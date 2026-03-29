@@ -28,7 +28,7 @@ Frappe's bench is a Python wrapper that shells out to system commands, manages v
 | `bench update` is all-or-nothing; partial failures leave dirty state | Atomic operations with automatic rollback on failure |
 | No built-in health checks or diagnostics | `moca doctor` — comprehensive system health analysis |
 | Three separate Redis instances (cache, queue, socketio) | Unified Redis with logical separation (key prefixes + streams) |
-| No horizontal scaling support | `moca scale` — built-in orchestration for multi-process deployment |
+| No horizontal scaling support | `moca worker scale` + `moca generate k8s` — built-in orchestration for multi-process deployment |
 | Module caching bugs after app changes | No module cache — Go binaries + metadata registry, no stale state |
 | Whitespace in paths breaks commands | Robust path handling throughout |
 
@@ -187,10 +187,11 @@ my-project/                          ← project root
 │   ├── moca-worker.log
 │   └── moca-scheduler.log
 ├── storage/                         ← local file storage (dev mode)
-├── desk/                            ← React frontend source (if customized)
+├── desk/                            ← React frontend source (project-level overrides)
 │   ├── src/
-│   ├── package.json
+│   ├── package.json                 ← depends on @moca/desk (workspace-local package from framework)
 │   └── vite.config.ts
+├── go.work                          ← Go workspace: composes framework + installed apps
 └── .moca/                           ← CLI state directory
     ├── current_site                  ← active site pointer
     ├── environment                   ← dev/staging/prod
@@ -240,6 +241,7 @@ infrastructure:
     db_cache: 0
     db_queue: 1
     db_session: 2
+    db_pubsub: 3
 
   kafka:
     enabled: true
@@ -277,9 +279,18 @@ production:
     provider: acme                        # automatic Let's Encrypt
     email: admin@example.com
   proxy:
-    engine: caddy                         # caddy or traefik
+    engine: caddy                         # caddy or nginx
   process_manager: systemd                # systemd or docker
   log_level: warn
+
+# Staging settings (optional — extends production with overrides)
+staging:
+  inherits: production                    # starts from production settings
+  port: 8443
+  log_level: info
+  tls:
+    provider: acme
+    email: admin@example.com
 
 # Scheduler configuration
 scheduler:
@@ -441,7 +452,7 @@ moca
 │   ├── systemd                       # Generate systemd unit files
 │   ├── docker                        # Generate Docker Compose files
 │   ├── k8s                           # Generate Kubernetes manifests
-│   ├── supervisor                    # Generate supervisor config (legacy compat)
+│   ├── supervisor                    # Generate supervisor config (legacy compat, not a supported process manager)
 │   └── env                           # Generate .env file from moca.yaml
 │
 ├── dev                               # Developer tools
@@ -456,7 +467,7 @@ moca
 │
 ├── test                              # Testing
 │   ├── run                           # Run tests (Go tests + framework tests)
-│   ├── run-ui                        # Run frontend/Cypress tests
+│   ├── run-ui                        # Run frontend/Playwright tests
 │   ├── coverage                      # Generate test coverage report
 │   ├── fixtures                      # Load test fixture data
 │   └── factory                       # Generate test data from MetaType definitions
@@ -465,7 +476,8 @@ moca
 │   ├── desk                          # Build React Desk frontend
 │   ├── portal                        # Build portal/website assets
 │   ├── assets                        # Build all static assets
-│   └── app                           # Compile an app's Go code
+│   ├── app                           # Verify an app's Go code compiles
+│   └── server                        # Compile server binary with all installed apps
 │
 ├── user                              # User management
 │   ├── add                           # Create a new user on a site
@@ -732,6 +744,7 @@ Flags:
   --site string      Target site (default: active site)
   --all              Migrate all sites
   --dry-run          Show what would be migrated without executing
+  --no-backup        Skip automatic backup before migration
   --skip-search      Skip search index rebuild after migration
   --skip-cache       Skip cache clear after migration
   --parallel int     Parallel migration workers for --all (default: 4)
@@ -876,12 +889,17 @@ What it generates:
   ├── hooks.go                # Hook registration (with examples)
   ├── modules/
   │   └── {module}/
-  │       └── doctypes/
+  │       ├── doctypes/
+  │       │   └── .gitkeep
+  │       ├── pages/           # Custom page components (.tsx)
+  │       │   └── .gitkeep
+  │       └── reports/         # Report definitions (.json + .go)
   │           └── .gitkeep
   ├── fixtures/
   ├── migrations/
   │   └── 001_initial.sql
   ├── templates/
+  │   └── portal/
   ├── public/
   ├── tests/
   │   └── setup_test.go
@@ -1090,8 +1108,15 @@ Flags:
   --no-scheduler      Don't start the scheduler
   --no-desk           Don't start the React dev server
   --desk-port int     React dev server port (default: 3000)
-  --no-watch          Don't watch for file changes
+  --no-watch          Don't watch for file changes (disables both MetaType
+                      JSON watching and frontend asset watching)
   --profile           Enable pprof profiling endpoints
+
+File watching behavior:
+  - The server watches `*/doctypes/*.json` for MetaType changes and triggers
+    the full hot reload pipeline (schema diff, cache invalidation, event broadcast).
+  - `moca dev watch` watches only frontend assets (.tsx, .css) for rebuilds.
+  - `--no-watch` disables BOTH MetaType and frontend watching.
 
 What it starts (single process):
   ┌────────────────────────────────────────────┐
@@ -1338,6 +1363,12 @@ Flags:
   --dry-run           Show SQL that would be executed
   --verbose           Show each migration as it runs
   --step int          Run only N migrations
+  --skip string       Skip a specific migration by version/filename
+
+Note: The migration runner respects `DependsOn` declarations in app manifests.
+If `--step` would stop before a depended-upon migration completes, an error
+is raised. `--skip` will refuse to skip a migration that other pending
+migrations depend on.
 ```
 
 ##### `moca db rollback`
@@ -1742,6 +1773,9 @@ Flags:
   --email string        Admin email for TLS certificates
   --proxy string        Reverse proxy: "caddy" (default), "nginx"
   --process string      Process manager: "systemd" (default), "docker"
+                        When "docker" is selected, step 5 internally runs
+                        `moca generate docker --profile production` to produce
+                        the Compose files, then starts the stack via docker compose.
   --workers int         Number of HTTP worker processes (default: auto)
   --background int      Number of background workers (default: 2)
   --tls string          TLS mode: "acme" (default), "custom", "none"
@@ -1926,6 +1960,7 @@ Generates:
   moca-worker@.service      (template for worker processes)
   moca-scheduler.service    (single instance)
   moca-outbox.service       (single instance, if Kafka enabled)
+  moca-search-sync.service  (Kafka → Meilisearch sync, if Kafka enabled)
   moca.target               (group target for all services)
 ```
 
@@ -2007,6 +2042,11 @@ Usage: moca dev console [flags]
 
 Start an interactive console with the Moca framework loaded.
 Uses yaegi (Go interpreter) for a Go REPL experience.
+
+> **Known limitations:** Yaegi does not support CGo or all reflection patterns.
+> If a framework package fails to load in the console (e.g., packages with
+> native dependencies), use `moca dev execute` for one-off expressions instead,
+> which runs compiled Go code in the actual server process.
 
 Flags:
   --site string       Target site context
@@ -2188,11 +2228,16 @@ Flags:
   --app string        Build assets for a specific app only
 
 What it does:
-  1. Resolves all app desk/ component registrations
-  2. Generates route manifest from installed apps
-  3. Runs Vite production build
-  4. Outputs to static/ directory
-  5. Generates content hash for cache busting
+  1. Compiles the framework Desk (@moca/desk) as the base React app
+  2. Discovers and registers all app Desk extensions (per-DocType .tsx files)
+  3. Applies project-level desk/ overrides (if present)
+  4. Generates route manifest from installed apps
+  5. Runs Vite production build
+  6. Outputs to static/ directory
+  7. Generates content hash for cache busting
+
+  If two apps register a component for the same DocType view, the app
+  with higher priority in moca.yaml wins.
 ```
 
 ##### `moca build portal`
@@ -2224,11 +2269,30 @@ Flags:
 ```
 Usage: moca build app APP_NAME [flags]
 
-Compile an app's Go code and verify it builds cleanly.
+Verify that an app's Go code compiles cleanly within the workspace.
+Does not produce a standalone binary — apps are composed into the
+server binary via `moca build server`.
 
 Flags:
   --race              Enable race detector
   --verbose           Show compiler output
+```
+
+##### `moca build server`
+
+```
+Usage: moca build server [flags]
+
+Compile the moca-server binary with all installed apps included.
+Uses the Go workspace (go.work) to compose the framework and all
+app modules into a single binary. This is called automatically by
+`moca serve` and `moca deploy update`.
+
+Flags:
+  --output string     Output binary path (default: bin/moca-server)
+  --race              Enable race detector
+  --verbose           Show compiler output
+  --ldflags string    Additional linker flags
 ```
 
 ---
@@ -3123,7 +3187,43 @@ Flags:
 
 ---
 
-#### 4.2.21 Shell Completion
+#### 4.2.21 Notification Configuration
+
+##### `moca notify test-email`
+
+```
+Usage: moca notify test-email [flags]
+
+Send a test email to verify SMTP configuration.
+
+Flags:
+  --site string       Target site
+  --to string         Recipient email address (required)
+  --provider string   "smtp" (default), "ses", "sendgrid"
+```
+
+##### `moca notify config`
+
+```
+Usage: moca notify config [flags]
+
+Show or update notification provider settings.
+
+Flags:
+  --site string       Target site
+  --set KEY=VALUE     Set a notification config value
+  --json              Output current config as JSON
+
+Example:
+  moca notify config --set smtp.host=smtp.gmail.com --set smtp.port=587
+  moca notify config --json
+```
+
+> **Note on OAuth2/SAML/OIDC:** Enterprise SSO configuration (OAuth2 providers, SAML identity providers, OIDC settings) is managed via the Desk UI administration panel at `Settings > Authentication`. CLI-based auth configuration is planned for a future release. For headless/automated deployments, use `moca config set` to write auth provider settings directly (e.g., `moca config set auth.oauth2.client_id=xxx --site acme.localhost`).
+
+---
+
+#### 4.2.22 Shell Completion
 
 ##### `moca completion`
 
@@ -3468,7 +3568,7 @@ internal/                           # CLI internal services
 
 **Decision:** Distribute the Moca CLI as a single compiled Go binary.
 **Rationale:** Eliminates Python version conflicts, virtualenv management, pip dependency resolution, and the entire class of "bench won't install" issues that plague the Frappe ecosystem. A Go binary runs on any Linux/macOS/Windows machine without prerequisites.
-**Trade-off:** Apps cannot dynamically extend the CLI with arbitrary Python scripts. Instead, they register Go commands at build time. For truly dynamic extensions, apps can register as plugins that the CLI discovers.
+**Trade-off:** Apps cannot dynamically extend the CLI with arbitrary Python scripts. Instead, they register Go commands at build time via `cli.RegisterCommand()` in `hooks.go`. These CLI extensions are compiled into the binary during `moca build server`.
 
 ### ADR-CLI-002: Cobra over Custom CLI Framework
 

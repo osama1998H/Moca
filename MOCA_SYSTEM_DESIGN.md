@@ -26,7 +26,7 @@ Moca is a metadata-driven, multitenant business application platform where a Met
 | Event Streaming | **Apache Kafka** | Cross-service event bus, audit log, CDC, integration backbone |
 | Search | **Meilisearch** | Full-text search across documents, typo-tolerant, faceted filtering |
 | Object Storage | **S3-compatible (MinIO)** | File attachments, generated reports, export artifacts |
-| Reverse Proxy | **Caddy / Traefik** | Automatic TLS, tenant-based routing |
+| Reverse Proxy | **Caddy / NGINX** | Automatic TLS, tenant-based routing |
 
 ### What Moca Fixes Over Frappe
 
@@ -285,13 +285,15 @@ const (
                     └──────────────┘    └──────────────┘    └──────────────┘
 ```
 
-**Hot Reload:** When a MetaType definition changes at runtime (through the Desk UI or API), Moca:
+**Hot Reload:** When a MetaType definition changes at runtime (through the Desk UI, API, or filesystem watch during development), Moca:
 1. Validates the new schema against the existing data.
 2. Generates and executes a migration diff (ALTER TABLE, add indexes, etc.).
 3. Invalidates the Redis metadata cache.
-4. Publishes a `meta.changed` event to Kafka so all running instances refresh.
+4. Publishes a `meta.changed` event to Kafka (or Redis pub/sub if Kafka is disabled) so all running instances refresh.
 5. Re-registers API routes if `APIConfig` changed.
 6. Updates the Meilisearch index mapping.
+
+**Development Mode Filesystem Trigger:** When running via `moca serve`, the server watches `*/doctypes/*.json` files for changes and triggers the full hot reload pipeline above. This enables a fast edit-save-refresh loop for MetaType development. The `--no-watch` flag disables this filesystem trigger. Note: `moca dev watch` watches only frontend assets (`.tsx`, `.css`), not MetaType JSON files — MetaType watching is handled by the server process itself.
 
 ---
 
@@ -849,8 +851,10 @@ Each Moca site (tenant) gets its own PostgreSQL **schema** within a shared datab
 
 ### 4.2 Core System Tables
 
+> **Note:** The system schema name `moca_system` is configurable via `moca.yaml:infrastructure.database.system_db`. All SQL examples in this document use the default name. The framework reads this value from configuration at startup and uses it for all system-level queries.
+
 ```sql
--- moca_system schema: shared across all tenants
+-- moca_system schema: shared across all tenants (default name; configurable via system_db)
 
 CREATE TABLE moca_system.sites (
     name            TEXT PRIMARY KEY,              -- "acme.moca.cloud"
@@ -1037,8 +1041,34 @@ schema:{site}:version                    Schema version counter      Permanent
 link:{site}:{doctype}:{field}:{value}    Link field autocomplete     1 min
 ```
 
+**Redis DB Assignments** (configured in `moca.yaml`):
+- `db_cache: 0` — metadata, document, and config caches
+- `db_queue: 1` — Redis Streams for background jobs
+- `db_session: 2` — user sessions
+- `db_pubsub: 3` — pub/sub channels for WebSocket real-time and event broadcast
+
+**Pub/Sub Channel Patterns** (on `db_pubsub`):
+```
+pubsub:doc:{site}:{doctype}:{name}      Document change notifications (WebSocket)
+pubsub:meta:{site}:{doctype}            MetaType change broadcasts
+pubsub:config:{site}                    Config change broadcasts
+```
+
 **Cache invalidation strategy:**
-Moca uses a **write-through + event-based invalidation** model. When a document is saved, the document cache is updated immediately. When metadata changes, a Kafka event triggers all instances to flush their local and Redis caches.
+Moca uses a **write-through + event-based invalidation** model. When a document is saved, the document cache is updated immediately. When metadata changes, a Kafka event (or Redis pub/sub when Kafka is disabled) triggers all instances to flush their local and Redis caches.
+
+### 5.1.1 Configuration Sync Contract
+
+Site configuration has two representations:
+- **At rest (source of truth for CLI):** YAML files on disk — `sites/{site}/site_config.yaml`, `sites/common_site_config.yaml`, and `moca.yaml`.
+- **At runtime (source of truth for server):** PostgreSQL `moca_system.sites.config` JSONB column, cached in Redis as `config:{site}`.
+
+**Sync rules:**
+1. `moca site create` writes the initial config to YAML **and** syncs it to the database.
+2. `moca config set` writes to the appropriate YAML file **and** updates the database atomically. It then publishes a `config.changed` event (via Kafka or Redis pub/sub) to invalidate all server instances' config caches.
+3. The running server reads config **only** from the database (via Redis cache). It never reads YAML files directly.
+4. `moca config get --resolved` merges all YAML layers to show the effective config. `moca config get --runtime` queries the server's active config from the database.
+5. On `moca deploy update`, all YAML configs are re-synced to the database as part of the update lifecycle.
 
 ### 5.2 Queue Layer (Redis Streams)
 
@@ -1202,6 +1232,32 @@ CREATE TABLE tenant_acme.tab_outbox (
 CREATE INDEX idx_outbox_pending ON tenant_acme.tab_outbox(status) WHERE status = 'pending';
 ```
 
+### 6.5 Kafka-Optional Architecture
+
+Kafka can be disabled for small deployments via `moca.yaml` (`kafka.enabled: false`) or `moca init --no-kafka`. When Kafka is disabled, the system operates in **minimal event mode** using Redis pub/sub as a fallback:
+
+| Feature | With Kafka | Without Kafka (Redis fallback) |
+|---------|-----------|-------------------------------|
+| Document lifecycle events (`moca.doc.events`) | Durable Kafka topic | Redis pub/sub (fire-and-forget, no persistence) |
+| Audit log (`moca.audit.log`) | 90-day durable retention | Written directly to `tab_audit_log` table only (no streaming) |
+| MetaType cache flush (`moca.meta.changes`) | Kafka broadcast | Redis pub/sub broadcast |
+| Webhook dispatch (`moca.integration.outbox`) | Via outbox → Kafka pipeline | Via outbox → direct HTTP dispatch (synchronous poller) |
+| Workflow transitions (`moca.workflow.transitions`) | Kafka topic | Redis pub/sub |
+| CDC (`moca.cdc.*`) | **Available** | **Not available** — requires Kafka |
+| Search sync (`moca.search.indexing`) | Kafka → Meilisearch consumer | Direct sync on document save (in-request or background job) |
+| Notification events (`moca.notifications`) | Kafka topic | Redis pub/sub + direct delivery |
+
+**Process changes when Kafka is disabled:**
+- `moca-outbox` process: Still runs but publishes to Redis pub/sub channels and dispatches webhooks directly instead of writing to Kafka.
+- `moca-search-sync` process: Not started. Search indexing happens synchronously on document save or via a Redis Streams background job.
+- All other processes (`moca-server`, `moca-worker`, `moca-scheduler`) operate normally.
+
+**Limitations of minimal mode:**
+- No durable event replay (Redis pub/sub is fire-and-forget).
+- No CDC for external consumers.
+- Audit log retention depends solely on the database (no streaming analytics).
+- Webhook delivery has weaker ordering guarantees.
+
 ---
 
 ## 7. App / Plugin System
@@ -1226,7 +1282,9 @@ type AppManifest struct {
 
     // Contents
     Modules      []ModuleDef  `json:"modules"`
-    Hooks        HookDefs     `json:"hooks"`          // declarative hook config
+    // Hooks are registered programmatically via hooks.go (see §7.3).
+    // The manifest declares only which lifecycle events the app hooks into,
+    // for dependency resolution and documentation. Registration uses RegisterHook() in init().
     Fixtures     []FixtureDef `json:"fixtures"`       // seed data
     Migrations   []Migration  `json:"migrations"`
 
@@ -1317,7 +1375,13 @@ apps/
         crm_custom.js
       css/
         crm.css
+    tests/
+      setup_test.go            # Test helpers and fixtures
+    go.mod                     # App Go module (composed via go.work)
+    go.sum
 ```
+
+**Build Composition Model:** Each app is a separate Go module with its own `go.mod`. The project root contains a `go.work` file (Go workspaces) that includes the framework and all installed apps. `moca app get` and `moca app install` update `go.work` to include the new app module. `moca serve` and `moca build server` compile all apps into the single `moca-server` binary via the workspace. `moca build app APP_NAME` verifies that a single app compiles cleanly within the workspace context but does not produce a standalone binary.
 
 ---
 
@@ -1376,10 +1440,12 @@ create-site acme.moca.cloud
     ├── 1. Create PostgreSQL schema "tenant_acme"
     ├── 2. Create system tables (tab_singles, tab_version, etc.)
     ├── 3. Run core framework migrations
-    ├── 4. Create Redis key namespace
-    ├── 5. Create S3 storage bucket/prefix
-    ├── 6. Create Meilisearch index
-    ├── 7. Register site in moca_system.sites
+    ├── 4. Create Administrator user
+    ├── 5. Create Redis key namespace
+    ├── 6. Create S3 storage bucket/prefix
+    ├── 7. Create Meilisearch index
+    ├── 8. Register site in moca_system.sites
+    ├── 9. Warm metadata cache
     │
     ▼
 install-app crm --site acme.moca.cloud
@@ -1506,7 +1572,7 @@ const FIELD_TYPE_MAP: Record<FieldType, React.ComponentType> = {
 Apps can register custom field types that the Desk will render:
 
 ```tsx
-// In an app's desk plugin:
+// In an app's Desk extension:
 import { registerFieldType } from '@moca/desk';
 
 registerFieldType('TreeSelect', TreeSelectField);
@@ -1520,8 +1586,8 @@ Client                    Server                     Redis Pub/Sub
   │                         │                            │
   │  WS Connect             │                            │
   │ ──────────────────────▶ │                            │
-  │                         │  SUBSCRIBE                 │
-  │                         │  doc:{site}:{doctype}:*   │
+  │                         │  SUBSCRIBE (on db_pubsub)  │
+  │                         │  pubsub:doc:{site}:{doctype}:*│
   │                         │ ──────────────────────────▶│
   │                         │                            │
   │                         │      (another user saves)  │
@@ -1551,6 +1617,37 @@ type PortalPage struct {
 // Controller signature
 type PortalController func(ctx *PortalContext) (map[string]any, error)
 ```
+
+### 9.6 Translation Architecture
+
+Moca supports internationalization (i18n) for both the Desk UI and server-rendered content.
+
+**Translation storage:** Translations are stored in a per-tenant table:
+
+```sql
+CREATE TABLE tenant_acme.tab_translation (
+    source_text     TEXT NOT NULL,
+    language        TEXT NOT NULL,          -- "ar", "fr", "de"
+    translated_text TEXT NOT NULL,
+    context         TEXT,                   -- "DocType:SalesOrder", "label", "option"
+    app             TEXT,                   -- originating app
+    PRIMARY KEY (source_text, language, context)
+);
+```
+
+**String extraction:** Translatable strings are extracted from:
+- MetaType definitions: field labels, description, select options, section headings.
+- Portal templates: `{{ _("text") }}` markers.
+- Desk UI: `t("text")` calls in `.tsx` files.
+
+The CLI command `moca translate export` extracts all translatable strings from these sources.
+
+**Backend `Accept-Language` flow:**
+1. The `I18nProvider` middleware reads the `Accept-Language` header (or user preference from session).
+2. The `Localizer` transformer (§3.3.5) translates MetaType labels, select options, and error messages in API responses.
+3. Translations are cached in Redis as `i18n:{site}:{lang}` with invalidation on `moca translate import/compile`.
+
+**Compiled translations:** `moca translate compile` produces binary `.mo` files in `sites/{site}/translations/{lang}.mo` for fast runtime lookup. The framework loads these at startup and on cache invalidation.
 
 ---
 
@@ -1832,7 +1929,7 @@ moca/
 │   ├── moca-server/         # HTTP API + WebSocket server
 │   ├── moca-worker/         # Background job consumer
 │   ├── moca-scheduler/      # Cron scheduler
-│   ├── moca-cli/            # CLI tool (create-site, install-app, bench, migrate)
+│   ├── moca/                # CLI tool (create-site, install-app, bench, migrate)
 │   └── moca-outbox/         # Outbox → Kafka publisher
 │
 ├── pkg/
@@ -1956,9 +2053,7 @@ moca/
 │   ├── templates/
 │   └── static/
 │
-└── tools/
-    ├── moca-bench/          # benchmarking tool
-    └── moca-migrate/        # standalone migration runner
+└── go.work                  # Go workspace: composes framework + installed apps
 ```
 
 ---
@@ -2020,6 +2115,31 @@ moca/
 | Kafka throughput | 100,000 events/sec | Increase partitions + consumers |
 | Tenants per cluster | 10,000 | Schema-per-tenant; large tenants get dedicated DB |
 | Search index size per tenant | 10M documents | Meilisearch sharding by tenant prefix |
+
+---
+
+## 17.1 Terminology Glossary
+
+To avoid ambiguity, the following terms have precise meanings throughout Moca documentation:
+
+| Term | Definition |
+|------|-----------|
+| **App** | A Moca application package — has `manifest.yaml`, modules, DocTypes, hooks, and its own `go.mod`. |
+| **Module** | A logical grouping of DocTypes within an App (e.g., "Selling", "Buying"). |
+| **Desk Extension** | App-provided React components that extend the Desk UI (custom field types, views, dashboard widgets). Formerly "desk plugin." |
+| **CLI Extension** | App-registered custom CLI commands via `cli.RegisterCommand()` in `hooks.go`, discovered at build time. |
+| **Hook** | A programmatic Go function registered in `hooks.go` that intercepts document lifecycle events or API middleware. |
+| **Plugin** (reserved) | Future WASM-based sandboxed extension model for untrusted third-party code. Not currently implemented. |
+
+### 17.2 Frontend Desk Composition Model
+
+The Desk UI is composed from three layers:
+
+1. **Framework Desk** (`moca/desk/`): The base React application — core providers, components, and views. Published as the `@moca/desk` npm package (workspace-local, not published to npm registry).
+2. **App Desk Extensions** (per-DocType `.tsx` files in app directories): Apps contribute form/list view overrides and custom field types via `registerFieldType()` and related APIs.
+3. **Project Desk** (`my-project/desk/`): Optional project-level overrides for theming, custom routes, or site-specific components.
+
+**Build process:** `moca build desk` compiles all three layers: framework desk is the base; app extensions are discovered by scanning installed apps for `.tsx` files; project desk overrides are applied last. If two apps register a component for the same DocType view, the app with higher priority in `moca.yaml` wins.
 
 ---
 
