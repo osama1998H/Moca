@@ -9,7 +9,8 @@ LDFLAGS    := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildD
 
 GO := go
 
-.PHONY: build test lint clean \
+.PHONY: build build-server build-worker build-scheduler build-moca build-outbox \
+        test lint clean \
         spike-pg spike-redis spike-gowork spike-meili spike-cobra \
         help
 
@@ -17,22 +18,46 @@ GO := go
 help:
 	@echo "MOCA Framework — available targets:"
 	@echo ""
-	@echo "  build          Build moca-server binary to bin/moca-server"
-	@echo "  test           Run all tests with race detector"
-	@echo "  lint           Run golangci-lint"
-	@echo "  clean          Remove build artifacts"
+	@echo "  build            Build all 5 binaries to bin/"
+	@echo "  build-server     Build moca-server binary"
+	@echo "  build-worker     Build moca-worker binary"
+	@echo "  build-scheduler  Build moca-scheduler binary"
+	@echo "  build-moca       Build moca CLI binary"
+	@echo "  build-outbox     Build moca-outbox binary"
+	@echo "  test             Run all tests with race detector"
+	@echo "  lint             Run golangci-lint"
+	@echo "  clean            Remove build artifacts"
 	@echo ""
-	@echo "  spike-pg       Run PostgreSQL tenant isolation spike (MS-00-T2)"
-	@echo "  spike-redis    Run Redis Streams consumer group spike (MS-00-T3)"
-	@echo "  spike-gowork   Run Go workspace composition spike (MS-00-T4)"
-	@echo "  spike-meili    Run Meilisearch tenant isolation spike (MS-00-T5)"
-	@echo "  spike-cobra    Run Cobra CLI extension spike (MS-00-T4)"
+	@echo "  spike-pg         Run PostgreSQL tenant isolation spike (MS-00-T2)"
+	@echo "  spike-redis      Run Redis Streams consumer group spike (MS-00-T3)"
+	@echo "  spike-gowork     Run Go workspace composition spike (MS-00-T4)"
+	@echo "  spike-meili      Run Meilisearch tenant isolation spike (MS-00-T5)"
+	@echo "  spike-cobra      Run Cobra CLI extension spike (MS-00-T4)"
 	@echo ""
 	@echo "Override build vars: make build VERSION=0.1.0"
 
-## build: Build the moca-server binary
-build:
+## build: Build all 5 binaries to bin/
+build: build-server build-worker build-scheduler build-moca build-outbox
+
+## build-server: Build the moca-server binary
+build-server:
 	$(GO) build -ldflags "$(LDFLAGS)" -o bin/moca-server ./cmd/moca-server
+
+## build-worker: Build the moca-worker binary
+build-worker:
+	$(GO) build -ldflags "$(LDFLAGS)" -o bin/moca-worker ./cmd/moca-worker
+
+## build-scheduler: Build the moca-scheduler binary
+build-scheduler:
+	$(GO) build -ldflags "$(LDFLAGS)" -o bin/moca-scheduler ./cmd/moca-scheduler
+
+## build-moca: Build the moca CLI binary
+build-moca:
+	$(GO) build -ldflags "$(LDFLAGS)" -o bin/moca ./cmd/moca
+
+## build-outbox: Build the moca-outbox binary
+build-outbox:
+	$(GO) build -ldflags "$(LDFLAGS)" -o bin/moca-outbox ./cmd/moca-outbox
 
 ## test: Run all tests with race detection
 test:

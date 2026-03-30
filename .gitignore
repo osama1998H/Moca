@@ -9,6 +9,7 @@
 /moca-worker
 /moca-scheduler
 /moca-outbox
+/moca
 
 # Go test artifacts
 *.test
