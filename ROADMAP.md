@@ -46,42 +46,121 @@ Each blocker below has been traced to its source in the design documents and ass
 
 ## Milestone Dependency Graph
 
-```
-MS-00 (Spikes)
-  └─► MS-01 (Project Structure & Config)
-        ├─► MS-02 (PostgreSQL & Redis Foundation)
-        │     ├─► MS-03 (Metadata Registry)
-        │     │     ├─► MS-04 (Document Runtime)
-        │     │     │     ├─► MS-05 (Query Engine)
-        │     │     │     │     └─► MS-06 (REST API Layer) ◄─── MS-04
-        │     │     │     │           ├─► MS-10 (Dev Server & Hot Reload) ◄─── MS-08
-        │     │     │     │           ├─► MS-12 (Multitenancy) ◄─── MS-02
-        │     │     │     │           │     └─► MS-15 (Jobs, Events, Search) ◄─── MS-04, MS-06
-        │     │     │     │           │           ├─► MS-16 (CLI Queue/Events/Search) ◄─── MS-07
-        │     │     │     │           │           ├─► MS-18 (API Keys, Webhooks) ◄─── MS-14
-        │     │     │     │           │           ├─► MS-21 (Deployment) ◄─── MS-10
-        │     │     │     │           │           ├─► MS-22 (Security Hardening) ◄─── MS-14
-        │     │     │     │           │           └─► MS-24 (Observability) ◄─── MS-06
-        │     │     │     │           ├─► MS-14 (Permission Engine) ◄─── MS-08
-        │     │     │     │           │     └─► MS-17 (React Desk) ◄─── MS-06
-        │     │     │     │           │           ├─► MS-19 (Desk Real-Time) ◄─── MS-15
-        │     │     │     │           │           └─► MS-20 (GraphQL, Dashboard, i18n) ◄─── MS-05
-        │     │     │     │           └─► MS-27 (Portal SSR) [post-v1.0]
-        │     │     │     └─► MS-08 (Hook Registry & App System)
-        │     │     │           └─► MS-09 (CLI Site/App Commands) ◄─── MS-07
-        │     │     │                 ├─► MS-11 (CLI DB/Backup/Config)
-        │     │     │                 └─► MS-13 (CLI App Scaffold, Users, Build)
-        │     │     └─► MS-23 (Workflow Engine) ◄─── MS-14, MS-15, MS-17
-        │     └─► MS-12
-        └─► MS-07 (CLI Foundation)
-              └─► MS-09, MS-16
+Milestones are labeled `#N` with their implementation order — milestones sharing the same `#N` can be built in parallel. Four workstreams: **Core** (framework engine), **CLI** (developer tooling), **Frontend** (React Desk), **Ops** (deployment, security, observability, release).
 
-MS-25 (Testing Framework) ◄─── MS-23
-  └─► MS-26 (Documentation & Packaging) ──► v1.0 Release
+```mermaid
+sequenceDiagram
+    participant C as Core
+    participant L as CLI
+    participant F as Frontend
+    participant O as Ops
 
-Post-v1.0:
-  MS-28 (VirtualDoc, CDC, Advanced) ◄─── v1.0
-  MS-29 (WASM Plugin Marketplace) ◄─── v1.0
+    rect rgb(240, 248, 255)
+        Note over C,O: Order 1–2 — Foundation
+        activate C
+        C->>C: #1 MS-00 Arch Validation Spikes
+        C->>C: #2 MS-01 Project Structure & Config
+        deactivate C
+    end
+
+    rect rgb(245, 255, 245)
+        Note over C,O: Order 3 — Parallel
+        par
+            C->>C: #3 MS-02 PostgreSQL & Redis Foundation
+        and
+            C->>L: #3 MS-07 CLI Foundation
+        end
+    end
+
+    rect rgb(255, 250, 240)
+        Note over C,O: Order 4–5 — Core Engine
+        activate C
+        C->>C: #4 MS-03 Metadata Registry
+        C->>C: #5 MS-04 Document Runtime
+        deactivate C
+    end
+
+    rect rgb(245, 255, 245)
+        Note over C,O: Order 6 — Parallel
+        par
+            C->>C: #6 MS-05 Query Engine
+        and
+            C->>C: #6 MS-08 Hook Registry & App System
+        end
+    end
+
+    rect rgb(245, 255, 245)
+        Note over C,O: Order 7 — Parallel
+        par
+            C->>C: #7 MS-06 REST API Layer
+        and
+            L->>L: #7 MS-09 CLI Site/App Commands
+        end
+    end
+
+    rect rgb(240, 240, 255)
+        Note over C,O: Order 8 — Parallel (5 milestones)
+        par
+            C->>C: #8 MS-12 Multitenancy
+        and
+            C->>C: #8 MS-14 Permission Engine
+        and
+            L->>L: #8 MS-10 Dev Server & Hot Reload
+        and
+            L->>L: #8 MS-11 CLI DB/Backup/Config
+        and
+            L->>L: #8 MS-13 CLI App Scaffold & Users
+        end
+    end
+
+    rect rgb(245, 255, 245)
+        Note over C,O: Order 9 — Parallel
+        par
+            C->>C: #9 MS-15 Jobs, Events, Search
+        and
+            C->>F: #9 MS-17 React Desk Foundation
+        end
+    end
+
+    rect rgb(255, 245, 245)
+        Note over C,O: Order 10 — Parallel (8 milestones)
+        par
+            L->>L: #10 MS-16 CLI Queue/Events/Search
+        and
+            C->>C: #10 MS-18 API Keys & Webhooks
+        and
+            F->>F: #10 MS-19 Desk Real-Time
+        and
+            F->>F: #10 MS-20 GraphQL, Dashboard, i18n
+        and
+            O->>O: #10 MS-21 Deployment
+        and
+            O->>O: #10 MS-22 Security Hardening
+        and
+            C->>C: #10 MS-23 Workflow Engine
+        and
+            O->>O: #10 MS-24 Observability
+        end
+    end
+
+    rect rgb(240, 248, 255)
+        Note over C,O: Order 11–12 — Release Path
+        activate O
+        O->>O: #11 MS-25 Testing Framework
+        O->>O: #12 MS-26 Docs & Packaging → v1.0
+        deactivate O
+    end
+
+    rect rgb(250, 250, 250)
+        Note over C,O: Post-v1.0
+        par
+            F->>F: #13 MS-27 Portal SSR
+        and
+            C->>C: #13 MS-28 VirtualDoc, CDC, Advanced
+        and
+            C->>C: #13 MS-29 WASM Plugin Marketplace
+        end
+    end
 ```
 
 ### Critical Path (longest dependency chain)

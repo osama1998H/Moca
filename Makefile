@@ -61,7 +61,7 @@ spike-gowork:
 
 ## spike-meili: Run the Meilisearch tenant isolation spike
 spike-meili:
-	cd spikes/meilisearch && $(GO) test -v -count=1 ./...
+	cd spikes/meilisearch && GOWORK=off $(GO) test -v -count=1 ./...
 
 ## spike-cobra: Run the Cobra CLI extension spike
 spike-cobra:
