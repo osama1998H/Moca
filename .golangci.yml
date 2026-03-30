@@ -13,16 +13,16 @@ linters:
     - errcheck
     - staticcheck
     - unused
-
-settings:
-  govet:
-    enable-all: true
-  errcheck:
-    check-type-assertions: true
-    check-blank: false
+  settings:
+    govet:
+      enable-all: true
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+  exclusions:
+    paths:
+      - spikes/
 
 issues:
   max-issues-per-linter: 50
   max-same-issues: 5
-  exclude-dirs:
-    - spikes
