@@ -13,17 +13,14 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ['1.22', 'stable']
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go ${{ matrix.go-version }}
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version: '1.26.1'
           cache: true
 
       - name: Download dependencies
@@ -32,30 +29,28 @@ jobs:
       - name: Build all packages
         run: go build ./...
 
-      - name: Build moca-server binary
-        run: |
-          go build \
-            -ldflags "-X main.Version=ci -X main.Commit=${{ github.sha }} -X main.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            -o bin/moca-server \
-            ./cmd/moca-server
+      - name: Build all binaries
+        run: make build
 
-      - name: Verify moca-server runs
-        run: ./bin/moca-server
+      - name: Verify binaries run
+        run: |
+          ./bin/moca-server
+          ./bin/moca-worker
+          ./bin/moca-scheduler
+          ./bin/moca
+          ./bin/moca-outbox
 
   test:
     name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ['1.22', 'stable']
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go ${{ matrix.go-version }}
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version: '1.26.1'
           cache: true
 
       - name: Download dependencies
@@ -74,11 +69,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: stable
+          go-version: '1.26.1'
           cache: true
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.64.8
+          version: v2.11.4
           args: --timeout=5m
