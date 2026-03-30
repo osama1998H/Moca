@@ -1,0 +1,46 @@
+# Go binaries and build output
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/bin/
+/moca-server
+/moca-worker
+/moca-scheduler
+/moca-outbox
+
+# Go test artifacts
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Go vendor directory (not used in this project)
+/vendor/
+
+# OS-generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE / editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.orig
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build and dist artifacts
+/dist/
+/tmp/
