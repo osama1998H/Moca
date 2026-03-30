@@ -6,7 +6,7 @@
 // for dynamic/custom fields that avoids schema migrations for customizations.
 //
 // Key components:
-//   - Postgres: pgxpool connection management with BeforeAcquire search_path reset
+//   - Postgres: pgxpool connection management with AfterConnect search_path hook
 //   - Query: dynamic query builder driven by MetaType field definitions
 //   - Transaction: transaction helpers with context propagation
 //   - Schema: DDL generation from MetaType definitions (CREATE TABLE, ALTER TABLE)

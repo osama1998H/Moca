@@ -52,6 +52,10 @@ type DatabaseConfig struct {
 	Driver   string `yaml:"driver"`
 	Host     string `yaml:"host"`
 	SystemDB string `yaml:"system_db"`
+	// User is the PostgreSQL username. Supports ${DB_USER} env expansion.
+	User string `yaml:"user,omitempty"`
+	// Password is the PostgreSQL password. Supports ${DB_PASSWORD} env expansion.
+	Password string `yaml:"password,omitempty"`
 	Port     int    `yaml:"port"`
 	PoolSize int    `yaml:"pool_size,omitempty"`
 }

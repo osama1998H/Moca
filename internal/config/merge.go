@@ -95,6 +95,8 @@ func mergeDatabase(base, override *DatabaseConfig) {
 	mergeString(&base.Driver, override.Driver)
 	mergeString(&base.Host, override.Host)
 	mergeString(&base.SystemDB, override.SystemDB)
+	mergeString(&base.User, override.User)
+	mergeString(&base.Password, override.Password)
 	mergeInt(&base.Port, override.Port)
 	mergeInt(&base.PoolSize, override.PoolSize)
 }
