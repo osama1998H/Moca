@@ -103,6 +103,7 @@ func mergeDatabase(base, override *DatabaseConfig) {
 
 func mergeRedis(base, override *RedisConfig) {
 	mergeString(&base.Host, override.Host)
+	mergeString(&base.Password, override.Password)
 	mergeInt(&base.Port, override.Port)
 	mergeInt(&base.DbCache, override.DbCache)
 	mergeInt(&base.DbQueue, override.DbQueue)

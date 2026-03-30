@@ -64,6 +64,9 @@ type DatabaseConfig struct {
 type RedisConfig struct {
 	// Host is the Redis server hostname. Required.
 	Host string `yaml:"host"`
+	// Password is the Redis AUTH password. Supports ${REDIS_PASSWORD} env expansion.
+	// Defaults to empty string (no authentication) for development.
+	Password string `yaml:"password,omitempty"`
 	// Port is the Redis server TCP port. Required; valid range 1–65535.
 	Port int `yaml:"port"`
 	// DbCache is the Redis database index used for application cache.
