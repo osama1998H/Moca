@@ -53,7 +53,7 @@ spike-pg:
 
 ## spike-redis: Run the Redis Streams consumer group spike
 spike-redis:
-	cd spikes/redis-streams && $(GO) test -v -count=1 ./...
+	cd spikes/redis-streams && GOWORK=off $(GO) test -v -count=1 ./...
 
 ## spike-gowork: Run the Go workspace composition spike
 spike-gowork:
