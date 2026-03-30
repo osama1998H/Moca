@@ -1,0 +1,18 @@
+project:
+  name: minimal-project
+  version: "0.1.0"
+
+moca: "^1.0.0"
+
+apps:
+  core:
+    source: builtin
+
+infrastructure:
+  database:
+    host: db.example.com
+    port: 5432
+
+  redis:
+    host: redis.example.com
+    port: 6379

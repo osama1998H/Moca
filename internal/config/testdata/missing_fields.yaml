@@ -1,0 +1,14 @@
+# Missing: moca, project.name, infrastructure.database.host, infrastructure.redis.port
+project:
+  version: "1.0.0"
+
+apps:
+  core:
+    source: builtin
+
+infrastructure:
+  database:
+    port: 5432
+
+  redis:
+    host: localhost

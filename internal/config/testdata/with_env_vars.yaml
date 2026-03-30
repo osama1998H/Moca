@@ -1,0 +1,33 @@
+project:
+  name: env-project
+  version: "1.0.0"
+
+moca: "^1.0.0"
+
+apps:
+  core:
+    source: builtin
+
+infrastructure:
+  database:
+    host: localhost
+    port: 5432
+
+  redis:
+    host: localhost
+    port: 6379
+
+  search:
+    engine: meilisearch
+    host: localhost
+    port: 7700
+    api_key: "${MOCA_MEILI_KEY}"
+
+  storage:
+    driver: s3
+    bucket: moca-files
+    access_key: "${MOCA_S3_ACCESS_KEY}"
+    secret_key: "${MOCA_S3_SECRET_KEY}"
+
+backup:
+  encryption_key: "${MOCA_BACKUP_KEY}"

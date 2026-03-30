@@ -1,0 +1,34 @@
+project:
+  name: staging-project
+  version: "1.0.0"
+
+moca: "^1.0.0"
+
+apps:
+  core:
+    source: builtin
+
+infrastructure:
+  database:
+    host: localhost
+    port: 5432
+
+  redis:
+    host: localhost
+    port: 6379
+
+production:
+  port: 443
+  workers: auto
+  tls:
+    provider: acme
+    email: admin@example.com
+  proxy:
+    engine: caddy
+  process_manager: systemd
+  log_level: warn
+
+staging:
+  inherits: production
+  port: 8443
+  log_level: info

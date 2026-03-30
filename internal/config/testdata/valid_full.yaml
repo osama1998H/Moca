@@ -1,0 +1,89 @@
+project:
+  name: my-erp
+  version: "1.0.0"
+
+moca: ">=1.0.0, <2.0.0"
+
+apps:
+  core:
+    source: builtin
+  crm:
+    source: github.com/moca-apps/crm
+    version: "~1.2.0"
+    branch: main
+    ref: "a1b2c3d"
+  accounting:
+    source: github.com/moca-apps/accounting
+    version: "^2.0.0"
+  custom-hr:
+    source: ./local-apps/custom-hr
+    version: "*"
+
+infrastructure:
+  database:
+    driver: postgres
+    host: localhost
+    port: 5432
+    system_db: moca_system
+    pool_size: 25
+
+  redis:
+    host: localhost
+    port: 6379
+    db_cache: 0
+    db_queue: 1
+    db_session: 2
+    db_pubsub: 3
+
+  kafka:
+    enabled: true
+    brokers:
+      - localhost:9092
+
+  search:
+    engine: meilisearch
+    host: localhost
+    port: 7700
+    api_key: supersecretkey
+
+  storage:
+    driver: s3
+    endpoint: localhost:9000
+    bucket: moca-files
+    access_key: accesskey123
+    secret_key: secretkey456
+
+development:
+  port: 8000
+  workers: 2
+  auto_reload: true
+  desk_dev_server: true
+  desk_port: 3000
+
+production:
+  port: 443
+  workers: auto
+  tls:
+    provider: acme
+    email: admin@example.com
+  proxy:
+    engine: caddy
+  process_manager: systemd
+  log_level: warn
+
+scheduler:
+  enabled: true
+  tick_interval: 60s
+
+backup:
+  schedule: "0 2 * * *"
+  retention:
+    daily: 7
+    weekly: 4
+    monthly: 12
+  destination:
+    driver: s3
+    bucket: moca-backups
+    prefix: my-erp/
+  encrypt: true
+  encryption_key: backupkey789
