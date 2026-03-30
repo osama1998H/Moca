@@ -1,0 +1,70 @@
+{
+  "name": "SalesOrder",
+  "module": "selling",
+  "label": "Sales Order",
+  "description": "A sales transaction with customer, items, and totals.",
+  "naming_rule": {
+    "rule": "pattern",
+    "pattern": "SO-.####"
+  },
+  "title_field": "customer_name",
+  "sort_field": "creation",
+  "sort_order": "desc",
+  "search_fields": ["customer_name", "status"],
+  "is_submittable": true,
+  "track_changes": true,
+  "fields": [
+    {
+      "name": "customer_name",
+      "field_type": "Data",
+      "label": "Customer Name",
+      "required": true,
+      "in_list_view": true,
+      "searchable": true
+    },
+    {
+      "name": "customer",
+      "field_type": "Link",
+      "label": "Customer",
+      "options": "Customer",
+      "required": true,
+      "db_index": true
+    },
+    {
+      "name": "transaction_date",
+      "field_type": "Date",
+      "label": "Transaction Date",
+      "required": true
+    },
+    {
+      "name": "grand_total",
+      "field_type": "Currency",
+      "label": "Grand Total",
+      "in_list_view": true
+    },
+    {
+      "name": "status",
+      "field_type": "Select",
+      "label": "Status",
+      "options": "Draft\nSubmitted\nCancelled\nClosed",
+      "in_list_view": true,
+      "in_filter": true
+    },
+    {
+      "name": "items",
+      "field_type": "Table",
+      "label": "Items",
+      "options": "SalesOrderItem"
+    },
+    {
+      "name": "notes",
+      "field_type": "LongText",
+      "label": "Notes"
+    },
+    {
+      "name": "is_return",
+      "field_type": "Check",
+      "label": "Is Return"
+    }
+  ]
+}
