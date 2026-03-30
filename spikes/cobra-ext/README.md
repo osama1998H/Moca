@@ -1,6 +1,6 @@
 # Spike 5: Cobra CLI Extension Discovery
 
-**Status:** Not started
+**Status:** Complete
 **Task:** MS-00-T4
 **Design Reference:** `MOCA_CLI_SYSTEM_DESIGN.md` §8 (lines 3363-3406)
 
@@ -25,3 +25,16 @@ Also test the explicit `NewCommand()` constructor pattern as an alternative.
 - Main binary that blank-imports both apps
 - Collision test (two apps attempt to register the same command name)
 - `ADR-005-cobra-cli-extension.md` — init() vs constructor recommendation
+
+## Run
+
+```bash
+# From repo root:
+make spike-cobra
+
+# Or directly:
+cd spikes/cobra-ext && go test -v -count=1 ./...
+
+# Build and test the binary interactively:
+cd spikes/cobra-ext && go build -o moca-spike . && ./moca-spike --help
+```
