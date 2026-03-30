@@ -29,6 +29,19 @@ func (e *ConfigError) Unwrap() error {
 	return e.Err
 }
 
+// ValidationError represents a single field-level validation failure.
+// Field is the dot-path to the offending field (e.g., "infrastructure.database.port").
+// Message describes what is wrong (e.g., "required", "must be between 1 and 65535").
+type ValidationError struct {
+	Field   string
+	Message string
+}
+
+// Error implements the error interface.
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Field, e.Message)
+}
+
 // EnvExpandError is returned when one or more environment variables referenced in the
 // config file are not set. It lists every missing variable name.
 type EnvExpandError struct {
