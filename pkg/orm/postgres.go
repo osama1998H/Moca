@@ -27,12 +27,12 @@ const perTenantDivisor = 10
 type DBManager struct {
 	systemPool        *pgxpool.Pool
 	sitePools         map[string]*pgxpool.Pool
-	mu                sync.RWMutex
 	logger            *slog.Logger
 	connStr           string
+	lastUsed          sync.Map // map[string]time.Time, keyed by schema name
+	mu                sync.RWMutex
 	systemMaxConns    int32
 	perTenantMaxConns int32
-	lastUsed          sync.Map // map[string]time.Time, keyed by schema name
 }
 
 // NewDBManager creates a DBManager from the given DatabaseConfig. It builds the
@@ -167,7 +167,11 @@ func (m *DBManager) EvictIdlePools(maxIdle time.Duration) int {
 		if !ok {
 			continue
 		}
-		if time.Since(v.(time.Time)) > maxIdle {
+		lastUsed, ok := v.(time.Time)
+		if !ok {
+			continue
+		}
+		if time.Since(lastUsed) > maxIdle {
 			pool.Close()
 			delete(m.sitePools, schema)
 			m.lastUsed.Delete(schema)
