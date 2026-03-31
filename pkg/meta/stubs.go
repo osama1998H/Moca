@@ -97,10 +97,15 @@ type ViewMeta struct{}
 type LayoutHint struct{}
 
 // RateLimitConfig defines rate limiting parameters for API endpoints.
-// This is a placeholder; the full field set is defined in MS-06 (REST API Layer).
+// Window is the sliding window duration, MaxRequests is the cap within
+// that window, and BurstSize allows short bursts above MaxRequests.
 //
 // Completed in MS-06 (REST API Layer).
-type RateLimitConfig struct{}
+type RateLimitConfig struct {
+	Window      time.Duration `json:"window"`       // sliding window size (e.g. 1*time.Minute)
+	MaxRequests int           `json:"max_requests"` // maximum requests allowed per window
+	BurstSize   int           `json:"burst_size"`   // burst allowance above MaxRequests
+}
 
 // APIConfig controls per-MetaType API behavior: endpoint exposure, rate limiting,
 // pagination, response shaping, webhooks, and custom endpoints.
