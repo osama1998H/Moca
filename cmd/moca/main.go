@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
 	clicontext "github.com/moca-framework/moca/internal/context"
+	"github.com/moca-framework/moca/internal/output"
 	"github.com/moca-framework/moca/pkg/cli"
 	"github.com/spf13/cobra"
 )
@@ -41,7 +44,41 @@ func main() {
 	)
 
 	if err := root.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		handleError(root, err)
 		os.Exit(1)
+	}
+}
+
+// handleError formats and prints the error to stderr.
+// CLIError gets the rich 5-section format; other errors get a simple message.
+// In JSON mode, errors are emitted as JSON objects on stderr.
+func handleError(root *cobra.Command, err error) {
+	noColor, _ := root.Flags().GetBool("no-color")
+	jsonFlag, _ := root.Flags().GetBool("json")
+
+	var cliErr *output.CLIError
+
+	if jsonFlag {
+		if errors.As(err, &cliErr) {
+			_ = json.NewEncoder(os.Stderr).Encode(map[string]string{
+				"error":     cliErr.Message,
+				"context":   cliErr.Context,
+				"cause":     cliErr.Cause,
+				"fix":       cliErr.Fix,
+				"reference": cliErr.Reference,
+			})
+		} else {
+			_ = json.NewEncoder(os.Stderr).Encode(map[string]string{
+				"error": err.Error(),
+			})
+		}
+		return
+	}
+
+	cc := output.NewColorConfig(noColor, os.Stderr)
+	if errors.As(err, &cliErr) {
+		cliErr.Format(os.Stderr, cc)
+	} else {
+		fmt.Fprintf(os.Stderr, "%s %s\n", cc.Error("Error:"), err.Error())
 	}
 }
