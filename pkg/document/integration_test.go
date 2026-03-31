@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/moca-framework/moca/pkg/document"
+	"github.com/moca-framework/moca/pkg/orm"
 )
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -819,4 +820,146 @@ func (w *notesExtensionWrapper) BeforeRename(ctx *document.DocContext, doc docum
 }
 func (w *notesExtensionWrapper) AfterRename(ctx *document.DocContext, doc document.Document, oldName, newName string) error {
 	return w.inner.AfterRename(ctx, doc, oldName, newName)
+}
+
+// ── GetList integration tests ───────────────────────────────────────────────
+
+// TestInteg_GetList_LegacyFilters verifies that the old-style Filters
+// map[string]any path still works after the QueryBuilder refactor.
+func TestInteg_GetList_LegacyFilters(t *testing.T) {
+	skipIfNoInfra(t)
+	dctx := newIntegCtx(t)
+
+	// Insert two orders with different customers.
+	doc1, err := integDocManager.Insert(dctx, "IntegTestOrder", map[string]any{
+		"customer": "GetList-Alice",
+		"amount":   10.0,
+	})
+	if err != nil {
+		t.Fatalf("Insert doc1: %v", err)
+	}
+	doc2, err := integDocManager.Insert(dctx, "IntegTestOrder", map[string]any{
+		"customer": "GetList-Bob",
+		"amount":   20.0,
+	})
+	if err != nil {
+		t.Fatalf("Insert doc2: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupDocs(t, "IntegTestOrder", doc1.Name(), doc2.Name())
+	})
+
+	// Filter by customer (legacy equality filter).
+	docs, total, err := integDocManager.GetList(dctx, "IntegTestOrder", document.ListOptions{
+		Filters: map[string]any{"customer": "GetList-Alice"},
+	})
+	if err != nil {
+		t.Fatalf("GetList: %v", err)
+	}
+	if total < 1 {
+		t.Fatalf("expected at least 1 result, got total=%d", total)
+	}
+	found := false
+	for _, d := range docs {
+		if d.Get("customer") == "GetList-Alice" {
+			found = true
+		}
+		if d.Get("customer") == "GetList-Bob" {
+			t.Error("GetList with customer=GetList-Alice returned GetList-Bob document")
+		}
+	}
+	if !found {
+		t.Error("GetList-Alice document not found in results")
+	}
+}
+
+// TestInteg_GetList_AdvancedFilters verifies that AdvancedFilters with
+// non-equality operators work end-to-end.
+func TestInteg_GetList_AdvancedFilters(t *testing.T) {
+	skipIfNoInfra(t)
+	dctx := newIntegCtx(t)
+
+	// Insert orders with different amounts.
+	doc1, err := integDocManager.Insert(dctx, "IntegTestOrder", map[string]any{
+		"customer": "AdvFilter-Test",
+		"amount":   100.0,
+	})
+	if err != nil {
+		t.Fatalf("Insert doc1: %v", err)
+	}
+	doc2, err := integDocManager.Insert(dctx, "IntegTestOrder", map[string]any{
+		"customer": "AdvFilter-Test",
+		"amount":   500.0,
+	})
+	if err != nil {
+		t.Fatalf("Insert doc2: %v", err)
+	}
+	doc3, err := integDocManager.Insert(dctx, "IntegTestOrder", map[string]any{
+		"customer": "AdvFilter-Test",
+		"amount":   50.0,
+	})
+	if err != nil {
+		t.Fatalf("Insert doc3: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupDocs(t, "IntegTestOrder", doc1.Name(), doc2.Name(), doc3.Name())
+	})
+
+	// Use AdvancedFilters: customer = "AdvFilter-Test" AND amount > 75.
+	docs, _, err := integDocManager.GetList(dctx, "IntegTestOrder", document.ListOptions{
+		Filters: map[string]any{"customer": "AdvFilter-Test"},
+		AdvancedFilters: []orm.Filter{
+			{Field: "amount", Operator: orm.OpGreater, Value: 75.0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("GetList: %v", err)
+	}
+
+	// Should return doc1 (100) and doc2 (500), not doc3 (50).
+	if len(docs) != 2 {
+		t.Errorf("expected 2 docs with amount > 75, got %d", len(docs))
+	}
+}
+
+// TestInteg_GetList_Pagination verifies offset + limit + total count.
+func TestInteg_GetList_Pagination(t *testing.T) {
+	skipIfNoInfra(t)
+	dctx := newIntegCtx(t)
+
+	// Insert 5 orders.
+	var names []string
+	for i := 0; i < 5; i++ {
+		doc, err := integDocManager.Insert(dctx, "IntegTestOrder", map[string]any{
+			"customer": fmt.Sprintf("Paging-%d", i),
+			"amount":   float64(i * 10),
+		})
+		if err != nil {
+			t.Fatalf("Insert %d: %v", i, err)
+		}
+		names = append(names, doc.Name())
+	}
+	t.Cleanup(func() {
+		cleanupDocs(t, "IntegTestOrder", names...)
+	})
+
+	// Page: limit 2, offset 1. Filter by customer prefix isn't available via
+	// equality, so we use LIKE via AdvancedFilters.
+	docs, total, err := integDocManager.GetList(dctx, "IntegTestOrder", document.ListOptions{
+		AdvancedFilters: []orm.Filter{
+			{Field: "customer", Operator: orm.OpLike, Value: "Paging-%"},
+		},
+		Limit:  2,
+		Offset: 1,
+	})
+	if err != nil {
+		t.Fatalf("GetList: %v", err)
+	}
+
+	if total != 5 {
+		t.Errorf("total = %d, want 5", total)
+	}
+	if len(docs) != 2 {
+		t.Errorf("page size = %d, want 2", len(docs))
+	}
 }

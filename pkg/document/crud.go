@@ -62,16 +62,33 @@ func (e *DocNotFoundError) Error() string {
 
 // ListOptions configures a GetList query. All fields are optional.
 type ListOptions struct {
-	// Filters is a map of field name -> value for equality filters.
-	// Each key is validated against the MetaType's known fields.
-	Filters map[string]any
-
 	// OrderBy is the column to sort by. Defaults to "modified".
 	// Must be a known field name or standard column to prevent injection.
+	// Ignored when OrderByMulti is non-empty.
 	OrderBy string
 
 	// OrderDir is "ASC" or "DESC". Defaults to "DESC".
+	// Ignored when OrderByMulti is non-empty.
 	OrderDir string
+
+	// Filters is a map of field name -> value for equality filters.
+	// Each key is validated against the MetaType's known fields.
+	// These are converted internally to orm.Filter with OpEqual.
+	Filters map[string]any
+
+	// AdvancedFilters provides operator-aware filters (e.g. >, IN, LIKE).
+	// Applied in addition to equality Filters above.
+	AdvancedFilters []orm.Filter
+
+	// Fields specifies which columns to SELECT. When empty, all columns are returned.
+	Fields []string
+
+	// GroupBy specifies GROUP BY columns.
+	GroupBy []string
+
+	// OrderByMulti specifies multiple ORDER BY clauses.
+	// Takes precedence over OrderBy/OrderDir when non-empty.
+	OrderByMulti []orm.OrderClause
 
 	// Limit is the maximum number of rows to return. Defaults to 20, capped at 100.
 	Limit int
@@ -125,16 +142,6 @@ func buildDocColumns(mt *meta.MetaType) []string {
 	return columns
 }
 
-// buildColSet returns a set of all valid column names for a MetaType (for
-// validation of filter keys and ORDER BY values in GetList).
-func buildColSet(mt *meta.MetaType) map[string]struct{} {
-	cols := buildDocColumns(mt)
-	set := make(map[string]struct{}, len(cols))
-	for _, c := range cols {
-		set[c] = struct{}{}
-	}
-	return set
-}
 
 // quoteIdents returns a slice of sanitized quoted identifiers for the given
 // column names. Uses pgx.Identifier to prevent SQL injection.
@@ -362,12 +369,13 @@ func applyValues(doc *DynamicDoc, values map[string]any) error {
 //
 // All public methods are safe for concurrent use.
 type DocManager struct {
-	registry    *meta.Registry
-	db          *orm.DBManager
-	naming      *NamingEngine
-	validator   *Validator
-	controllers *ControllerRegistry
-	logger      *slog.Logger
+	registry     *meta.Registry
+	db           *orm.DBManager
+	queryAdapter orm.MetaProvider
+	naming       *NamingEngine
+	validator    *Validator
+	controllers  *ControllerRegistry
+	logger       *slog.Logger
 }
 
 // NewDocManager constructs a DocManager. All parameters are required.
@@ -380,12 +388,13 @@ func NewDocManager(
 	logger *slog.Logger,
 ) *DocManager {
 	return &DocManager{
-		registry:    registry,
-		db:          db,
-		naming:      naming,
-		validator:   validator,
-		controllers: controllers,
-		logger:      logger,
+		registry:     registry,
+		db:           db,
+		queryAdapter: meta.NewQueryMetaAdapter(registry),
+		naming:       naming,
+		validator:    validator,
+		controllers:  controllers,
+		logger:       logger,
 	}
 }
 
@@ -1011,89 +1020,89 @@ func (m *DocManager) GetList(ctx *DocContext, doctype string, opts ListOptions) 
 		return nil, 0, fmt.Errorf("crud: GetList %q: load MetaType: %w", doctype, err)
 	}
 
-	validCols := buildColSet(mt)
-
-	// Validate and sort filter keys for deterministic SQL.
-	filterKeys := make([]string, 0, len(opts.Filters))
-	for k := range opts.Filters {
-		if _, ok := validCols[k]; !ok {
-			return nil, 0, fmt.Errorf("crud: GetList %q: unknown filter field %q", doctype, k)
+	// Merge legacy equality filters and advanced filters.
+	var allFilters []orm.Filter
+	if len(opts.Filters) > 0 {
+		keys := make([]string, 0, len(opts.Filters))
+		for k := range opts.Filters {
+			keys = append(keys, k)
 		}
-		filterKeys = append(filterKeys, k)
+		sort.Strings(keys) // deterministic ordering
+		for _, k := range keys {
+			allFilters = append(allFilters, orm.Filter{
+				Field:    k,
+				Operator: orm.OpEqual,
+				Value:    opts.Filters[k],
+			})
+		}
 	}
-	sort.Strings(filterKeys)
+	allFilters = append(allFilters, opts.AdvancedFilters...)
 
-	// Build WHERE clause.
-	var whereParts []string
-	var whereArgs []any
-	for i, k := range filterKeys {
-		whereParts = append(whereParts, fmt.Sprintf("%s = $%d", pgx.Identifier{k}.Sanitize(), i+1))
-		whereArgs = append(whereArgs, opts.Filters[k])
+	// Build a base QueryBuilder with filters and groupBy.
+	base := orm.NewQueryBuilder(m.queryAdapter, ctx.Site.Name).For(doctype)
+	if len(allFilters) > 0 {
+		base = base.Where(allFilters...)
 	}
-	whereSQL := ""
-	if len(whereParts) > 0 {
-		whereSQL = " WHERE " + strings.Join(whereParts, " AND ")
+	if len(opts.GroupBy) > 0 {
+		base = base.GroupBy(opts.GroupBy...)
 	}
-
-	// Validate ORDER BY.
-	orderBy := opts.OrderBy
-	if orderBy == "" {
-		orderBy = "modified"
-	} else if _, ok := validCols[orderBy]; !ok {
-		return nil, 0, fmt.Errorf("crud: GetList %q: unknown order_by field %q", doctype, orderBy)
-	}
-	orderDir := strings.ToUpper(opts.OrderDir)
-	if orderDir != "ASC" && orderDir != "DESC" {
-		orderDir = "DESC"
-	}
-
-	// Validate and clamp LIMIT.
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = 20
-	} else if limit > 100 {
-		limit = 100
-	}
-	offset := opts.Offset
-	if offset < 0 {
-		offset = 0
-	}
-
-	tableName := meta.TableName(doctype)
-	quotedTable := pgx.Identifier{tableName}.Sanitize()
-	columns := buildDocColumns(mt)
-	quotedCols := quoteIdents(columns)
 
 	// COUNT query.
-	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s%s", quotedTable, whereSQL)
+	countSQL, countArgs, err := base.BuildCount(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("crud: GetList %q: build count: %w", doctype, err)
+	}
 	var total int
-	err = pool.QueryRow(ctx, countSQL, whereArgs...).Scan(&total)
+	err = pool.QueryRow(ctx, countSQL, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("crud: GetList %q: count: %w", doctype, err)
 	}
 
-	// Main SELECT query.
-	limitArgIdx := len(whereArgs) + 1
-	offsetArgIdx := limitArgIdx + 1
-	mainSQL := fmt.Sprintf("SELECT %s FROM %s%s ORDER BY %s %s LIMIT $%d OFFSET $%d",
-		strings.Join(quotedCols, ", "),
-		quotedTable,
-		whereSQL,
-		pgx.Identifier{orderBy}.Sanitize(),
-		orderDir,
-		limitArgIdx,
-		offsetArgIdx,
-	)
+	// Main SELECT query — rebuild to add fields, order, limit, offset.
+	qb := orm.NewQueryBuilder(m.queryAdapter, ctx.Site.Name).For(doctype)
+	if len(opts.Fields) > 0 {
+		qb = qb.Fields(opts.Fields...)
+	}
+	if len(allFilters) > 0 {
+		qb = qb.Where(allFilters...)
+	}
+	if len(opts.GroupBy) > 0 {
+		qb = qb.GroupBy(opts.GroupBy...)
+	}
 
-	mainArgs := make([]any, 0, len(whereArgs)+2)
-	mainArgs = append(mainArgs, whereArgs...)
-	mainArgs = append(mainArgs, limit, offset)
+	// Order: OrderByMulti takes precedence over legacy OrderBy/OrderDir.
+	if len(opts.OrderByMulti) > 0 {
+		for _, o := range opts.OrderByMulti {
+			qb = qb.OrderBy(o.Field, o.Direction)
+		}
+	} else if opts.OrderBy != "" {
+		dir := strings.ToUpper(opts.OrderDir)
+		if dir != "ASC" && dir != "DESC" {
+			dir = "DESC"
+		}
+		qb = qb.OrderBy(opts.OrderBy, dir)
+	}
+	// When neither is set, QueryBuilder defaults to "modified" DESC.
+
+	qb = qb.Limit(opts.Limit).Offset(opts.Offset)
+
+	mainSQL, mainArgs, err := qb.Build(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("crud: GetList %q: build query: %w", doctype, err)
+	}
 
 	rows, err := pool.Query(ctx, mainSQL, mainArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("crud: GetList %q: query: %w", doctype, err)
 	}
 	defer rows.Close()
+
+	// Derive column names from the query result for flexible scanning.
+	fieldDescs := rows.FieldDescriptions()
+	colNames := make([]string, len(fieldDescs))
+	for i, fd := range fieldDescs {
+		colNames[i] = fd.Name
+	}
 
 	childMetas, err := m.resolveChildMetas(ctx, ctx.Site.Name, mt)
 	if err != nil {
@@ -1107,7 +1116,7 @@ func (m *DocManager) GetList(ctx *DocContext, doctype string, opts ListOptions) 
 			return nil, 0, fmt.Errorf("crud: GetList %q: scan row: %w", doctype, err)
 		}
 		doc := NewDynamicDoc(mt, childMetas, false)
-		for i, col := range columns {
+		for i, col := range colNames {
 			doc.values[col] = normalizeDBValue(vals[i])
 		}
 		doc.resetDirtyState()

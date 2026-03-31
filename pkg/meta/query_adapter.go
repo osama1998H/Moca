@@ -37,12 +37,18 @@ func (a *QueryMetaAdapter) QueryMeta(ctx context.Context, site, doctype string) 
 		validCols[c.Name] = struct{}{}
 	}
 
+	fieldTypes := make(map[string]string, len(mt.Fields))
+	nonQueryableFields := make(map[string]struct{})
 	linkFields := make(map[string]string)
 	dynamicLinkFields := make(map[string]struct{})
 
 	for _, f := range mt.Fields {
-		if ColumnType(f.FieldType) != "" {
+		colType := ColumnType(f.FieldType)
+		if colType != "" {
 			validCols[f.Name] = struct{}{}
+			fieldTypes[f.Name] = colType
+		} else if f.FieldType == FieldTypeTable || f.FieldType == FieldTypeTableMultiSelect {
+			nonQueryableFields[f.Name] = struct{}{}
 		}
 		switch f.FieldType {
 		case FieldTypeLink:
@@ -53,11 +59,13 @@ func (a *QueryMetaAdapter) QueryMeta(ctx context.Context, site, doctype string) 
 	}
 
 	return &orm.QueryMeta{
-		Name:              mt.Name,
-		IsChildTable:      mt.IsChildTable,
-		TableName:         TableName(doctype),
-		ValidColumns:      validCols,
-		LinkFields:        linkFields,
-		DynamicLinkFields: dynamicLinkFields,
+		Name:               mt.Name,
+		IsChildTable:       mt.IsChildTable,
+		TableName:          TableName(doctype),
+		ValidColumns:       validCols,
+		FieldTypes:         fieldTypes,
+		NonQueryableFields: nonQueryableFields,
+		LinkFields:         linkFields,
+		DynamicLinkFields:  dynamicLinkFields,
 	}, nil
 }
