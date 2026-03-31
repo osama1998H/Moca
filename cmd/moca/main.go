@@ -38,10 +38,8 @@ func main() {
 
 	// Register framework-internal commands using explicit constructors.
 	// App-contributed commands use init() + cli.MustRegisterCommand() instead.
-	root.AddCommand(
-		NewVersionCommand(),
-		NewCompletionCommand(),
-	)
+	root.AddCommand(NewVersionCommand(), NewCompletionCommand())
+	root.AddCommand(allCommands()...)
 
 	if err := root.Execute(); err != nil {
 		handleError(root, err)
