@@ -13,17 +13,18 @@ import (
 // It owns the ServeMux, dependency references, and middleware chain.
 // Field order is chosen to minimise the GC pointer-scan region.
 type Gateway struct {
-	mux          *http.ServeMux
-	docManager   *document.DocManager
-	registry     *meta.Registry
-	redis        *drivers.RedisClients
-	rateLimiter  *RateLimiter
-	logger       *slog.Logger
-	defaultRate  *meta.RateLimitConfig
-	auth         Authenticator
-	perm         PermissionChecker
-	siteResolver SiteResolver
-	cors         CORSConfig
+	mux           *http.ServeMux
+	docManager    *document.DocManager
+	registry      *meta.Registry
+	redis         *drivers.RedisClients
+	rateLimiter   *RateLimiter
+	versionRouter *VersionRouter
+	logger        *slog.Logger
+	defaultRate   *meta.RateLimitConfig
+	auth          Authenticator
+	perm          PermissionChecker
+	siteResolver  SiteResolver
+	cors          CORSConfig
 }
 
 // GatewayOption configures a Gateway during construction.
@@ -46,14 +47,19 @@ func NewGateway(opts ...GatewayOption) *Gateway {
 }
 
 // Handler returns an http.Handler with the full middleware chain applied.
-// Chain order: RequestID → CORS → Tenant → Auth → RateLimit → ServeMux.
+// Chain order: RequestID → CORS → Tenant → Auth → RateLimit → Version → ServeMux.
 //
 // Rate limiting is placed after Auth so the key includes user identity.
 // Tenant resolution is before Auth because auth may need the site context.
+// Version middleware is innermost (closest to handlers) since it only sets
+// context and headers — it doesn't need auth/tenant info.
 func (g *Gateway) Handler() http.Handler {
 	var h http.Handler = g.mux
 
 	// Wrap innermost to outermost (last applied runs first).
+	if g.versionRouter != nil {
+		h = g.versionRouter.Middleware()(h)
+	}
 	h = rateLimitMiddleware(g.rateLimiter, g.defaultRate)(h)
 	h = authMiddleware(g.auth)(h)
 	h = tenantMiddleware(g.siteResolver)(h)
@@ -132,6 +138,11 @@ func WithRateLimiter(rl *RateLimiter, defaultCfg *meta.RateLimitConfig) GatewayO
 // WithCORS sets the CORS configuration.
 func WithCORS(cfg CORSConfig) GatewayOption {
 	return func(g *Gateway) { g.cors = cfg }
+}
+
+// WithVersionRouter sets the version router for multi-version API support.
+func WithVersionRouter(vr *VersionRouter) GatewayOption {
+	return func(g *Gateway) { g.versionRouter = vr }
 }
 
 // WithLogger sets the structured logger.

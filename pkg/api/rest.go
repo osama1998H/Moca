@@ -84,9 +84,17 @@ func (h *ResourceHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	chain := buildTransformerChain(r.Context(), mt)
+	ctx := WithOperationType(r.Context(), OpList)
 	data := make([]map[string]any, len(docs))
 	for i, d := range docs {
-		data[i] = d.AsMap()
+		item := d.AsMap()
+		item, err = chain.TransformResponse(ctx, mt, item)
+		if err != nil {
+			h.handleCRUDError(w, r, transformError("response", err))
+			return
+		}
+		data[i] = item
 	}
 	writeListSuccess(w, data, total, opts.Limit, opts.Offset)
 }
@@ -115,7 +123,16 @@ func (h *ResourceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		h.handleCRUDError(w, r, err)
 		return
 	}
-	writeSuccess(w, http.StatusOK, doc.AsMap())
+
+	chain := buildTransformerChain(r.Context(), mt)
+	ctx := WithOperationType(r.Context(), OpGet)
+	data := doc.AsMap()
+	data, err = chain.TransformResponse(ctx, mt, data)
+	if err != nil {
+		h.handleCRUDError(w, r, transformError("response", err))
+		return
+	}
+	writeSuccess(w, http.StatusOK, data)
 }
 
 func (h *ResourceHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
@@ -133,13 +150,28 @@ func (h *ResourceHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return // error already written
 	}
 
+	chain := buildTransformerChain(r.Context(), mt)
+	ctx := WithOperationType(r.Context(), OpCreate)
+	values, err = chain.TransformRequest(ctx, mt, values)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "TRANSFORM_ERROR", err.Error())
+		return
+	}
+
 	docCtx := document.NewDocContext(r.Context(), site, user)
 	doc, err := h.crud.Insert(docCtx, mt.Name, values)
 	if err != nil {
 		h.handleCRUDError(w, r, err)
 		return
 	}
-	writeSuccess(w, http.StatusCreated, doc.AsMap())
+
+	data := doc.AsMap()
+	data, err = chain.TransformResponse(ctx, mt, data)
+	if err != nil {
+		h.handleCRUDError(w, r, transformError("response", err))
+		return
+	}
+	writeSuccess(w, http.StatusCreated, data)
 }
 
 func (h *ResourceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
@@ -159,13 +191,28 @@ func (h *ResourceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	chain := buildTransformerChain(r.Context(), mt)
+	ctx := WithOperationType(r.Context(), OpUpdate)
+	values, err = chain.TransformRequest(ctx, mt, values)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "TRANSFORM_ERROR", err.Error())
+		return
+	}
+
 	docCtx := document.NewDocContext(r.Context(), site, user)
 	doc, err := h.crud.Update(docCtx, mt.Name, name, values)
 	if err != nil {
 		h.handleCRUDError(w, r, err)
 		return
 	}
-	writeSuccess(w, http.StatusOK, doc.AsMap())
+
+	data := doc.AsMap()
+	data, err = chain.TransformResponse(ctx, mt, data)
+	if err != nil {
+		h.handleCRUDError(w, r, transformError("response", err))
+		return
+	}
+	writeSuccess(w, http.StatusOK, data)
 }
 
 func (h *ResourceHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +244,8 @@ func (h *ResourceHandler) handleMeta(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeSuccess(w, http.StatusOK, buildMetaResponse(mt))
+	resp := filterMetaFields(buildMetaResponse(mt), mt, r.Context())
+	writeSuccess(w, http.StatusOK, resp)
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

@@ -12,9 +12,11 @@ import (
 type contextKey int
 
 const (
-	userKey      contextKey = iota // *auth.User
-	siteKey                        // *tenancy.SiteContext
-	requestIDKey                   // string
+	userKey          contextKey = iota // *auth.User
+	siteKey                            // *tenancy.SiteContext
+	requestIDKey                       // string
+	apiVersionKey                      // string ("v1", "v2", ...)
+	operationTypeKey                   // OperationType
 )
 
 // WithUser stores the authenticated user in ctx.
@@ -51,4 +53,28 @@ func WithRequestID(ctx context.Context, id string) context.Context {
 func RequestIDFromContext(ctx context.Context) string {
 	id, _ := ctx.Value(requestIDKey).(string)
 	return id
+}
+
+// WithAPIVersion stores the API version string (e.g. "v1") in ctx.
+func WithAPIVersion(ctx context.Context, version string) context.Context {
+	return context.WithValue(ctx, apiVersionKey, version)
+}
+
+// APIVersionFromContext retrieves the API version string stored by WithAPIVersion.
+// Returns an empty string if no version is present.
+func APIVersionFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(apiVersionKey).(string)
+	return v
+}
+
+// WithOperationType stores the current API operation type in ctx.
+func WithOperationType(ctx context.Context, op OperationType) context.Context {
+	return context.WithValue(ctx, operationTypeKey, op)
+}
+
+// OperationTypeFromContext retrieves the OperationType stored by WithOperationType.
+// Returns OpGet as the zero-value default.
+func OperationTypeFromContext(ctx context.Context) OperationType {
+	op, _ := ctx.Value(operationTypeKey).(OperationType)
+	return op
 }
