@@ -39,8 +39,8 @@ func newRootCommand() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 
-		// PersistentPreRunE is a no-op placeholder. MS-07-T2 will wire
-		// context resolution (project/site/env detection) here.
+		// PersistentPreRunE is a no-op default. Context resolution
+		// (project/site/env detection) is wired in cmd/moca/main.go.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			return nil
 		},
