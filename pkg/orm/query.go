@@ -6,10 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
+
+// extraFieldNameRe validates _extra field names: lowercase alphanumeric + underscore,
+// must start with a letter or underscore. This regex ensures SQL injection safety
+// when embedding field names in _extra->>'...' expressions.
+var extraFieldNameRe = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
 
 // ── Operator type and constants ──────────────────────────────────────────────
 
@@ -70,6 +77,14 @@ type QueryMeta struct {
 	// ValidColumns is the set of column names that are valid for queries.
 	// Includes standard columns and user-defined storable fields.
 	ValidColumns map[string]struct{}
+	// FieldTypes maps field names to their PostgreSQL column type (e.g. "TEXT",
+	// "INTEGER"). When non-nil, enables _extra JSONB transparency: fields not
+	// found in ValidColumns or NonQueryableFields are treated as _extra fields.
+	// When nil, unknown fields produce errors (backward compat with T1).
+	FieldTypes map[string]string
+	// NonQueryableFields is the set of field names that exist in the MetaType
+	// but cannot be queried (Table, TableMultiSelect, layout-only types).
+	NonQueryableFields map[string]struct{}
 	// Name is the DocType name (e.g. "SalesOrder").
 	Name string
 	// TableName is the PostgreSQL table name (e.g. "tab_sales_order").
@@ -293,11 +308,125 @@ func (qb *QueryBuilder) BuildCount(ctx context.Context) (string, []any, error) {
 	return sb.String(), rq.whereArgs, nil
 }
 
+// ── field access resolution ──────────────────────────────────────────────────
+
+// fieldAccess describes how a field maps to SQL — either as a direct column
+// reference or as a _extra JSONB extraction expression.
+type fieldAccess struct {
+	// expr is the SQL expression for the field:
+	//   real column: `"status"`
+	//   _extra field: `_extra->>'custom_color'`
+	expr string
+	// name is the original field name.
+	name string
+	// isExtra is true when the field lives in the _extra JSONB column.
+	isExtra bool
+}
+
+// resolveFieldAccess classifies a field name and returns the appropriate SQL
+// expression. The classification order is:
+//  1. Known real column (in ValidColumns) → quoted identifier
+//  2. Known non-queryable field (Table, layout) → error
+//  3. If FieldTypes is nil (no _extra support) → error (backward compat)
+//  4. Valid _extra field name (regex check) → _extra->>'field'
+//  5. Invalid name → error
+func resolveFieldAccess(fieldName string, qm *QueryMeta, doctype string) (*fieldAccess, error) {
+	// 1. Real column.
+	if _, ok := qm.ValidColumns[fieldName]; ok {
+		return &fieldAccess{
+			expr: pgx.Identifier{fieldName}.Sanitize(),
+			name: fieldName,
+		}, nil
+	}
+
+	// 2. Non-queryable field (Table, layout types).
+	if qm.NonQueryableFields != nil {
+		if _, ok := qm.NonQueryableFields[fieldName]; ok {
+			return nil, fmt.Errorf("querybuilder: field %q is not queryable for doctype %q", fieldName, doctype)
+		}
+	}
+
+	// 3. No _extra support (backward compat).
+	if qm.FieldTypes == nil {
+		return nil, fmt.Errorf("querybuilder: unknown field %q for doctype %q", fieldName, doctype)
+	}
+
+	// 4. Validate as _extra field name.
+	if !extraFieldNameRe.MatchString(fieldName) {
+		return nil, fmt.Errorf("querybuilder: invalid _extra field name %q for doctype %q", fieldName, doctype)
+	}
+
+	return &fieldAccess{
+		expr:    fmt.Sprintf("_extra->>'%s'", fieldName),
+		name:    fieldName,
+		isExtra: true,
+	}, nil
+}
+
+// extraFilterExpr returns the SQL expression for an _extra field in a WHERE
+// clause, applying type casts as needed for the given operator and value type.
+//
+// Rules:
+//   - Equality/LIKE/IN: text comparison (no cast)
+//   - Numeric comparisons (>, <, >=, <=, BETWEEN): cast based on Go value type
+//   - IS NULL / IS NOT NULL: no cast
+//   - @> JSONB contains: operates on the _extra column itself
+func extraFilterExpr(fieldName string, op Operator, value any) string {
+	base := fmt.Sprintf("_extra->>'%s'", fieldName)
+
+	switch op {
+	case OpJSONContains:
+		// @> operates on the _extra column itself, not the extracted text.
+		return pgx.Identifier{"_extra"}.Sanitize()
+
+	case OpIsNull, OpIsNotNull:
+		return base
+
+	case OpEqual, OpNotEqual, OpLike, OpNotLike, OpIn, OpNotIn:
+		return base
+
+	case OpGreater, OpLess, OpGreaterOrEq, OpLessOrEq, OpBetween:
+		cast := inferCast(value)
+		if cast == "" {
+			return base
+		}
+		return fmt.Sprintf("(%s)::%s", base, cast)
+
+	default:
+		return base
+	}
+}
+
+// inferCast returns the PostgreSQL cast suffix for a Go value used in numeric
+// comparisons on _extra JSONB fields. For BETWEEN, the value is a slice — we
+// inspect the first element.
+func inferCast(value any) string {
+	v := value
+	// For BETWEEN, inspect the first element of the slice.
+	if s, ok := value.([]any); ok && len(s) > 0 {
+		v = s[0]
+	}
+
+	switch v.(type) {
+	case int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		float32, float64:
+		return "NUMERIC"
+	case bool:
+		return "BOOLEAN"
+	case time.Time:
+		return "TIMESTAMPTZ"
+	default:
+		return ""
+	}
+}
+
 // ── internal helpers ─────────────────────────────────────────────────────────
 
 // resolvedQuery holds the validated, pre-built query components shared by
 // Build() and BuildCount().
 type resolvedQuery struct {
+	qm          *QueryMeta
 	validCols   map[string]struct{}
 	quotedTable string
 	groupBySQL  string
@@ -323,18 +452,19 @@ func (qb *QueryBuilder) resolve(ctx context.Context) (*resolvedQuery, error) {
 	quotedTable := pgx.Identifier{qm.TableName}.Sanitize()
 
 	// WHERE clause.
-	whereSQL, whereArgs, err := qb.buildWhereClause(qm.ValidColumns)
+	whereSQL, whereArgs, err := qb.buildWhereClause(qm)
 	if err != nil {
 		return nil, err
 	}
 
 	// GROUP BY clause.
-	groupBySQL, err := qb.buildGroupByClause(qm.ValidColumns)
+	groupBySQL, err := qb.buildGroupByClause(qm)
 	if err != nil {
 		return nil, err
 	}
 
 	return &resolvedQuery{
+		qm:          qm,
 		quotedTable: quotedTable,
 		validCols:   qm.ValidColumns,
 		whereSQL:    whereSQL,
@@ -344,7 +474,7 @@ func (qb *QueryBuilder) resolve(ctx context.Context) (*resolvedQuery, error) {
 }
 
 // buildSelectClause returns the SELECT column list or "*".
-// Field names are validated against the MetaType's valid columns.
+// Field names are resolved via resolveFieldAccess; _extra fields are aliased.
 func (qb *QueryBuilder) buildSelectClause(rq *resolvedQuery) (string, error) {
 	if len(qb.fields) == 0 {
 		return "*", nil
@@ -356,17 +486,23 @@ func (qb *QueryBuilder) buildSelectClause(rq *resolvedQuery) (string, error) {
 		if _, dup := seen[f]; dup {
 			continue
 		}
-		if _, ok := rq.validCols[f]; !ok {
-			return "", fmt.Errorf("querybuilder: unknown select field %q for doctype %q", f, qb.doctype)
+		fa, err := resolveFieldAccess(f, rq.qm, qb.doctype)
+		if err != nil {
+			return "", err
 		}
 		seen[f] = struct{}{}
-		parts = append(parts, pgx.Identifier{f}.Sanitize())
+		if fa.isExtra {
+			// _extra fields need an alias: _extra->>'color' AS "color"
+			parts = append(parts, fmt.Sprintf("%s AS %s", fa.expr, pgx.Identifier{f}.Sanitize()))
+		} else {
+			parts = append(parts, fa.expr)
+		}
 	}
 	return strings.Join(parts, ", "), nil
 }
 
 // buildWhereClause generates the WHERE SQL and args from the builder's filters.
-func (qb *QueryBuilder) buildWhereClause(validCols map[string]struct{}) (string, []any, error) {
+func (qb *QueryBuilder) buildWhereClause(qm *QueryMeta) (string, []any, error) {
 	if len(qb.filters) == 0 {
 		return "", nil, nil
 	}
@@ -376,10 +512,11 @@ func (qb *QueryBuilder) buildWhereClause(validCols map[string]struct{}) (string,
 	var args []any
 
 	for _, f := range qb.filters {
-		if _, ok := validCols[f.Field]; !ok {
-			return "", nil, fmt.Errorf("querybuilder: unknown filter field %q for doctype %q", f.Field, qb.doctype)
+		fa, err := resolveFieldAccess(f.Field, qm, qb.doctype)
+		if err != nil {
+			return "", nil, err
 		}
-		sql, newArgs, err := buildFilterSQL(f, &argIdx)
+		sql, newArgs, err := buildFilterSQL(f, fa, &argIdx)
 		if err != nil {
 			return "", nil, err
 		}
@@ -391,16 +528,17 @@ func (qb *QueryBuilder) buildWhereClause(validCols map[string]struct{}) (string,
 }
 
 // buildGroupByClause validates and quotes GROUP BY fields.
-func (qb *QueryBuilder) buildGroupByClause(validCols map[string]struct{}) (string, error) {
+func (qb *QueryBuilder) buildGroupByClause(qm *QueryMeta) (string, error) {
 	if len(qb.groupBy) == 0 {
 		return "", nil
 	}
 	parts := make([]string, 0, len(qb.groupBy))
 	for _, f := range qb.groupBy {
-		if _, ok := validCols[f]; !ok {
-			return "", fmt.Errorf("querybuilder: unknown group_by field %q for doctype %q", f, qb.doctype)
+		fa, err := resolveFieldAccess(f, qm, qb.doctype)
+		if err != nil {
+			return "", err
 		}
-		parts = append(parts, pgx.Identifier{f}.Sanitize())
+		parts = append(parts, fa.expr)
 	}
 	return strings.Join(parts, ", "), nil
 }
@@ -413,33 +551,40 @@ func (qb *QueryBuilder) buildOrderByClause(rq *resolvedQuery) (string, error) {
 	}
 	parts := make([]string, 0, len(qb.orderBy))
 	for _, o := range qb.orderBy {
-		if _, ok := rq.validCols[o.Field]; !ok {
-			return "", fmt.Errorf("querybuilder: unknown order_by field %q for doctype %q", o.Field, qb.doctype)
+		fa, err := resolveFieldAccess(o.Field, rq.qm, qb.doctype)
+		if err != nil {
+			return "", err
 		}
-		parts = append(parts, pgx.Identifier{o.Field}.Sanitize()+" "+o.Direction)
+		parts = append(parts, fa.expr+" "+o.Direction)
 	}
 	return strings.Join(parts, ", "), nil
 }
 
 // buildFilterSQL generates the SQL fragment and args for a single Filter.
-// argIdx is advanced past any consumed placeholder positions.
-func buildFilterSQL(f Filter, argIdx *int) (string, []any, error) {
-	quoted := pgx.Identifier{f.Field}.Sanitize()
+// fa provides the resolved field expression. argIdx is advanced past any
+// consumed placeholder positions.
+func buildFilterSQL(f Filter, fa *fieldAccess, argIdx *int) (string, []any, error) {
+	// Determine the field expression for this filter.
+	// For _extra fields, the expression may include type casts.
+	fieldExpr := fa.expr
+	if fa.isExtra {
+		fieldExpr = extraFilterExpr(fa.name, f.Operator, f.Value)
+	}
 
 	switch f.Operator {
 	// Simple comparison operators.
 	case OpEqual, OpNotEqual, OpGreater, OpLess, OpGreaterOrEq, OpLessOrEq:
-		sql := fmt.Sprintf("%s %s $%d", quoted, string(f.Operator), *argIdx)
+		sql := fmt.Sprintf("%s %s $%d", fieldExpr, string(f.Operator), *argIdx)
 		*argIdx++
 		return sql, []any{f.Value}, nil
 
 	case OpLike:
-		sql := fmt.Sprintf("%s LIKE $%d", quoted, *argIdx)
+		sql := fmt.Sprintf("%s LIKE $%d", fieldExpr, *argIdx)
 		*argIdx++
 		return sql, []any{f.Value}, nil
 
 	case OpNotLike:
-		sql := fmt.Sprintf("%s NOT LIKE $%d", quoted, *argIdx)
+		sql := fmt.Sprintf("%s NOT LIKE $%d", fieldExpr, *argIdx)
 		*argIdx++
 		return sql, []any{f.Value}, nil
 
@@ -460,7 +605,7 @@ func buildFilterSQL(f Filter, argIdx *int) (string, []any, error) {
 		if f.Operator == OpNotIn {
 			keyword = "NOT IN"
 		}
-		sql := fmt.Sprintf("%s %s (%s)", quoted, keyword, strings.Join(placeholders, ", "))
+		sql := fmt.Sprintf("%s %s (%s)", fieldExpr, keyword, strings.Join(placeholders, ", "))
 		return sql, elems, nil
 
 	case OpBetween:
@@ -471,22 +616,27 @@ func buildFilterSQL(f Filter, argIdx *int) (string, []any, error) {
 		if len(elems) != 2 {
 			return "", nil, fmt.Errorf("querybuilder: between operator on field %q: requires exactly 2 values, got %d", f.Field, len(elems))
 		}
-		sql := fmt.Sprintf("%s BETWEEN $%d AND $%d", quoted, *argIdx, *argIdx+1)
+		// For _extra fields with BETWEEN, re-resolve with the actual slice
+		// so inferCast can inspect the element types.
+		if fa.isExtra {
+			fieldExpr = extraFilterExpr(fa.name, f.Operator, elems)
+		}
+		sql := fmt.Sprintf("%s BETWEEN $%d AND $%d", fieldExpr, *argIdx, *argIdx+1)
 		*argIdx += 2
 		return sql, elems, nil
 
 	case OpIsNull:
-		return fmt.Sprintf("%s IS NULL", quoted), nil, nil
+		return fmt.Sprintf("%s IS NULL", fieldExpr), nil, nil
 
 	case OpIsNotNull:
-		return fmt.Sprintf("%s IS NOT NULL", quoted), nil, nil
+		return fmt.Sprintf("%s IS NOT NULL", fieldExpr), nil, nil
 
 	case OpJSONContains:
 		data, err := json.Marshal(f.Value)
 		if err != nil {
 			return "", nil, fmt.Errorf("querybuilder: @> operator on field %q: json marshal: %w", f.Field, err)
 		}
-		sql := fmt.Sprintf("%s @> $%d::jsonb", quoted, *argIdx)
+		sql := fmt.Sprintf("%s @> $%d::jsonb", fieldExpr, *argIdx)
 		*argIdx++
 		return sql, []any{string(data)}, nil
 

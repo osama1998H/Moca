@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 // ── test MetaProvider ────────────────────────────────────────────────────────
@@ -167,7 +168,7 @@ func TestBuild_UnknownSelectField(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown select field")
 	}
-	if !strings.Contains(err.Error(), "unknown select field") {
+	if !strings.Contains(err.Error(), "unknown field") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -516,7 +517,7 @@ func TestBuild_UnknownFilterField(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown filter field")
 	}
-	if !strings.Contains(err.Error(), "unknown filter field") {
+	if !strings.Contains(err.Error(), "unknown field") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -570,7 +571,7 @@ func TestBuild_OrderBy_InvalidField(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown order_by field")
 	}
-	if !strings.Contains(err.Error(), "unknown order_by field") {
+	if !strings.Contains(err.Error(), "unknown field") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -626,7 +627,7 @@ func TestBuild_GroupBy_UnknownField(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown group_by field")
 	}
-	if !strings.Contains(err.Error(), "unknown group_by field") {
+	if !strings.Contains(err.Error(), "unknown field") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -935,5 +936,555 @@ func TestBuild_FullSQLStructure(t *testing.T) {
 	}
 	if args[0] != "Draft" || args[1] != 50 || args[2] != 10 {
 		t.Errorf("args = %v, want [Draft 50 10]", args)
+	}
+}
+
+// ── _extra JSONB transparency tests (MS-05-T2) ─────────────────────────────
+
+// salesOrderMetaWithExtra returns a QueryMeta fixture with FieldTypes and
+// NonQueryableFields populated, enabling _extra JSONB transparency.
+func salesOrderMetaWithExtra() *QueryMeta {
+	cols := map[string]struct{}{
+		// Standard columns.
+		"name": {}, "owner": {}, "creation": {}, "modified": {},
+		"modified_by": {}, "docstatus": {}, "idx": {}, "workflow_state": {},
+		"_extra": {}, "_user_tags": {}, "_comments": {}, "_assign": {}, "_liked_by": {},
+		// User-defined real columns.
+		"customer": {}, "total": {}, "status": {}, "tags": {}, "order_date": {},
+	}
+	fieldTypes := map[string]string{
+		"customer":   "TEXT",
+		"total":      "NUMERIC(18,6)",
+		"status":     "TEXT",
+		"tags":       "JSONB",
+		"order_date": "DATE",
+	}
+	nonQueryable := map[string]struct{}{
+		"items":     {}, // Table type
+		"addresses": {}, // TableMultiSelect type
+	}
+	return &QueryMeta{
+		Name:               "SalesOrder",
+		IsChildTable:       false,
+		TableName:          "tab_sales_order",
+		ValidColumns:       cols,
+		FieldTypes:         fieldTypes,
+		NonQueryableFields: nonQueryable,
+	}
+}
+
+func testProviderWithExtra() *stubMetaProvider {
+	return &stubMetaProvider{
+		metas: map[string]*QueryMeta{
+			"site1:SalesOrder": salesOrderMetaWithExtra(),
+		},
+	}
+}
+
+// ── _extra: SELECT clause ──────────────────────────────────────────────────
+
+func TestExtra_Select_RealColumnUnchanged(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Fields("name", "status").
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `"name", "status"`) {
+		t.Errorf("expected quoted real columns, got: %s", sql)
+	}
+}
+
+func TestExtra_Select_ExtraField(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Fields("custom_color").
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := `_extra->>'custom_color' AS "custom_color"`
+	if !strings.Contains(sql, expected) {
+		t.Errorf("expected %q in SELECT, got: %s", expected, sql)
+	}
+}
+
+func TestExtra_Select_MixedRealAndExtra(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Fields("name", "custom_color", "status").
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `"name"`) {
+		t.Errorf("expected real column in SELECT, got: %s", sql)
+	}
+	if !strings.Contains(sql, `_extra->>'custom_color' AS "custom_color"`) {
+		t.Errorf("expected _extra field in SELECT, got: %s", sql)
+	}
+	if !strings.Contains(sql, `"status"`) {
+		t.Errorf("expected real column in SELECT, got: %s", sql)
+	}
+}
+
+// ── _extra: WHERE equality (no cast) ───────────────────────────────────────
+
+func TestExtra_Filter_Equality(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_color", Operator: OpEqual, Value: "red"}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `_extra->>'custom_color' = $1`) {
+		t.Errorf("expected _extra equality filter, got: %s", sql)
+	}
+	if args[0] != "red" {
+		t.Errorf("arg[0] = %v, want red", args[0])
+	}
+}
+
+func TestExtra_Filter_NotEqual(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_color", Operator: OpNotEqual, Value: "blue"}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `_extra->>'custom_color' != $1`) {
+		t.Errorf("expected _extra != filter, got: %s", sql)
+	}
+}
+
+// ── _extra: numeric comparisons (::NUMERIC cast) ───────────────────────────
+
+func TestExtra_Filter_NumericGreater_Int(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_age", Operator: OpGreater, Value: 30}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `(_extra->>'custom_age')::NUMERIC > $1`) {
+		t.Errorf("expected NUMERIC cast, got: %s", sql)
+	}
+	if args[0] != 30 {
+		t.Errorf("arg[0] = %v, want 30", args[0])
+	}
+}
+
+func TestExtra_Filter_NumericLess_Float64(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_score", Operator: OpLess, Value: 99.5}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `(_extra->>'custom_score')::NUMERIC < $1`) {
+		t.Errorf("expected NUMERIC cast for float64, got: %s", sql)
+	}
+}
+
+func TestExtra_Filter_NumericGTE_NoCastForString(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_rank", Operator: OpGreaterOrEq, Value: "A"}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// String value → no cast, text comparison.
+	if !strings.Contains(sql, `_extra->>'custom_rank' >= $1`) {
+		t.Errorf("expected no cast for string value, got: %s", sql)
+	}
+}
+
+// ── _extra: BOOLEAN and TIMESTAMPTZ casts ──────────────────────────────────
+
+func TestExtra_Filter_BoolCast(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_active", Operator: OpEqual, Value: true}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Equality with bool → no cast (equality uses text comparison).
+	if !strings.Contains(sql, `_extra->>'custom_active' = $1`) {
+		t.Errorf("expected no cast for equality, got: %s", sql)
+	}
+}
+
+func TestExtra_Filter_BoolCast_Comparison(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_active", Operator: OpGreater, Value: false}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `(_extra->>'custom_active')::BOOLEAN > $1`) {
+		t.Errorf("expected BOOLEAN cast, got: %s", sql)
+	}
+}
+
+func TestExtra_Filter_TimestamptzCast(t *testing.T) {
+	ts := time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC)
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_deadline", Operator: OpLessOrEq, Value: ts}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `(_extra->>'custom_deadline')::TIMESTAMPTZ <= $1`) {
+		t.Errorf("expected TIMESTAMPTZ cast, got: %s", sql)
+	}
+}
+
+// ── _extra: LIKE / NOT LIKE (no cast) ──────────────────────────────────────
+
+func TestExtra_Filter_Like(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_note", Operator: OpLike, Value: "%urgent%"}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `_extra->>'custom_note' LIKE $1`) {
+		t.Errorf("expected _extra LIKE without cast, got: %s", sql)
+	}
+}
+
+func TestExtra_Filter_NotLike(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_note", Operator: OpNotLike, Value: "%draft%"}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `_extra->>'custom_note' NOT LIKE $1`) {
+		t.Errorf("expected _extra NOT LIKE without cast, got: %s", sql)
+	}
+}
+
+// ── _extra: IS NULL / IS NOT NULL ──────────────────────────────────────────
+
+func TestExtra_Filter_IsNull(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_color", Operator: OpIsNull}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `_extra->>'custom_color' IS NULL`) {
+		t.Errorf("expected _extra IS NULL, got: %s", sql)
+	}
+	// Only limit + offset args.
+	if len(args) != 2 {
+		t.Errorf("args count = %d, want 2", len(args))
+	}
+}
+
+func TestExtra_Filter_IsNotNull(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_color", Operator: OpIsNotNull}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `_extra->>'custom_color' IS NOT NULL`) {
+		t.Errorf("expected _extra IS NOT NULL, got: %s", sql)
+	}
+}
+
+// ── _extra: IN / NOT IN (text, no cast) ────────────────────────────────────
+
+func TestExtra_Filter_In(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_color", Operator: OpIn, Value: []string{"red", "blue"}}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `_extra->>'custom_color' IN ($1, $2)`) {
+		t.Errorf("expected _extra IN, got: %s", sql)
+	}
+}
+
+// ── _extra: BETWEEN with numeric cast ──────────────────────────────────────
+
+func TestExtra_Filter_Between_Numeric(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_age", Operator: OpBetween, Value: []any{18, 65}}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `(_extra->>'custom_age')::NUMERIC BETWEEN $1 AND $2`) {
+		t.Errorf("expected NUMERIC cast BETWEEN, got: %s", sql)
+	}
+	if len(args) != 4 { // 2 between + limit + offset
+		t.Errorf("args count = %d, want 4", len(args))
+	}
+}
+
+func TestExtra_Filter_Between_String(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_grade", Operator: OpBetween, Value: []any{"A", "C"}}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// String values → no cast.
+	if !strings.Contains(sql, `_extra->>'custom_grade' BETWEEN $1 AND $2`) {
+		t.Errorf("expected no cast for string BETWEEN, got: %s", sql)
+	}
+}
+
+// ── _extra: @> JSONB contains (on _extra column itself) ────────────────────
+
+func TestExtra_Filter_JSONContains(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_meta", Operator: OpJSONContains, Value: map[string]any{"key": "val"}}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// @> on _extra field operates on the _extra column itself.
+	if !strings.Contains(sql, `"_extra" @> $1::jsonb`) {
+		t.Errorf("expected _extra @> on column, got: %s", sql)
+	}
+	jsonStr, ok := args[0].(string)
+	if !ok {
+		t.Fatalf("arg[0] type = %T, want string", args[0])
+	}
+	if !strings.Contains(jsonStr, `"key"`) {
+		t.Errorf("expected JSON-encoded arg, got: %s", jsonStr)
+	}
+}
+
+// ── _extra: ORDER BY ───────────────────────────────────────────────────────
+
+func TestExtra_OrderBy(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		OrderBy("custom_color", "ASC").
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `ORDER BY _extra->>'custom_color' ASC`) {
+		t.Errorf("expected _extra ORDER BY, got: %s", sql)
+	}
+}
+
+func TestExtra_OrderBy_MixedRealAndExtra(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		OrderBy("status", "ASC").
+		OrderBy("custom_priority", "DESC").
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `"status" ASC, _extra->>'custom_priority' DESC`) {
+		t.Errorf("expected mixed ORDER BY, got: %s", sql)
+	}
+}
+
+// ── _extra: GROUP BY ───────────────────────────────────────────────────────
+
+func TestExtra_GroupBy(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Fields("custom_color").
+		GroupBy("custom_color").
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `GROUP BY _extra->>'custom_color'`) {
+		t.Errorf("expected _extra GROUP BY, got: %s", sql)
+	}
+}
+
+// ── _extra: error cases ────────────────────────────────────────────────────
+
+func TestExtra_NonQueryableField(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "items", Operator: OpEqual, Value: "x"}).
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for non-queryable field")
+	}
+	if !strings.Contains(err.Error(), "not queryable") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestExtra_NonQueryableField_Select(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Fields("items").
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for non-queryable field in SELECT")
+	}
+	if !strings.Contains(err.Error(), "not queryable") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestExtra_InvalidFieldName(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "INVALID-FIELD", Operator: OpEqual, Value: "x"}).
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for invalid _extra field name")
+	}
+	if !strings.Contains(err.Error(), "invalid _extra field name") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestExtra_InvalidFieldName_Uppercase(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Fields("CamelCase").
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for uppercase _extra field name")
+	}
+	if !strings.Contains(err.Error(), "invalid _extra field name") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestExtra_InvalidFieldName_Hyphen(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		OrderBy("field-with-hyphens", "ASC").
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for hyphenated _extra field name")
+	}
+	if !strings.Contains(err.Error(), "invalid _extra field name") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// ── _extra: mixed real + _extra filter parameter numbering ─────────────────
+
+func TestExtra_MixedFilters_ParameterNumbering(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(
+			Filter{Field: "customer", Operator: OpEqual, Value: "ACME"},
+			Filter{Field: "custom_color", Operator: OpEqual, Value: "red"},
+			Filter{Field: "status", Operator: OpIn, Value: []string{"Draft", "Open"}},
+			Filter{Field: "custom_age", Operator: OpGreater, Value: 25},
+		).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `"customer" = $1`) {
+		t.Errorf("expected $1 for real column, got: %s", sql)
+	}
+	if !strings.Contains(sql, `_extra->>'custom_color' = $2`) {
+		t.Errorf("expected $2 for _extra equality, got: %s", sql)
+	}
+	if !strings.Contains(sql, `"status" IN ($3, $4)`) {
+		t.Errorf("expected $3,$4 for IN, got: %s", sql)
+	}
+	if !strings.Contains(sql, `(_extra->>'custom_age')::NUMERIC > $5`) {
+		t.Errorf("expected $5 for _extra numeric, got: %s", sql)
+	}
+	if !strings.Contains(sql, "LIMIT $6 OFFSET $7") {
+		t.Errorf("expected LIMIT $6 OFFSET $7, got: %s", sql)
+	}
+	if len(args) != 7 {
+		t.Errorf("args count = %d, want 7", len(args))
+	}
+}
+
+// ── _extra: backward compat (nil FieldTypes) ───────────────────────────────
+
+func TestExtra_BackwardCompat_NilFieldTypes(t *testing.T) {
+	// Using the original testProvider which has nil FieldTypes.
+	_, _, err := NewQueryBuilder(testProvider(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_color", Operator: OpEqual, Value: "red"}).
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for unknown field with nil FieldTypes")
+	}
+	if !strings.Contains(err.Error(), "unknown field") {
+		t.Errorf("expected 'unknown field' error, got: %v", err)
+	}
+}
+
+// ── _extra: BuildCount with _extra field ───────────────────────────────────
+
+func TestExtra_BuildCount_WithExtraFilter(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "custom_color", Operator: OpEqual, Value: "red"}).
+		BuildCount(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasPrefix(sql, "SELECT COUNT(*) FROM") {
+		t.Errorf("expected COUNT query, got: %s", sql)
+	}
+	if !strings.Contains(sql, `_extra->>'custom_color' = $1`) {
+		t.Errorf("expected _extra filter in COUNT, got: %s", sql)
+	}
+	if len(args) != 1 {
+		t.Errorf("args count = %d, want 1", len(args))
+	}
+}
+
+// ── _extra: full SQL structure ─────────────────────────────────────────────
+
+func TestExtra_FullSQLStructure(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Fields("name", "custom_color").
+		Where(Filter{Field: "custom_color", Operator: OpEqual, Value: "red"}).
+		OrderBy("custom_color", "DESC").
+		Limit(10).
+		Offset(5).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := `SELECT "name", _extra->>'custom_color' AS "custom_color" FROM "tab_sales_order" WHERE _extra->>'custom_color' = $1 ORDER BY _extra->>'custom_color' DESC LIMIT $2 OFFSET $3`
+	if sql != expected {
+		t.Errorf("SQL mismatch.\ngot:  %s\nwant: %s", sql, expected)
+	}
+	if len(args) != 3 {
+		t.Fatalf("args count = %d, want 3", len(args))
+	}
+	if args[0] != "red" || args[1] != 10 || args[2] != 5 {
+		t.Errorf("args = %v, want [red 10 5]", args)
 	}
 }
