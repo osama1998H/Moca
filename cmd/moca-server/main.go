@@ -46,7 +46,8 @@ func run() error {
 	// ── Load configuration ──────────────────────────────────────────────
 	const configFile = "moca.yaml"
 	if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("no %s found in current directory", configFile)
+		fmt.Printf("No %s found in current directory — nothing to serve.\n", configFile)
+		return nil
 	}
 
 	cfg, err := config.LoadAndResolve(configFile)
