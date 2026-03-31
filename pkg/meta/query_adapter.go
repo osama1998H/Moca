@@ -36,16 +36,28 @@ func (a *QueryMetaAdapter) QueryMeta(ctx context.Context, site, doctype string) 
 	for _, c := range stdCols {
 		validCols[c.Name] = struct{}{}
 	}
+
+	linkFields := make(map[string]string)
+	dynamicLinkFields := make(map[string]struct{})
+
 	for _, f := range mt.Fields {
 		if ColumnType(f.FieldType) != "" {
 			validCols[f.Name] = struct{}{}
 		}
+		switch f.FieldType {
+		case FieldTypeLink:
+			linkFields[f.Name] = f.Options
+		case FieldTypeDynamicLink:
+			dynamicLinkFields[f.Name] = struct{}{}
+		}
 	}
 
 	return &orm.QueryMeta{
-		Name:         mt.Name,
-		IsChildTable: mt.IsChildTable,
-		TableName:    TableName(doctype),
-		ValidColumns: validCols,
+		Name:              mt.Name,
+		IsChildTable:      mt.IsChildTable,
+		TableName:         TableName(doctype),
+		ValidColumns:      validCols,
+		LinkFields:        linkFields,
+		DynamicLinkFields: dynamicLinkFields,
 	}, nil
 }

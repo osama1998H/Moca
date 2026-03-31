@@ -18,6 +18,10 @@ import (
 // when embedding field names in _extra->>'...' expressions.
 var extraFieldNameRe = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
 
+// maxJoinDepth is the maximum number of Link hops allowed in dot-notation.
+// e.g., "customer.territory" = depth 1, "customer.territory.region" = depth 2.
+const maxJoinDepth = 2
+
 // ── Operator type and constants ──────────────────────────────────────────────
 
 // Operator represents a comparison operator in a query filter.
@@ -85,6 +89,12 @@ type QueryMeta struct {
 	// NonQueryableFields is the set of field names that exist in the MetaType
 	// but cannot be queried (Table, TableMultiSelect, layout-only types).
 	NonQueryableFields map[string]struct{}
+	// LinkFields maps Link field names to their target DocType name.
+	// e.g., "customer" → "Customer". Only populated for FieldTypeLink fields.
+	LinkFields map[string]string
+	// DynamicLinkFields is the set of field names that are FieldTypeDynamicLink.
+	// Used to produce clear errors when dot-notation is attempted on them.
+	DynamicLinkFields map[string]struct{}
 	// Name is the DocType name (e.g. "SalesOrder").
 	Name string
 	// TableName is the PostgreSQL table name (e.g. "tab_sales_order").
@@ -269,6 +279,7 @@ func (qb *QueryBuilder) Build(ctx context.Context) (string, []any, error) {
 	sb.WriteString(selectSQL)
 	sb.WriteString(" FROM ")
 	sb.WriteString(rq.quotedTable)
+	rq.writeJoinSQL(&sb)
 	if rq.whereSQL != "" {
 		sb.WriteString(" WHERE ")
 		sb.WriteString(rq.whereSQL)
@@ -296,6 +307,7 @@ func (qb *QueryBuilder) BuildCount(ctx context.Context) (string, []any, error) {
 	var sb strings.Builder
 	sb.WriteString("SELECT COUNT(*) FROM ")
 	sb.WriteString(rq.quotedTable)
+	rq.writeJoinSQL(&sb)
 	if rq.whereSQL != "" {
 		sb.WriteString(" WHERE ")
 		sb.WriteString(rq.whereSQL)
@@ -316,9 +328,13 @@ type fieldAccess struct {
 	// expr is the SQL expression for the field:
 	//   real column: `"status"`
 	//   _extra field: `_extra->>'custom_color'`
+	//   aliased real: `"t0"."status"`
+	//   aliased _extra: `"t1"._extra->>'custom_color'`
 	expr string
-	// name is the original field name.
+	// name is the original field name (without dot-notation prefix).
 	name string
+	// tableAlias is the table alias ("t0", "t1", etc.) or empty for unaliased.
+	tableAlias string
 	// isExtra is true when the field lives in the _extra JSONB column.
 	isExtra bool
 }
@@ -365,19 +381,24 @@ func resolveFieldAccess(fieldName string, qm *QueryMeta, doctype string) (*field
 
 // extraFilterExpr returns the SQL expression for an _extra field in a WHERE
 // clause, applying type casts as needed for the given operator and value type.
+// tableAlias is the table alias (e.g. "t0", "t1") or empty for unaliased queries.
 //
 // Rules:
 //   - Equality/LIKE/IN: text comparison (no cast)
 //   - Numeric comparisons (>, <, >=, <=, BETWEEN): cast based on Go value type
 //   - IS NULL / IS NOT NULL: no cast
 //   - @> JSONB contains: operates on the _extra column itself
-func extraFilterExpr(fieldName string, op Operator, value any) string {
-	base := fmt.Sprintf("_extra->>'%s'", fieldName)
+func extraFilterExpr(fieldName string, op Operator, value any, tableAlias string) string {
+	prefix := ""
+	if tableAlias != "" {
+		prefix = fmt.Sprintf("%q.", tableAlias)
+	}
+	base := fmt.Sprintf("%s_extra->>'%s'", prefix, fieldName)
 
 	switch op {
 	case OpJSONContains:
 		// @> operates on the _extra column itself, not the extracted text.
-		return pgx.Identifier{"_extra"}.Sanitize()
+		return prefix + pgx.Identifier{"_extra"}.Sanitize()
 
 	case OpIsNull, OpIsNotNull:
 		return base
@@ -421,17 +442,215 @@ func inferCast(value any) string {
 	}
 }
 
+// ── Link field auto-join resolution ─────────────────────────────────────────
+
+// joinEntry represents a single LEFT JOIN in the query, generated from a
+// Link field dot-notation path.
+type joinEntry struct {
+	alias       string // "t1", "t2", etc.
+	targetTable string // unquoted table name, e.g. "tab_customer"
+	targetQM    *QueryMeta
+	joinOnCol   string // source column that holds the link value, e.g. "customer"
+	sourceAlias string // "t0" or "t1" — the alias of the table being joined FROM
+}
+
+// resolvedJoinField stores the pre-resolved field access for a dotted field path.
+type resolvedJoinField struct {
+	fa    *fieldAccess // resolved on the target QueryMeta
+	alias string       // which join alias owns the final field
+}
+
+// joinState accumulates joins discovered during field resolution. It is shared
+// across SELECT, WHERE, ORDER BY, and GROUP BY clause building.
+type joinState struct {
+	entries  map[string]*joinEntry         // key = dot-prefix, e.g. "customer"
+	resolved map[string]*resolvedJoinField // key = full dotted path, e.g. "customer.territory"
+	ordered  []*joinEntry                  // insertion order for deterministic SQL
+	nextIdx  int                           // next alias index (starts at 1)
+}
+
+func newJoinState() *joinState {
+	return &joinState{
+		entries:  make(map[string]*joinEntry),
+		resolved: make(map[string]*resolvedJoinField),
+		nextIdx:  1,
+	}
+}
+
+// hasJoins reports whether any joins have been registered.
+func (js *joinState) hasJoins() bool {
+	return js != nil && len(js.ordered) > 0
+}
+
+// resolveJoinField resolves a dot-notated field name (e.g. "customer.territory")
+// by walking the Link chain, registering joins, and returning the aliased
+// fieldAccess for the final (leaf) field.
+func (qb *QueryBuilder) resolveJoinField(
+	ctx context.Context,
+	dottedField string,
+	sourceQM *QueryMeta,
+	js *joinState,
+) (*fieldAccess, error) {
+	parts := strings.Split(dottedField, ".")
+
+	// Validate depth: parts includes the final field, so len(parts)-1 is the
+	// number of Link hops. Max depth is 2 (e.g. a.b.c = 2 hops + leaf).
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("querybuilder: invalid dot-notation %q: at least two segments required", dottedField)
+	}
+	hops := len(parts) - 1
+	if hops > maxJoinDepth {
+		return nil, fmt.Errorf("querybuilder: dot-notation %q exceeds maximum join depth of %d", dottedField, maxJoinDepth)
+	}
+
+	// Validate no empty segments.
+	for _, p := range parts {
+		if p == "" {
+			return nil, fmt.Errorf("querybuilder: invalid dot-notation %q: empty segment", dottedField)
+		}
+	}
+
+	currentQM := sourceQM
+	currentAlias := "t0"
+
+	// Walk intermediate segments (all except the last).
+	for i := 0; i < hops; i++ {
+		segment := parts[i]
+
+		// Build dedup key: join of all segments up to and including this one.
+		dedupKey := strings.Join(parts[:i+1], ".")
+
+		if existing, ok := js.entries[dedupKey]; ok {
+			// Reuse existing join.
+			currentQM = existing.targetQM
+			currentAlias = existing.alias
+			continue
+		}
+
+		// Check for DynamicLink — cannot auto-join.
+		if currentQM.DynamicLinkFields != nil {
+			if _, ok := currentQM.DynamicLinkFields[segment]; ok {
+				return nil, fmt.Errorf("querybuilder: DynamicLink field %q does not support auto-joins", segment)
+			}
+		}
+
+		// Must be a Link field.
+		targetDocType, ok := currentQM.LinkFields[segment]
+		if !ok {
+			return nil, fmt.Errorf("querybuilder: field %q is not a Link field in doctype %q", segment, currentQM.Name)
+		}
+
+		// Load target DocType metadata.
+		targetQM, err := qb.provider.QueryMeta(ctx, qb.site, targetDocType)
+		if err != nil {
+			return nil, fmt.Errorf("querybuilder: load linked MetaType %q: %w", targetDocType, err)
+		}
+
+		alias := fmt.Sprintf("t%d", js.nextIdx)
+		js.nextIdx++
+
+		je := &joinEntry{
+			alias:       alias,
+			targetTable: targetQM.TableName,
+			targetQM:    targetQM,
+			joinOnCol:   segment,
+			sourceAlias: currentAlias,
+		}
+		js.entries[dedupKey] = je
+		js.ordered = append(js.ordered, je)
+
+		currentQM = targetQM
+		currentAlias = alias
+	}
+
+	// Resolve the final (leaf) field on the target MetaType.
+	leafField := parts[len(parts)-1]
+	fa, err := resolveFieldAccess(leafField, currentQM, currentQM.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build aliased expression.
+	fa.tableAlias = currentAlias
+	if fa.isExtra {
+		fa.expr = fmt.Sprintf("%q._extra->>'%s'", currentAlias, fa.name)
+	} else {
+		fa.expr = fmt.Sprintf("%q.%s", currentAlias, pgx.Identifier{leafField}.Sanitize())
+	}
+
+	// Store the resolved join field for later lookup.
+	js.resolved[dottedField] = &resolvedJoinField{
+		alias: currentAlias,
+		fa:    fa,
+	}
+
+	return fa, nil
+}
+
+// resolveFieldForClause resolves a field name in the context of a query that
+// may or may not have joins. For dotted fields, it returns the pre-resolved
+// aliased expression. For non-dotted fields, it resolves via resolveFieldAccess
+// and prefixes with "t0". when joins are present.
+func (qb *QueryBuilder) resolveFieldForClause(fieldName string, sourceQM *QueryMeta, js *joinState) (*fieldAccess, error) {
+	// Dotted field: look up from pre-resolved join state.
+	if strings.Contains(fieldName, ".") {
+		rjf, ok := js.resolved[fieldName]
+		if !ok {
+			return nil, fmt.Errorf("querybuilder: internal error: join field %q not pre-resolved", fieldName)
+		}
+		return rjf.fa, nil
+	}
+
+	// Non-dotted field: resolve normally.
+	fa, err := resolveFieldAccess(fieldName, sourceQM, qb.doctype)
+	if err != nil {
+		return nil, err
+	}
+
+	// If joins are present, qualify with source table alias "t0".
+	if js.hasJoins() {
+		fa.tableAlias = "t0"
+		if fa.isExtra {
+			fa.expr = fmt.Sprintf("\"t0\"._extra->>'%s'", fa.name)
+		} else {
+			fa.expr = "\"t0\"." + pgx.Identifier{fa.name}.Sanitize()
+		}
+	}
+
+	return fa, nil
+}
+
 // ── internal helpers ─────────────────────────────────────────────────────────
 
 // resolvedQuery holds the validated, pre-built query components shared by
 // Build() and BuildCount().
 type resolvedQuery struct {
-	qm          *QueryMeta
 	validCols   map[string]struct{}
+	qm          *QueryMeta
+	joins       *joinState
 	quotedTable string
 	groupBySQL  string
 	whereSQL    string
 	whereArgs   []any
+}
+
+// writeJoinSQL appends the table alias and LEFT JOIN clauses to sb when joins
+// are present. When no joins exist, it is a no-op (preserving existing behavior).
+func (rq *resolvedQuery) writeJoinSQL(sb *strings.Builder) {
+	if !rq.joins.hasJoins() {
+		return
+	}
+	sb.WriteString(" AS \"t0\"")
+	for _, je := range rq.joins.ordered {
+		fmt.Fprintf(sb, " LEFT JOIN %s AS %q ON %q.%s = %q.%s",
+			pgx.Identifier{je.targetTable}.Sanitize(),
+			je.alias,
+			je.alias,
+			pgx.Identifier{"name"}.Sanitize(),
+			je.sourceAlias,
+			pgx.Identifier{je.joinOnCol}.Sanitize(),
+		)
+	}
 }
 
 // resolve performs MetaType lookup, field validation, and WHERE/GROUP BY
@@ -451,14 +670,20 @@ func (qb *QueryBuilder) resolve(ctx context.Context) (*resolvedQuery, error) {
 
 	quotedTable := pgx.Identifier{qm.TableName}.Sanitize()
 
+	// Pre-scan: resolve all dotted fields to populate the join state.
+	js := newJoinState()
+	if joinErr := qb.resolveAllJoins(ctx, qm, js); joinErr != nil {
+		return nil, joinErr
+	}
+
 	// WHERE clause.
-	whereSQL, whereArgs, err := qb.buildWhereClause(qm)
+	whereSQL, whereArgs, err := qb.buildWhereClause(qm, js)
 	if err != nil {
 		return nil, err
 	}
 
 	// GROUP BY clause.
-	groupBySQL, err := qb.buildGroupByClause(qm)
+	groupBySQL, err := qb.buildGroupByClause(qm, js)
 	if err != nil {
 		return nil, err
 	}
@@ -470,13 +695,57 @@ func (qb *QueryBuilder) resolve(ctx context.Context) (*resolvedQuery, error) {
 		whereSQL:    whereSQL,
 		whereArgs:   whereArgs,
 		groupBySQL:  groupBySQL,
+		joins:       js,
 	}, nil
 }
 
+// resolveAllJoins scans all field references (fields, filters, orderBy, groupBy)
+// for dot-notation and pre-resolves their join chains.
+func (qb *QueryBuilder) resolveAllJoins(ctx context.Context, sourceQM *QueryMeta, js *joinState) error {
+	// Collect all unique dotted field names.
+	seen := make(map[string]struct{})
+	var dotted []string
+
+	collect := func(name string) {
+		if strings.Contains(name, ".") {
+			if _, ok := seen[name]; !ok {
+				seen[name] = struct{}{}
+				dotted = append(dotted, name)
+			}
+		}
+	}
+
+	for _, f := range qb.fields {
+		collect(f)
+	}
+	for _, f := range qb.filters {
+		collect(f.Field)
+	}
+	for _, o := range qb.orderBy {
+		collect(o.Field)
+	}
+	for _, g := range qb.groupBy {
+		collect(g)
+	}
+
+	// Resolve each dotted field.
+	for _, df := range dotted {
+		if _, err := qb.resolveJoinField(ctx, df, sourceQM, js); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // buildSelectClause returns the SELECT column list or "*".
-// Field names are resolved via resolveFieldAccess; _extra fields are aliased.
+// Field names are resolved via resolveFieldForClause; _extra and joined fields
+// are aliased appropriately.
 func (qb *QueryBuilder) buildSelectClause(rq *resolvedQuery) (string, error) {
 	if len(qb.fields) == 0 {
+		if rq.joins.hasJoins() {
+			return "\"t0\".*", nil
+		}
 		return "*", nil
 	}
 	// Deduplicate while preserving order.
@@ -486,13 +755,16 @@ func (qb *QueryBuilder) buildSelectClause(rq *resolvedQuery) (string, error) {
 		if _, dup := seen[f]; dup {
 			continue
 		}
-		fa, err := resolveFieldAccess(f, rq.qm, qb.doctype)
+		fa, err := qb.resolveFieldForClause(f, rq.qm, rq.joins)
 		if err != nil {
 			return "", err
 		}
 		seen[f] = struct{}{}
-		if fa.isExtra {
-			// _extra fields need an alias: _extra->>'color' AS "color"
+
+		// Dotted fields and _extra fields need an alias.
+		if strings.Contains(f, ".") {
+			parts = append(parts, fmt.Sprintf("%s AS %s", fa.expr, pgx.Identifier{f}.Sanitize()))
+		} else if fa.isExtra {
 			parts = append(parts, fmt.Sprintf("%s AS %s", fa.expr, pgx.Identifier{f}.Sanitize()))
 		} else {
 			parts = append(parts, fa.expr)
@@ -502,7 +774,7 @@ func (qb *QueryBuilder) buildSelectClause(rq *resolvedQuery) (string, error) {
 }
 
 // buildWhereClause generates the WHERE SQL and args from the builder's filters.
-func (qb *QueryBuilder) buildWhereClause(qm *QueryMeta) (string, []any, error) {
+func (qb *QueryBuilder) buildWhereClause(qm *QueryMeta, js *joinState) (string, []any, error) {
 	if len(qb.filters) == 0 {
 		return "", nil, nil
 	}
@@ -512,7 +784,7 @@ func (qb *QueryBuilder) buildWhereClause(qm *QueryMeta) (string, []any, error) {
 	var args []any
 
 	for _, f := range qb.filters {
-		fa, err := resolveFieldAccess(f.Field, qm, qb.doctype)
+		fa, err := qb.resolveFieldForClause(f.Field, qm, js)
 		if err != nil {
 			return "", nil, err
 		}
@@ -528,13 +800,13 @@ func (qb *QueryBuilder) buildWhereClause(qm *QueryMeta) (string, []any, error) {
 }
 
 // buildGroupByClause validates and quotes GROUP BY fields.
-func (qb *QueryBuilder) buildGroupByClause(qm *QueryMeta) (string, error) {
+func (qb *QueryBuilder) buildGroupByClause(qm *QueryMeta, js *joinState) (string, error) {
 	if len(qb.groupBy) == 0 {
 		return "", nil
 	}
 	parts := make([]string, 0, len(qb.groupBy))
 	for _, f := range qb.groupBy {
-		fa, err := resolveFieldAccess(f, qm, qb.doctype)
+		fa, err := qb.resolveFieldForClause(f, qm, js)
 		if err != nil {
 			return "", err
 		}
@@ -547,11 +819,14 @@ func (qb *QueryBuilder) buildGroupByClause(qm *QueryMeta) (string, error) {
 // "modified" DESC when no OrderBy() calls have been made.
 func (qb *QueryBuilder) buildOrderByClause(rq *resolvedQuery) (string, error) {
 	if len(qb.orderBy) == 0 {
+		if rq.joins.hasJoins() {
+			return "\"t0\"." + pgx.Identifier{"modified"}.Sanitize() + " DESC", nil
+		}
 		return pgx.Identifier{"modified"}.Sanitize() + " DESC", nil
 	}
 	parts := make([]string, 0, len(qb.orderBy))
 	for _, o := range qb.orderBy {
-		fa, err := resolveFieldAccess(o.Field, rq.qm, qb.doctype)
+		fa, err := qb.resolveFieldForClause(o.Field, rq.qm, rq.joins)
 		if err != nil {
 			return "", err
 		}
@@ -568,7 +843,7 @@ func buildFilterSQL(f Filter, fa *fieldAccess, argIdx *int) (string, []any, erro
 	// For _extra fields, the expression may include type casts.
 	fieldExpr := fa.expr
 	if fa.isExtra {
-		fieldExpr = extraFilterExpr(fa.name, f.Operator, f.Value)
+		fieldExpr = extraFilterExpr(fa.name, f.Operator, f.Value, fa.tableAlias)
 	}
 
 	switch f.Operator {
@@ -619,7 +894,7 @@ func buildFilterSQL(f Filter, fa *fieldAccess, argIdx *int) (string, []any, erro
 		// For _extra fields with BETWEEN, re-resolve with the actual slice
 		// so inferCast can inspect the element types.
 		if fa.isExtra {
-			fieldExpr = extraFilterExpr(fa.name, f.Operator, elems)
+			fieldExpr = extraFilterExpr(fa.name, f.Operator, elems, fa.tableAlias)
 		}
 		sql := fmt.Sprintf("%s BETWEEN $%d AND $%d", fieldExpr, *argIdx, *argIdx+1)
 		*argIdx += 2

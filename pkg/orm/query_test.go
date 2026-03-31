@@ -963,6 +963,12 @@ func salesOrderMetaWithExtra() *QueryMeta {
 		"items":     {}, // Table type
 		"addresses": {}, // TableMultiSelect type
 	}
+	linkFields := map[string]string{
+		"customer": "Customer",
+	}
+	dynamicLinkFields := map[string]struct{}{
+		"dynamic_ref": {},
+	}
 	return &QueryMeta{
 		Name:               "SalesOrder",
 		IsChildTable:       false,
@@ -970,6 +976,8 @@ func salesOrderMetaWithExtra() *QueryMeta {
 		ValidColumns:       cols,
 		FieldTypes:         fieldTypes,
 		NonQueryableFields: nonQueryable,
+		LinkFields:         linkFields,
+		DynamicLinkFields:  dynamicLinkFields,
 	}
 }
 
@@ -1486,5 +1494,488 @@ func TestExtra_FullSQLStructure(t *testing.T) {
 	}
 	if args[0] != "red" || args[1] != 10 || args[2] != 5 {
 		t.Errorf("args = %v, want [red 10 5]", args)
+	}
+}
+
+// ── Link field auto-join tests (MS-05-T3) ──────────────────────────────────
+
+// customerMeta returns a QueryMeta fixture for "Customer" on "site1".
+func customerMeta() *QueryMeta {
+	cols := map[string]struct{}{
+		"name": {}, "owner": {}, "creation": {}, "modified": {},
+		"modified_by": {}, "docstatus": {}, "idx": {}, "workflow_state": {},
+		"_extra": {}, "_user_tags": {}, "_comments": {}, "_assign": {}, "_liked_by": {},
+		"territory": {}, "customer_group": {}, "customer_name": {},
+	}
+	return &QueryMeta{
+		Name:         "Customer",
+		IsChildTable: false,
+		TableName:    "tab_customer",
+		ValidColumns: cols,
+		FieldTypes: map[string]string{
+			"territory":      "TEXT",
+			"customer_group": "TEXT",
+			"customer_name":  "TEXT",
+		},
+		LinkFields: map[string]string{
+			"territory": "Territory",
+		},
+		DynamicLinkFields: map[string]struct{}{},
+	}
+}
+
+// territoryMeta returns a QueryMeta fixture for "Territory" on "site1".
+func territoryMeta() *QueryMeta {
+	cols := map[string]struct{}{
+		"name": {}, "owner": {}, "creation": {}, "modified": {},
+		"modified_by": {}, "docstatus": {}, "idx": {}, "workflow_state": {},
+		"_extra": {}, "_user_tags": {}, "_comments": {}, "_assign": {}, "_liked_by": {},
+		"region": {}, "parent_territory": {},
+	}
+	return &QueryMeta{
+		Name:         "Territory",
+		IsChildTable: false,
+		TableName:    "tab_territory",
+		ValidColumns: cols,
+		FieldTypes: map[string]string{
+			"region":           "TEXT",
+			"parent_territory": "TEXT",
+		},
+	}
+}
+
+func testProviderWithJoins() *stubMetaProvider {
+	return &stubMetaProvider{
+		metas: map[string]*QueryMeta{
+			"site1:SalesOrder": salesOrderMetaWithExtra(),
+			"site1:Customer":   customerMeta(),
+			"site1:Territory":  territoryMeta(),
+		},
+	}
+}
+
+// ── Join: SELECT clause ────────────────────────────────────────────────────
+
+func TestJoin_SingleLevel_Select(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("name", "customer.territory").
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Source table should be aliased as t0.
+	if !strings.Contains(sql, `FROM "tab_sales_order" AS "t0"`) {
+		t.Errorf("expected aliased source table, got: %s", sql)
+	}
+	// LEFT JOIN for customer → Customer.
+	if !strings.Contains(sql, `LEFT JOIN "tab_customer" AS "t1" ON "t1"."name" = "t0"."customer"`) {
+		t.Errorf("expected LEFT JOIN clause, got: %s", sql)
+	}
+	// SELECT should have aliased fields.
+	if !strings.Contains(sql, `"t0"."name"`) {
+		t.Errorf("expected t0-qualified name field, got: %s", sql)
+	}
+	if !strings.Contains(sql, `"t1"."territory" AS "customer.territory"`) {
+		t.Errorf("expected t1-qualified territory with alias, got: %s", sql)
+	}
+}
+
+func TestJoin_SelectStar_WithJoinFilter(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "customer.territory", Operator: OpEqual, Value: "West"}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// SELECT * becomes "t0".* when joins present.
+	if !strings.Contains(sql, `SELECT "t0".*`) {
+		t.Errorf("expected SELECT \"t0\".*, got: %s", sql)
+	}
+	if !strings.Contains(sql, `LEFT JOIN "tab_customer" AS "t1"`) {
+		t.Errorf("expected LEFT JOIN, got: %s", sql)
+	}
+}
+
+// ── Join: WHERE clause ─────────────────────────────────────────────────────
+
+func TestJoin_SingleLevel_Where(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "customer.territory", Operator: OpEqual, Value: "West"}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `"t1"."territory" = $1`) {
+		t.Errorf("expected aliased WHERE filter, got: %s", sql)
+	}
+	if len(args) < 1 || args[0] != "West" {
+		t.Errorf("expected first arg 'West', got: %v", args)
+	}
+}
+
+func TestJoin_Where_MixedLocalAndJoin(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Where(
+			Filter{Field: "status", Operator: OpEqual, Value: "Draft"},
+			Filter{Field: "customer.territory", Operator: OpEqual, Value: "West"},
+		).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Local field should be qualified with t0.
+	if !strings.Contains(sql, `"t0"."status" = $1`) {
+		t.Errorf("expected t0-qualified status, got: %s", sql)
+	}
+	// Joined field with t1.
+	if !strings.Contains(sql, `"t1"."territory" = $2`) {
+		t.Errorf("expected t1-qualified territory, got: %s", sql)
+	}
+	if len(args) != 4 { // 2 filter + limit + offset
+		t.Errorf("args count = %d, want 4", len(args))
+	}
+}
+
+// ── Join: ORDER BY clause ──────────────────────────────────────────────────
+
+func TestJoin_SingleLevel_OrderBy(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "customer.territory", Operator: OpEqual, Value: "West"}).
+		OrderBy("customer.territory", "ASC").
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `ORDER BY "t1"."territory" ASC`) {
+		t.Errorf("expected aliased ORDER BY, got: %s", sql)
+	}
+}
+
+func TestJoin_OrderBy_DefaultModified(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "customer.territory", Operator: OpEqual, Value: "West"}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Default ORDER BY should be qualified with t0.
+	if !strings.Contains(sql, `ORDER BY "t0"."modified" DESC`) {
+		t.Errorf("expected t0-qualified default ORDER BY, got: %s", sql)
+	}
+}
+
+// ── Join: GROUP BY clause ──────────────────────────────────────────────────
+
+func TestJoin_SingleLevel_GroupBy(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("customer.territory").
+		GroupBy("customer.territory").
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `GROUP BY "t1"."territory"`) {
+		t.Errorf("expected aliased GROUP BY, got: %s", sql)
+	}
+}
+
+// ── Join: depth-2 ──────────────────────────────────────────────────────────
+
+func TestJoin_Depth2(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("customer.territory.region").
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Two LEFT JOINs.
+	if !strings.Contains(sql, `LEFT JOIN "tab_customer" AS "t1" ON "t1"."name" = "t0"."customer"`) {
+		t.Errorf("expected first JOIN, got: %s", sql)
+	}
+	if !strings.Contains(sql, `LEFT JOIN "tab_territory" AS "t2" ON "t2"."name" = "t1"."territory"`) {
+		t.Errorf("expected second JOIN, got: %s", sql)
+	}
+	if !strings.Contains(sql, `"t2"."region" AS "customer.territory.region"`) {
+		t.Errorf("expected t2-qualified region, got: %s", sql)
+	}
+}
+
+// ── Join: depth > 2 error ──────────────────────────────────────────────────
+
+func TestJoin_Depth3_Error(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("customer.territory.region.subregion").
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for depth > 2")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum join depth") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// ── Join: deduplication ────────────────────────────────────────────────────
+
+func TestJoin_Dedup_SameLink(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("customer.territory", "customer.customer_name").
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should only have ONE LEFT JOIN to Customer.
+	count := strings.Count(sql, "LEFT JOIN")
+	if count != 1 {
+		t.Errorf("expected 1 LEFT JOIN (dedup), got %d in: %s", count, sql)
+	}
+	// Both fields should use same alias t1.
+	if !strings.Contains(sql, `"t1"."territory" AS "customer.territory"`) {
+		t.Errorf("expected t1.territory, got: %s", sql)
+	}
+	if !strings.Contains(sql, `"t1"."customer_name" AS "customer.customer_name"`) {
+		t.Errorf("expected t1.customer_name, got: %s", sql)
+	}
+}
+
+func TestJoin_Dedup_SelectAndWhere(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("customer.territory").
+		Where(Filter{Field: "customer.customer_name", Operator: OpEqual, Value: "ACME"}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	count := strings.Count(sql, "LEFT JOIN")
+	if count != 1 {
+		t.Errorf("expected 1 LEFT JOIN (dedup across SELECT+WHERE), got %d in: %s", count, sql)
+	}
+}
+
+// ── Join: DynamicLink error ────────────────────────────────────────────────
+
+func TestJoin_DynamicLink_Error(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("dynamic_ref.something").
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for DynamicLink auto-join")
+	}
+	if !strings.Contains(err.Error(), "DynamicLink") {
+		t.Errorf("expected DynamicLink error, got: %v", err)
+	}
+}
+
+// ── Join: non-Link field error ─────────────────────────────────────────────
+
+func TestJoin_NonLinkField_Error(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("status.something").
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for non-Link field in dot notation")
+	}
+	if !strings.Contains(err.Error(), "not a Link field") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// ── Join: unknown field on target ──────────────────────────────────────────
+
+func TestJoin_UnknownTargetField_TreatedAsExtra(t *testing.T) {
+	// When the target has FieldTypes set, unknown fields that pass the _extra
+	// name regex are treated as _extra fields (consistent with T2 behavior).
+	sql, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("customer.nonexistent_column").
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `"t1"._extra->>'nonexistent_column' AS "customer.nonexistent_column"`) {
+		t.Errorf("expected _extra treatment for unknown field, got: %s", sql)
+	}
+}
+
+func TestJoin_InvalidTargetFieldName(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("customer.INVALID").
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for invalid field name on target")
+	}
+	if !strings.Contains(err.Error(), "invalid _extra field name") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// ── Join: _extra field on target ───────────────────────────────────────────
+
+func TestJoin_ExtraOnTarget(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("customer.custom_note").
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `"t1"._extra->>'custom_note' AS "customer.custom_note"`) {
+		t.Errorf("expected joined _extra field expression, got: %s", sql)
+	}
+}
+
+func TestJoin_ExtraOnTarget_Filter(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "customer.custom_note", Operator: OpEqual, Value: "vip"}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `"t1"._extra->>'custom_note' = $1`) {
+		t.Errorf("expected joined _extra filter, got: %s", sql)
+	}
+}
+
+func TestJoin_ExtraOnTarget_NumericCast(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "customer.custom_score", Operator: OpGreater, Value: 100}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `("t1"._extra->>'custom_score')::NUMERIC > $1`) {
+		t.Errorf("expected joined _extra numeric cast, got: %s", sql)
+	}
+}
+
+// ── Join: no-join queries are unaffected ───────────────────────────────────
+
+func TestJoin_NoJoin_NoAlias(t *testing.T) {
+	sql, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("name", "customer").
+		Where(Filter{Field: "status", Operator: OpEqual, Value: "Draft"}).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// No aliases or JOINs.
+	if strings.Contains(sql, "AS \"t0\"") {
+		t.Errorf("expected no alias without joins, got: %s", sql)
+	}
+	if strings.Contains(sql, "LEFT JOIN") {
+		t.Errorf("expected no JOIN without dots, got: %s", sql)
+	}
+	// Unqualified field names.
+	if !strings.Contains(sql, `"status" = $1`) {
+		t.Errorf("expected unqualified filter, got: %s", sql)
+	}
+}
+
+// ── Join: BuildCount ───────────────────────────────────────────────────────
+
+func TestJoin_BuildCount(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "customer.territory", Operator: OpEqual, Value: "West"}).
+		BuildCount(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasPrefix(sql, "SELECT COUNT(*)") {
+		t.Errorf("expected COUNT query, got: %s", sql)
+	}
+	if !strings.Contains(sql, `LEFT JOIN "tab_customer" AS "t1"`) {
+		t.Errorf("expected LEFT JOIN in count query, got: %s", sql)
+	}
+	if !strings.Contains(sql, `"t1"."territory" = $1`) {
+		t.Errorf("expected aliased filter in count, got: %s", sql)
+	}
+	if len(args) != 1 {
+		t.Errorf("args count = %d, want 1", len(args))
+	}
+}
+
+// ── Join: empty segment error ──────────────────────────────────────────────
+
+func TestJoin_EmptySegment(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("customer.").
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for empty segment")
+	}
+	if !strings.Contains(err.Error(), "empty segment") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// ── Join: parameter numbering with joins ───────────────────────────────────
+
+func TestJoin_ParameterNumbering(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Where(
+			Filter{Field: "status", Operator: OpEqual, Value: "Draft"},
+			Filter{Field: "customer.territory", Operator: OpIn, Value: []string{"West", "East"}},
+		).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sql, `"t0"."status" = $1`) {
+		t.Errorf("expected $1 for local field, got: %s", sql)
+	}
+	if !strings.Contains(sql, `"t1"."territory" IN ($2, $3)`) {
+		t.Errorf("expected $2,$3 for joined IN, got: %s", sql)
+	}
+	if !strings.Contains(sql, "LIMIT $4 OFFSET $5") {
+		t.Errorf("expected LIMIT $4 OFFSET $5, got: %s", sql)
+	}
+	if len(args) != 5 {
+		t.Errorf("args count = %d, want 5", len(args))
+	}
+}
+
+// ── Join: full SQL structure ───────────────────────────────────────────────
+
+func TestJoin_FullSQLStructure(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("name", "customer.territory").
+		Where(Filter{Field: "customer.territory", Operator: OpEqual, Value: "West"}).
+		OrderBy("customer.territory", "ASC").
+		Limit(10).
+		Offset(5).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := `SELECT "t0"."name", "t1"."territory" AS "customer.territory" FROM "tab_sales_order" AS "t0" LEFT JOIN "tab_customer" AS "t1" ON "t1"."name" = "t0"."customer" WHERE "t1"."territory" = $1 ORDER BY "t1"."territory" ASC LIMIT $2 OFFSET $3`
+	if sql != expected {
+		t.Errorf("SQL mismatch.\ngot:  %s\nwant: %s", sql, expected)
+	}
+	if len(args) != 3 {
+		t.Fatalf("args count = %d, want 3", len(args))
+	}
+	if args[0] != "West" || args[1] != 10 || args[2] != 5 {
+		t.Errorf("args = %v, want [West 10 5]", args)
 	}
 }
