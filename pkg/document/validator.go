@@ -63,18 +63,10 @@ type ValidatorFunc func(ctx context.Context, doc Document, field *meta.FieldDef,
 //	    var ve *document.ValidationError
 //	    if errors.As(err, &ve) { /* handle structured errors */ }
 //	}
-//
-// Field layout: sync.Map (48) + sync.RWMutex (24) + map pointer (8) = 80 bytes.
-// The fieldalignment check incorrectly suggests 48 bytes is achievable;
-// no reordering of these three fields can reduce the total below 80 bytes.
-//
-//nolint:govet
 type Validator struct {
-	// regexCache caches compiled *regexp.Regexp keyed by pattern string.
-	regexCache sync.Map
-	mu         sync.RWMutex
-	// customValidators holds registered custom validator functions.
 	customValidators map[string]ValidatorFunc
+	regexCache       sync.Map
+	mu               sync.RWMutex
 }
 
 // NewValidator creates a new Validator with an empty custom validator registry.

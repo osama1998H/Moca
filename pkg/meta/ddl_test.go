@@ -277,10 +277,10 @@ func TestGenerateTableDDL_ColumnsSanitized(t *testing.T) {
 func TestGenerateSystemTablesDDL_AllTablesPresent(t *testing.T) {
 	stmts := meta.GenerateSystemTablesDDL()
 
-	// Expect exactly 6 statements: tab_doctype, tab_singles, tab_version,
-	// idx_version_ref, tab_audit_log, tab_audit_log_default.
-	if len(stmts) != 6 {
-		t.Errorf("GenerateSystemTablesDDL() returned %d statements; want 6", len(stmts))
+	// Expect exactly 7 statements: tab_doctype, tab_singles, tab_version,
+	// idx_version_ref, tab_audit_log, tab_audit_log_default, tab_outbox.
+	if len(stmts) != 7 {
+		t.Errorf("GenerateSystemTablesDDL() returned %d statements; want 7", len(stmts))
 		for i, s := range stmts {
 			t.Logf("  [%d] %s", i, s.Comment)
 		}
@@ -294,6 +294,7 @@ func TestGenerateSystemTablesDDL_AllTablesPresent(t *testing.T) {
 		"idx_version_ref",
 		"tab_audit_log",
 		"tab_audit_log_default",
+		"tab_outbox",
 	}
 	for _, ec := range expectedComments {
 		if _, ok := findStmtByComment(stmts, ec); !ok {
@@ -347,6 +348,25 @@ func TestGenerateSystemTablesDDL_VersionRefIndex(t *testing.T) {
 	}
 	if !strings.Contains(lc, "tab_version") {
 		t.Errorf("index should be on tab_version; SQL:\n%s", s.SQL)
+	}
+}
+
+func TestGenerateSystemTablesDDL_OutboxPresent(t *testing.T) {
+	stmts := meta.GenerateSystemTablesDDL()
+
+	s, ok := findStmtByComment(stmts, "tab_outbox")
+	if !ok {
+		t.Fatal("tab_outbox DDL not found in GenerateSystemTablesDDL()")
+	}
+
+	lc := strings.ToLower(s.SQL)
+	for _, col := range []string{"event_type", "topic", "partition_key", "payload", "created_at", "processed"} {
+		if !strings.Contains(lc, col) {
+			t.Errorf("tab_outbox DDL missing expected column %q;\nSQL:\n%s", col, s.SQL)
+		}
+	}
+	if !strings.Contains(lc, "jsonb") {
+		t.Errorf("tab_outbox payload column should be JSONB; SQL:\n%s", s.SQL)
 	}
 }
 

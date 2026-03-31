@@ -1,0 +1,1302 @@
+package document
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"math/big"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/moca-framework/moca/pkg/orm"
+)
+
+// ─── DynamicDoc internal helpers (same-package access) ───────────────────────
+
+// resetDirtyState snapshots the current values map as the new clean baseline.
+// Call this after a successful database write to clear the dirty-tracking state.
+func (d *DynamicDoc) resetDirtyState() {
+	d.original = deepCopyMap(d.values)
+	// Also reset child dirty state.
+	for _, rows := range d.children {
+		for _, child := range rows {
+			child.resetDirtyState()
+		}
+	}
+}
+
+// markPersisted transitions the document from the "new" state to the
+// "persisted" state. Call this after a successful INSERT.
+func (d *DynamicDoc) markPersisted() {
+	d.isNew = false
+	for _, rows := range d.children {
+		for _, child := range rows {
+			child.markPersisted()
+		}
+	}
+}
+
+// ─── Error types ─────────────────────────────────────────────────────────────
+
+// DocNotFoundError is returned by Get when no document with the given name
+// exists for the given doctype. Use errors.As to distinguish it from other
+// database errors.
+type DocNotFoundError struct {
+	Doctype string
+	Name    string
+}
+
+func (e *DocNotFoundError) Error() string {
+	return fmt.Sprintf("%s %q not found", e.Doctype, e.Name)
+}
+
+// ─── ListOptions ─────────────────────────────────────────────────────────────
+
+// ListOptions configures a GetList query. All fields are optional.
+type ListOptions struct {
+	// Filters is a map of field name -> value for equality filters.
+	// Each key is validated against the MetaType's known fields.
+	Filters map[string]any
+
+	// OrderBy is the column to sort by. Defaults to "modified".
+	// Must be a known field name or standard column to prevent injection.
+	OrderBy string
+
+	// OrderDir is "ASC" or "DESC". Defaults to "DESC".
+	OrderDir string
+
+	// Limit is the maximum number of rows to return. Defaults to 20, capped at 100.
+	Limit int
+
+	// Offset is the number of rows to skip. Defaults to 0.
+	Offset int
+}
+
+// ─── SQL builder helpers ──────────────────────────────────────────────────────
+
+// buildDocColumns returns the ordered list of column names for a MetaType's
+// document table. The order matches the CREATE TABLE column order:
+//   - standard prefix columns (before _extra)
+//   - user-defined storable, non-Table fields
+//   - standard suffix columns (_extra and after)
+func buildDocColumns(mt *meta.MetaType) []string {
+	var stdCols []meta.StandardColumnDef
+	if mt.IsChildTable {
+		stdCols = meta.ChildStandardColumns()
+	} else {
+		stdCols = meta.StandardColumns()
+	}
+
+	// Split standard columns at the _extra insertion point.
+	var before, after []meta.StandardColumnDef
+	foundExtra := false
+	for _, col := range stdCols {
+		if col.Name == "_extra" {
+			foundExtra = true
+		}
+		if !foundExtra {
+			before = append(before, col)
+		} else {
+			after = append(after, col)
+		}
+	}
+
+	var columns []string
+	for _, col := range before {
+		columns = append(columns, col.Name)
+	}
+	for _, f := range mt.Fields {
+		if meta.ColumnType(f.FieldType) == "" {
+			continue // skip Table, TableMultiSelect, and layout-only fields
+		}
+		columns = append(columns, f.Name)
+	}
+	for _, col := range after {
+		columns = append(columns, col.Name)
+	}
+	return columns
+}
+
+// buildColSet returns a set of all valid column names for a MetaType (for
+// validation of filter keys and ORDER BY values in GetList).
+func buildColSet(mt *meta.MetaType) map[string]struct{} {
+	cols := buildDocColumns(mt)
+	set := make(map[string]struct{}, len(cols))
+	for _, c := range cols {
+		set[c] = struct{}{}
+	}
+	return set
+}
+
+// quoteIdents returns a slice of sanitized quoted identifiers for the given
+// column names. Uses pgx.Identifier to prevent SQL injection.
+func quoteIdents(columns []string) []string {
+	quoted := make([]string, len(columns))
+	for i, col := range columns {
+		quoted[i] = pgx.Identifier{col}.Sanitize()
+	}
+	return quoted
+}
+
+// buildInsertSQL returns a parameterized INSERT SQL statement and the ordered
+// column list for the given MetaType. The columns list is used by
+// extractValues to build the matching argument slice.
+func buildInsertSQL(mt *meta.MetaType) (string, []string) {
+	tableName := meta.TableName(mt.Name)
+	quotedTable := pgx.Identifier{tableName}.Sanitize()
+	columns := buildDocColumns(mt)
+
+	quotedCols := quoteIdents(columns)
+	placeholders := make([]string, len(columns))
+	for i := range columns {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+	}
+
+	sql := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+		quotedTable,
+		strings.Join(quotedCols, ", "),
+		strings.Join(placeholders, ", "),
+	)
+	return sql, columns
+}
+
+// buildUpdateSQL returns a parameterized UPDATE SQL statement and the ordered
+// column list for the given set of fields to update. The WHERE clause always
+// matches on name, appended as the last parameter.
+//
+// modifiedFields must not include "name" (the PK) or "creation" (immutable).
+func buildUpdateSQL(mt *meta.MetaType, modifiedFields []string) (string, []string) {
+	tableName := meta.TableName(mt.Name)
+	quotedTable := pgx.Identifier{tableName}.Sanitize()
+
+	// Deduplicate and filter out immutable columns.
+	seen := make(map[string]bool)
+	var columns []string
+	for _, f := range modifiedFields {
+		if f == "name" || f == "creation" || seen[f] {
+			continue
+		}
+		seen[f] = true
+		columns = append(columns, f)
+	}
+	// Always include modified and modified_by.
+	if !seen["modified"] {
+		columns = append(columns, "modified")
+	}
+	if !seen["modified_by"] {
+		columns = append(columns, "modified_by")
+	}
+
+	setClauses := make([]string, len(columns))
+	for i, col := range columns {
+		setClauses[i] = fmt.Sprintf("%s = $%d", pgx.Identifier{col}.Sanitize(), i+1)
+	}
+
+	sql := fmt.Sprintf("UPDATE %s SET %s WHERE %s = $%d",
+		quotedTable,
+		strings.Join(setClauses, ", "),
+		pgx.Identifier{"name"}.Sanitize(),
+		len(columns)+1,
+	)
+	return sql, columns
+}
+
+// buildSelectSQL returns a SELECT SQL statement that fetches all columns of a
+// document by name, along with the ordered column list for scanning.
+func buildSelectSQL(mt *meta.MetaType) (string, []string) {
+	tableName := meta.TableName(mt.Name)
+	quotedTable := pgx.Identifier{tableName}.Sanitize()
+	columns := buildDocColumns(mt)
+	quotedCols := quoteIdents(columns)
+
+	sql := fmt.Sprintf("SELECT %s FROM %s WHERE %s = $1",
+		strings.Join(quotedCols, ", "),
+		quotedTable,
+		pgx.Identifier{"name"}.Sanitize(),
+	)
+	return sql, columns
+}
+
+// extractValues returns the document's field values in the same order as
+// columns, suitable for use as pgx query arguments. Nil values are replaced
+// with typed defaults for NOT NULL columns.
+func extractValues(doc *DynamicDoc, columns []string) []any {
+	vals := make([]any, len(columns))
+	for i, col := range columns {
+		v := doc.values[col]
+		// Supply typed defaults for NOT NULL columns to avoid pgx null violations.
+		if v == nil {
+			switch col {
+			case "_extra":
+				v = map[string]any{}
+			case "docstatus":
+				v = int16(0)
+			case "idx":
+				v = int32(0)
+			case "owner", "modified_by":
+				v = ""
+			}
+		}
+		vals[i] = v
+	}
+	return vals
+}
+
+// normalizeDBValue converts pgx-specific types returned by rows.Values() into
+// standard Go primitives so that doc.values contains clean, serialisable data.
+func normalizeDBValue(v any) any {
+	if v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case int16:
+		return int64(val)
+	case int32:
+		return int64(val)
+	case float32:
+		return float64(val)
+	case []byte:
+		// JSONB columns are returned as raw JSON bytes. Unmarshal to Go types.
+		var m any
+		if err := json.Unmarshal(val, &m); err == nil {
+			return m
+		}
+		return string(val)
+	case pgtype.Numeric:
+		if !val.Valid || val.NaN {
+			return nil
+		}
+		if val.Int == nil {
+			return 0.0
+		}
+		f := new(big.Float).SetPrec(128).SetInt(val.Int)
+		if val.Exp != 0 {
+			expAbs := val.Exp
+			if expAbs < 0 {
+				expAbs = -expAbs
+			}
+			base := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(expAbs)), nil)
+			expFloat := new(big.Float).SetPrec(128).SetInt(base)
+			if val.Exp > 0 {
+				f.Mul(f, expFloat)
+			} else {
+				f.Quo(f, expFloat)
+			}
+		}
+		result, _ := f.Float64()
+		return result
+	default:
+		return v
+	}
+}
+
+// applyValues sets the top-level scalar fields on doc, and rebuilds child
+// rows for any Table fields found in values. This handles the mixed payload
+// format accepted by Insert and Update:
+//
+//	values = map[string]any{
+//	    "customer": "Alice",          // scalar field
+//	    "items":    []any{...},       // child table rows
+//	}
+func applyValues(doc *DynamicDoc, values map[string]any) error {
+	for field, value := range values {
+		// Table fields require special handling to rebuild doc.children.
+		if _, isTable := doc.tableFields[field]; isTable {
+			if value == nil {
+				doc.children[field] = nil
+				continue
+			}
+			rows, ok := value.([]any)
+			if !ok {
+				return fmt.Errorf("crud: field %q expects []any (child table rows) on doctype %q, got %T",
+					field, doc.metaDef.Name, value)
+			}
+			childMeta, hasMeta := doc.childMetas[field]
+			if !hasMeta {
+				return fmt.Errorf("crud: no child MetaType for table field %q on doctype %q",
+					field, doc.metaDef.Name)
+			}
+			children := make([]*DynamicDoc, 0, len(rows))
+			for idx, rowAny := range rows {
+				rowMap, ok := rowAny.(map[string]any)
+				if !ok {
+					return fmt.Errorf("crud: child row %d for field %q must be map[string]any on doctype %q",
+						idx, field, doc.metaDef.Name)
+				}
+				child := NewDynamicDoc(childMeta, nil, true)
+				child.values["idx"] = idx
+				for k, val := range rowMap {
+					if err := child.Set(k, val); err != nil {
+						// Ignore unknown fields in child rows (caller may send extra keys).
+						continue
+					}
+				}
+				children = append(children, child)
+			}
+			doc.children[field] = children
+			continue
+		}
+		if err := doc.Set(field, value); err != nil {
+			// Unknown fields in the values map are silently ignored so callers
+			// can pass a superset of fields without errors.
+			continue
+		}
+	}
+	return nil
+}
+
+// ─── DocManager ──────────────────────────────────────────────────────────────
+
+// DocManager is the main entry point for all document CRUD operations. It
+// wires together the MetaType registry, database connection manager, naming
+// engine, validator, and controller registry to provide a complete document
+// lifecycle.
+//
+// All public methods are safe for concurrent use.
+type DocManager struct {
+	registry    *meta.Registry
+	db          *orm.DBManager
+	naming      *NamingEngine
+	validator   *Validator
+	controllers *ControllerRegistry
+	logger      *slog.Logger
+}
+
+// NewDocManager constructs a DocManager. All parameters are required.
+func NewDocManager(
+	registry *meta.Registry,
+	db *orm.DBManager,
+	naming *NamingEngine,
+	validator *Validator,
+	controllers *ControllerRegistry,
+	logger *slog.Logger,
+) *DocManager {
+	return &DocManager{
+		registry:    registry,
+		db:          db,
+		naming:      naming,
+		validator:   validator,
+		controllers: controllers,
+		logger:      logger,
+	}
+}
+
+// resolveChildMetas loads the MetaType for each Table field in mt from the
+// registry, returning a map keyed by field name.
+func (m *DocManager) resolveChildMetas(ctx context.Context, site string, mt *meta.MetaType) (map[string]*meta.MetaType, error) {
+	childMetas := make(map[string]*meta.MetaType)
+	for _, f := range mt.Fields {
+		if f.FieldType != meta.FieldTypeTable && f.FieldType != meta.FieldTypeTableMultiSelect {
+			continue
+		}
+		if f.Options == "" {
+			continue
+		}
+		childMeta, err := m.registry.Get(ctx, site, f.Options)
+		if err != nil {
+			return nil, fmt.Errorf("crud: resolve child meta %q for field %q on %q: %w",
+				f.Options, f.Name, mt.Name, err)
+		}
+		childMetas[f.Name] = childMeta
+	}
+	return childMetas, nil
+}
+
+// sitePool returns the pgxpool for the site in ctx.
+func sitePool(ctx *DocContext) (*pgxpool.Pool, error) {
+	if ctx.Site == nil || ctx.Site.Pool == nil {
+		return nil, fmt.Errorf("crud: DocContext.Site.Pool is nil; a tenant pool is required for CRUD operations")
+	}
+	return ctx.Site.Pool, nil
+}
+
+// userID returns the email of the authenticated user or "system" as fallback.
+func userID(ctx *DocContext) string {
+	if ctx.User != nil && ctx.User.Email != "" {
+		return ctx.User.Email
+	}
+	return "system"
+}
+
+// isTruthyFlag returns true if ctx.Flags[key] is a truthy value.
+func isTruthyFlag(ctx *DocContext, key string) bool {
+	v, ok := ctx.Flags[key]
+	if !ok {
+		return false
+	}
+	switch val := v.(type) {
+	case bool:
+		return val
+	case string:
+		return val == "true" || val == "1"
+	default:
+		return v != nil
+	}
+}
+
+// ─── Transactional helpers ────────────────────────────────────────────────────
+
+// insertOutbox writes a single outbox event inside an active transaction.
+// eventType is one of "insert", "update", "delete".
+func insertOutbox(ctx context.Context, tx pgx.Tx, eventType, topic, partitionKey string, payload []byte) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO tab_outbox ("event_type","topic","partition_key","payload") VALUES ($1,$2,$3,$4)`,
+		eventType, topic, partitionKey, payload,
+	)
+	if err != nil {
+		return fmt.Errorf("crud: insert outbox (event_type=%q topic=%q): %w", eventType, topic, err)
+	}
+	return nil
+}
+
+// insertAuditLog writes a single audit record inside an active transaction.
+// action is one of "Create", "Update", "Delete".
+// changes is a JSONB-encoded diff (may be nil for Create/Delete).
+func insertAuditLog(ctx context.Context, tx pgx.Tx, doctype, docname, action, uid string, changes []byte) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO tab_audit_log ("doctype","docname","action","user_id","timestamp","changes") VALUES ($1,$2,$3,$4,NOW(),$5)`,
+		doctype, docname, action, uid, changes,
+	)
+	if err != nil {
+		return fmt.Errorf("crud: insert audit_log (action=%q doctype=%q docname=%q): %w",
+			action, doctype, docname, err)
+	}
+	return nil
+}
+
+// insertChildRows INSERTs all current children of doc inside tx.
+// parentName, parentType, and parentField are set on each child row.
+func (m *DocManager) insertChildRows(ctx context.Context, tx pgx.Tx, doc *DynamicDoc, uid string) error {
+	now := time.Now()
+	for _, f := range doc.metaDef.Fields {
+		if f.FieldType != meta.FieldTypeTable && f.FieldType != meta.FieldTypeTableMultiSelect {
+			continue
+		}
+		children := doc.children[f.Name]
+		if len(children) == 0 {
+			continue
+		}
+		childMeta, ok := doc.childMetas[f.Name]
+		if !ok {
+			continue
+		}
+		insertSQL, columns := buildInsertSQL(childMeta)
+		for i, child := range children {
+			// Ensure all required parent-link and system fields are set.
+			childName := child.Name()
+			if childName == "" {
+				uuid, err := m.naming.generateUUID()
+				if err != nil {
+					return fmt.Errorf("crud: generate child name for field %q row %d: %w", f.Name, i, err)
+				}
+				child.values["name"] = uuid
+			}
+			child.values["parent"] = doc.Name()
+			child.values["parenttype"] = doc.metaDef.Name
+			child.values["parentfield"] = f.Name
+			child.values["idx"] = i
+			child.values["owner"] = uid
+			child.values["modified_by"] = uid
+			if child.values["creation"] == nil {
+				child.values["creation"] = now
+			}
+			if child.values["modified"] == nil {
+				child.values["modified"] = now
+			}
+
+			args := extractValues(child, columns)
+			if _, err := tx.Exec(ctx, insertSQL, args...); err != nil {
+				return fmt.Errorf("crud: insert child row for field %q row %d (doctype=%q): %w",
+					f.Name, i, childMeta.Name, err)
+			}
+		}
+	}
+	return nil
+}
+
+// deleteChildRows deletes all child rows for doc across every Table field.
+func (m *DocManager) deleteChildRows(ctx context.Context, tx pgx.Tx, doc *DynamicDoc) error {
+	for _, f := range doc.metaDef.Fields {
+		if f.FieldType != meta.FieldTypeTable && f.FieldType != meta.FieldTypeTableMultiSelect {
+			continue
+		}
+		childMeta, ok := doc.childMetas[f.Name]
+		if !ok {
+			// No registered child meta; nothing to delete.
+			continue
+		}
+		childTable := meta.TableName(childMeta.Name)
+		_, err := tx.Exec(ctx,
+			fmt.Sprintf("DELETE FROM %s WHERE %s = $1 AND %s = $2",
+				pgx.Identifier{childTable}.Sanitize(),
+				pgx.Identifier{"parent"}.Sanitize(),
+				pgx.Identifier{"parenttype"}.Sanitize(),
+			),
+			doc.Name(), doc.metaDef.Name,
+		)
+		if err != nil {
+			return fmt.Errorf("crud: delete children for field %q (doctype=%q, parent=%q): %w",
+				f.Name, childMeta.Name, doc.Name(), err)
+		}
+	}
+	return nil
+}
+
+// syncChildRows performs a delete-all + reinsert for all Table fields of doc.
+// This is the simplest correct strategy for v1; per-row diffing is a future optimisation.
+func (m *DocManager) syncChildRows(ctx context.Context, tx pgx.Tx, doc *DynamicDoc, uid string) error {
+	if err := m.deleteChildRows(ctx, tx, doc); err != nil {
+		return err
+	}
+	return m.insertChildRows(ctx, tx, doc, uid)
+}
+
+// ─── CRUD Operations ─────────────────────────────────────────────────────────
+
+// Insert creates a new document of the given doctype with the provided values.
+// values may include child table rows as []any under the Table field names.
+//
+// Lifecycle events fired (in order):
+//
+//	BeforeInsert → BeforeValidate → controller.Validate → field validation →
+//	BeforeSave → [TX: INSERT] → AfterInsert → AfterSave → OnChange (logged)
+func (m *DocManager) Insert(ctx *DocContext, doctype string, values map[string]any) (*DynamicDoc, error) {
+	pool, err := sitePool(ctx)
+	if err != nil {
+		return nil, err
+	}
+	uid := userID(ctx)
+
+	// 1. Load MetaType and resolve child MetaTypes.
+	mt, err := m.registry.Get(ctx, ctx.Site.Name, doctype)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: load MetaType: %w", doctype, err)
+	}
+	childMetas, err := m.resolveChildMetas(ctx, ctx.Site.Name, mt)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: %w", doctype, err)
+	}
+
+	// 2. Create document and apply incoming values.
+	doc := NewDynamicDoc(mt, childMetas, true)
+	err = applyValues(doc, values)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: apply values: %w", doctype, err)
+	}
+
+	// 3. Resolve controller and dispatch BeforeInsert.
+	ctrl := m.controllers.Resolve(doctype)
+	err = dispatchEvent(ctrl, EventBeforeInsert, ctx, doc)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: BeforeInsert: %w", doctype, err)
+	}
+
+	// 4. Generate document name (outside TX so sequences are never rolled back).
+	name, err := m.naming.GenerateName(ctx, doc, pool)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: naming: %w", doctype, err)
+	}
+	err = doc.Set("name", name)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: set name: %w", doctype, err)
+	}
+
+	// 5. Set system fields.
+	now := time.Now()
+	_ = doc.Set("owner", uid)
+	_ = doc.Set("modified_by", uid)
+	_ = doc.Set("creation", now)
+	_ = doc.Set("modified", now)
+	if doc.Get("docstatus") == nil {
+		_ = doc.Set("docstatus", int16(0))
+	}
+
+	// 6. Pre-save lifecycle: BeforeValidate → controller.Validate → field validation → BeforeSave.
+	err = dispatchEvent(ctrl, EventBeforeValidate, ctx, doc)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: BeforeValidate: %w", doctype, err)
+	}
+	err = dispatchEvent(ctrl, EventValidate, ctx, doc)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: Validate: %w", doctype, err)
+	}
+	if !isTruthyFlag(ctx, "skip_validation") {
+		err = m.validator.ValidateDoc(ctx, doc, pool)
+		if err != nil {
+			return nil, fmt.Errorf("crud: Insert %q: validation: %w", doctype, err)
+		}
+	}
+	err = dispatchEvent(ctrl, EventBeforeSave, ctx, doc)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: BeforeSave: %w", doctype, err)
+	}
+
+	// 7. Build the outbox payload before the transaction.
+	payload, err := doc.ToJSON()
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: marshal outbox payload: %w", doctype, err)
+	}
+
+	// 8. Database transaction: INSERT parent + children + outbox + audit.
+	insertSQL, columns := buildInsertSQL(mt)
+	args := extractValues(doc, columns)
+
+	txErr := orm.WithTransaction(ctx, pool, func(txCtx context.Context, tx pgx.Tx) error {
+		var txErr error
+		_, txErr = tx.Exec(txCtx, insertSQL, args...)
+		if txErr != nil {
+			return fmt.Errorf("INSERT %s: %w", meta.TableName(doctype), txErr)
+		}
+		txErr = m.insertChildRows(txCtx, tx, doc, uid)
+		if txErr != nil {
+			return txErr
+		}
+		txErr = insertOutbox(txCtx, tx, "insert", doctype, name, payload)
+		if txErr != nil {
+			return txErr
+		}
+		return insertAuditLog(txCtx, tx, doctype, name, "Create", uid, nil)
+	})
+	if txErr != nil {
+		return nil, fmt.Errorf("crud: Insert %q %q: %w", doctype, name, txErr)
+	}
+
+	// 9. Mark as persisted and reset dirty state.
+	doc.markPersisted()
+	doc.resetDirtyState()
+
+	// 10. Post-commit hooks (fatal).
+	err = dispatchEvent(ctrl, EventAfterInsert, ctx, doc)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert %q %q: AfterInsert: %w", doctype, name, err)
+	}
+	err = dispatchEvent(ctrl, EventAfterSave, ctx, doc)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert %q %q: AfterSave: %w", doctype, name, err)
+	}
+
+	// 11. OnChange is fire-and-forget: errors are logged, not returned.
+	err = dispatchEvent(ctrl, EventOnChange, ctx, doc)
+	if err != nil {
+		m.logger.Warn("crud: Insert OnChange error (non-fatal)",
+			"doctype", doctype, "name", name, "error", err)
+	}
+
+	ctx.EventBus.Emit(doctype+":insert", doc.AsMap())
+	return doc, nil
+}
+
+// Update applies the provided values to an existing document and persists the
+// changes. values may include child table rows ([]any) under Table field names.
+//
+// Lifecycle events fired (in order):
+//
+//	BeforeValidate → controller.Validate → field validation → BeforeSave →
+//	OnUpdate → [TX: UPDATE] → AfterSave → OnChange (logged)
+func (m *DocManager) Update(ctx *DocContext, doctype, name string, values map[string]any) (*DynamicDoc, error) {
+	pool, err := sitePool(ctx)
+	if err != nil {
+		return nil, err
+	}
+	uid := userID(ctx)
+
+	// 1. Load current state from DB.
+	doc, err := m.Get(ctx, doctype, name)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: load: %w", doctype, name, err)
+	}
+
+	// 2. Apply incoming values (scalar + child table rows).
+	err = applyValues(doc, values)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: apply values: %w", doctype, name, err)
+	}
+
+	// 3. Quick no-op check: if nothing changed, return early.
+	hasChildChange := hasTableFieldKey(values, doc)
+	if !doc.IsModified() && !hasChildChange {
+		return doc, nil
+	}
+
+	// 4. Set system timestamps.
+	now := time.Now()
+	_ = doc.Set("modified", now)
+	_ = doc.Set("modified_by", uid)
+
+	// 5. Capture modified fields and build audit diff before dispatching hooks
+	//    (hooks may further modify the doc).
+	modifiedBeforeHooks := doc.ModifiedFields()
+
+	// 6. Resolve controller.
+	ctrl := m.controllers.Resolve(doctype)
+
+	// 7. Pre-save lifecycle.
+	err = dispatchEvent(ctrl, EventBeforeValidate, ctx, doc)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: BeforeValidate: %w", doctype, name, err)
+	}
+	err = dispatchEvent(ctrl, EventValidate, ctx, doc)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: Validate: %w", doctype, name, err)
+	}
+	if !isTruthyFlag(ctx, "skip_validation") {
+		err = m.validator.ValidateDoc(ctx, doc, pool)
+		if err != nil {
+			return nil, fmt.Errorf("crud: Update %q %q: validation: %w", doctype, name, err)
+		}
+	}
+	err = dispatchEvent(ctrl, EventBeforeSave, ctx, doc)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: BeforeSave: %w", doctype, name, err)
+	}
+	err = dispatchEvent(ctrl, EventOnUpdate, ctx, doc)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: OnUpdate: %w", doctype, name, err)
+	}
+
+	// 8. Build audit diff from the fields that were modified before hooks ran.
+	changesJSON := buildChangesJSON(doc, modifiedBeforeHooks)
+
+	// 9. Build the final modified field list after all pre-save hooks ran.
+	finalModifiedFields := doc.ModifiedFields()
+
+	// 10. Build the outbox payload.
+	payload, err := doc.ToJSON()
+	if err != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: marshal outbox payload: %w", doctype, name, err)
+	}
+
+	// 11. Transaction: UPDATE parent + sync children + outbox + audit.
+	txErr := orm.WithTransaction(ctx, pool, func(txCtx context.Context, tx pgx.Tx) error {
+		// Only run the UPDATE if there are actual scalar changes.
+		scalarFields := filterScalarFields(doc, finalModifiedFields)
+		if len(scalarFields) > 0 {
+			updateSQL, updateCols := buildUpdateSQL(doc.metaDef, scalarFields)
+			updateArgs := extractValues(doc, updateCols)
+			updateArgs = append(updateArgs, name) // WHERE name = $N
+			if _, err := tx.Exec(txCtx, updateSQL, updateArgs...); err != nil {
+				return fmt.Errorf("UPDATE %s: %w", meta.TableName(doctype), err)
+			}
+		} else {
+			// Even with no scalar changes, update the timestamp if there are child changes.
+			if hasChildChange {
+				tsSQL := fmt.Sprintf("UPDATE %s SET %s = $1, %s = $2 WHERE %s = $3",
+					pgx.Identifier{meta.TableName(doctype)}.Sanitize(),
+					pgx.Identifier{"modified"}.Sanitize(),
+					pgx.Identifier{"modified_by"}.Sanitize(),
+					pgx.Identifier{"name"}.Sanitize(),
+				)
+				if _, err := tx.Exec(txCtx, tsSQL, now, uid, name); err != nil {
+					return fmt.Errorf("UPDATE modified timestamp %s: %w", meta.TableName(doctype), err)
+				}
+			}
+		}
+		if err := m.syncChildRows(txCtx, tx, doc, uid); err != nil {
+			return err
+		}
+		if err := insertOutbox(txCtx, tx, "update", doctype, name, payload); err != nil {
+			return err
+		}
+		return insertAuditLog(txCtx, tx, doctype, name, "Update", uid, changesJSON)
+	})
+	if txErr != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: %w", doctype, name, txErr)
+	}
+
+	// 12. Reset dirty state.
+	doc.resetDirtyState()
+
+	// 13. Post-commit hooks (fatal).
+	if err := dispatchEvent(ctrl, EventAfterSave, ctx, doc); err != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: AfterSave: %w", doctype, name, err)
+	}
+
+	// 14. OnChange is fire-and-forget.
+	if err := dispatchEvent(ctrl, EventOnChange, ctx, doc); err != nil {
+		m.logger.Warn("crud: Update OnChange error (non-fatal)",
+			"doctype", doctype, "name", name, "error", err)
+	}
+
+	ctx.EventBus.Emit(doctype+":update", doc.AsMap())
+	return doc, nil
+}
+
+// Delete removes an existing document (and all its child rows) from the database.
+//
+// Lifecycle events fired:
+//
+//	OnTrash → [TX: DELETE] → AfterDelete (logged)
+func (m *DocManager) Delete(ctx *DocContext, doctype, name string) error {
+	pool, err := sitePool(ctx)
+	if err != nil {
+		return err
+	}
+	uid := userID(ctx)
+
+	// 1. Load current state.
+	doc, err := m.Get(ctx, doctype, name)
+	if err != nil {
+		return fmt.Errorf("crud: Delete %q %q: load: %w", doctype, name, err)
+	}
+
+	// 2. Dispatch OnTrash (fatal: if controller rejects, abort).
+	ctrl := m.controllers.Resolve(doctype)
+	if err := dispatchEvent(ctrl, EventOnTrash, ctx, doc); err != nil {
+		return fmt.Errorf("crud: Delete %q %q: OnTrash: %w", doctype, name, err)
+	}
+
+	// 3. Transaction: DELETE children + parent + outbox + audit.
+	tableSQL := fmt.Sprintf("DELETE FROM %s WHERE %s = $1",
+		pgx.Identifier{meta.TableName(doctype)}.Sanitize(),
+		pgx.Identifier{"name"}.Sanitize(),
+	)
+
+	txErr := orm.WithTransaction(ctx, pool, func(txCtx context.Context, tx pgx.Tx) error {
+		if err := m.deleteChildRows(txCtx, tx, doc); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(txCtx, tableSQL, name); err != nil {
+			return fmt.Errorf("DELETE %s %q: %w", meta.TableName(doctype), name, err)
+		}
+		if err := insertOutbox(txCtx, tx, "delete", doctype, name, []byte(`{"name":"`+name+`"}`)); err != nil {
+			return err
+		}
+		return insertAuditLog(txCtx, tx, doctype, name, "Delete", uid, nil)
+	})
+	if txErr != nil {
+		return fmt.Errorf("crud: Delete %q %q: %w", doctype, name, txErr)
+	}
+
+	// 4. AfterDelete is non-fatal (data already deleted; log errors only).
+	if err := dispatchEvent(ctrl, EventAfterDelete, ctx, doc); err != nil {
+		m.logger.Warn("crud: Delete AfterDelete error (non-fatal)",
+			"doctype", doctype, "name", name, "error", err)
+	}
+
+	ctx.EventBus.Emit(doctype+":delete", map[string]any{"name": name})
+	return nil
+}
+
+// Get retrieves a document by doctype and name. Returns *DocNotFoundError if
+// no document with that name exists. Child table rows are eagerly loaded for
+// all Table fields.
+func (m *DocManager) Get(ctx *DocContext, doctype, name string) (*DynamicDoc, error) {
+	pool, err := sitePool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	mt, err := m.registry.Get(ctx, ctx.Site.Name, doctype)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Get %q: load MetaType: %w", doctype, err)
+	}
+	childMetas, err := m.resolveChildMetas(ctx, ctx.Site.Name, mt)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Get %q: %w", doctype, err)
+	}
+
+	selectSQL, columns := buildSelectSQL(mt)
+
+	rows, err := pool.Query(ctx, selectSQL, name)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Get %q %q: query: %w", doctype, name, err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		err = rows.Err()
+		if err != nil {
+			return nil, fmt.Errorf("crud: Get %q %q: scan: %w", doctype, name, err)
+		}
+		return nil, &DocNotFoundError{Doctype: doctype, Name: name}
+	}
+
+	vals, err := rows.Values()
+	if err != nil {
+		return nil, fmt.Errorf("crud: Get %q %q: read values: %w", doctype, name, err)
+	}
+	rows.Close()
+
+	doc := NewDynamicDoc(mt, childMetas, false)
+	for i, col := range columns {
+		doc.values[col] = normalizeDBValue(vals[i])
+	}
+	doc.resetDirtyState()
+
+	// Load child rows for each Table field.
+	for _, f := range mt.Fields {
+		if f.FieldType != meta.FieldTypeTable && f.FieldType != meta.FieldTypeTableMultiSelect {
+			continue
+		}
+		childMeta, ok := childMetas[f.Name]
+		if !ok {
+			continue
+		}
+		children, err := m.loadChildRows(ctx, pool, childMeta, name, f.Name)
+		if err != nil {
+			return nil, fmt.Errorf("crud: Get %q %q: load children for field %q: %w",
+				doctype, name, f.Name, err)
+		}
+		doc.children[f.Name] = children
+	}
+	doc.resetDirtyState() // re-snapshot after children are loaded
+
+	return doc, nil
+}
+
+// loadChildRows fetches all child rows for a given parent document and field.
+func (m *DocManager) loadChildRows(ctx context.Context, pool *pgxpool.Pool, childMeta *meta.MetaType, parentName, parentField string) ([]*DynamicDoc, error) {
+	childTable := meta.TableName(childMeta.Name)
+	childCols := buildDocColumns(childMeta)
+	quotedCols := quoteIdents(childCols)
+
+	sql := fmt.Sprintf("SELECT %s FROM %s WHERE %s = $1 AND %s = $2 ORDER BY %s ASC",
+		strings.Join(quotedCols, ", "),
+		pgx.Identifier{childTable}.Sanitize(),
+		pgx.Identifier{"parent"}.Sanitize(),
+		pgx.Identifier{"parentfield"}.Sanitize(),
+		pgx.Identifier{"idx"}.Sanitize(),
+	)
+
+	rows, err := pool.Query(ctx, sql, parentName, parentField)
+	if err != nil {
+		return nil, fmt.Errorf("query child table %s: %w", childTable, err)
+	}
+	defer rows.Close()
+
+	var children []*DynamicDoc
+	var vals []any
+	for rows.Next() {
+		vals, err = rows.Values()
+		if err != nil {
+			return nil, fmt.Errorf("scan child row from %s: %w", childTable, err)
+		}
+		child := NewDynamicDoc(childMeta, nil, false)
+		for i, col := range childCols {
+			child.values[col] = normalizeDBValue(vals[i])
+		}
+		child.resetDirtyState()
+		children = append(children, child)
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf("iterate child rows from %s: %w", childTable, err)
+	}
+	return children, nil
+}
+
+// GetList returns a paginated list of documents matching the given options.
+// Child rows are NOT loaded for performance (use Get for full documents).
+// Returns the slice of documents, the total count matching the filters, and
+// any error.
+//
+// Filter keys are validated against the MetaType's known columns to prevent
+// SQL injection. Values are always parameterised.
+func (m *DocManager) GetList(ctx *DocContext, doctype string, opts ListOptions) ([]*DynamicDoc, int, error) {
+	pool, err := sitePool(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	mt, err := m.registry.Get(ctx, ctx.Site.Name, doctype)
+	if err != nil {
+		return nil, 0, fmt.Errorf("crud: GetList %q: load MetaType: %w", doctype, err)
+	}
+
+	validCols := buildColSet(mt)
+
+	// Validate and sort filter keys for deterministic SQL.
+	filterKeys := make([]string, 0, len(opts.Filters))
+	for k := range opts.Filters {
+		if _, ok := validCols[k]; !ok {
+			return nil, 0, fmt.Errorf("crud: GetList %q: unknown filter field %q", doctype, k)
+		}
+		filterKeys = append(filterKeys, k)
+	}
+	sort.Strings(filterKeys)
+
+	// Build WHERE clause.
+	var whereParts []string
+	var whereArgs []any
+	for i, k := range filterKeys {
+		whereParts = append(whereParts, fmt.Sprintf("%s = $%d", pgx.Identifier{k}.Sanitize(), i+1))
+		whereArgs = append(whereArgs, opts.Filters[k])
+	}
+	whereSQL := ""
+	if len(whereParts) > 0 {
+		whereSQL = " WHERE " + strings.Join(whereParts, " AND ")
+	}
+
+	// Validate ORDER BY.
+	orderBy := opts.OrderBy
+	if orderBy == "" {
+		orderBy = "modified"
+	} else if _, ok := validCols[orderBy]; !ok {
+		return nil, 0, fmt.Errorf("crud: GetList %q: unknown order_by field %q", doctype, orderBy)
+	}
+	orderDir := strings.ToUpper(opts.OrderDir)
+	if orderDir != "ASC" && orderDir != "DESC" {
+		orderDir = "DESC"
+	}
+
+	// Validate and clamp LIMIT.
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
+	offset := opts.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	tableName := meta.TableName(doctype)
+	quotedTable := pgx.Identifier{tableName}.Sanitize()
+	columns := buildDocColumns(mt)
+	quotedCols := quoteIdents(columns)
+
+	// COUNT query.
+	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s%s", quotedTable, whereSQL)
+	var total int
+	err = pool.QueryRow(ctx, countSQL, whereArgs...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("crud: GetList %q: count: %w", doctype, err)
+	}
+
+	// Main SELECT query.
+	limitArgIdx := len(whereArgs) + 1
+	offsetArgIdx := limitArgIdx + 1
+	mainSQL := fmt.Sprintf("SELECT %s FROM %s%s ORDER BY %s %s LIMIT $%d OFFSET $%d",
+		strings.Join(quotedCols, ", "),
+		quotedTable,
+		whereSQL,
+		pgx.Identifier{orderBy}.Sanitize(),
+		orderDir,
+		limitArgIdx,
+		offsetArgIdx,
+	)
+
+	mainArgs := make([]any, 0, len(whereArgs)+2)
+	mainArgs = append(mainArgs, whereArgs...)
+	mainArgs = append(mainArgs, limit, offset)
+
+	rows, err := pool.Query(ctx, mainSQL, mainArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("crud: GetList %q: query: %w", doctype, err)
+	}
+	defer rows.Close()
+
+	childMetas, err := m.resolveChildMetas(ctx, ctx.Site.Name, mt)
+	if err != nil {
+		return nil, 0, fmt.Errorf("crud: GetList %q: %w", doctype, err)
+	}
+
+	var docs []*DynamicDoc
+	for rows.Next() {
+		vals, err := rows.Values()
+		if err != nil {
+			return nil, 0, fmt.Errorf("crud: GetList %q: scan row: %w", doctype, err)
+		}
+		doc := NewDynamicDoc(mt, childMetas, false)
+		for i, col := range columns {
+			doc.values[col] = normalizeDBValue(vals[i])
+		}
+		doc.resetDirtyState()
+		docs = append(docs, doc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("crud: GetList %q: iterate rows: %w", doctype, err)
+	}
+
+	return docs, total, nil
+}
+
+// GetSingle retrieves a Single-type document (MetaType.IsSingle == true).
+// Values are stored as key-value pairs in tab_singles and reconstructed into
+// a DynamicDoc.
+func (m *DocManager) GetSingle(ctx *DocContext, doctype string) (*DynamicDoc, error) {
+	pool, err := sitePool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	mt, err := m.registry.Get(ctx, ctx.Site.Name, doctype)
+	if err != nil {
+		return nil, fmt.Errorf("crud: GetSingle %q: load MetaType: %w", doctype, err)
+	}
+	if !mt.IsSingle {
+		return nil, fmt.Errorf("crud: GetSingle %q: doctype is not a Single", doctype)
+	}
+
+	rows, err := pool.Query(ctx,
+		`SELECT "field", "value" FROM tab_singles WHERE "doctype" = $1`,
+		doctype,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("crud: GetSingle %q: query: %w", doctype, err)
+	}
+	defer rows.Close()
+
+	doc := NewDynamicDoc(mt, nil, false)
+	for rows.Next() {
+		var field, value string
+		if err := rows.Scan(&field, &value); err != nil {
+			return nil, fmt.Errorf("crud: GetSingle %q: scan: %w", doctype, err)
+		}
+		// Values are stored as TEXT in tab_singles; ignore unknown field names.
+		_ = doc.Set(field, value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("crud: GetSingle %q: iterate: %w", doctype, err)
+	}
+
+	doc.resetDirtyState()
+	return doc, nil
+}
+
+// SetSingle persists a Single-type document by upserting all storable fields
+// into tab_singles. The full lifecycle (BeforeValidate → Validate → validation
+// → BeforeSave → AfterSave → OnChange) is executed.
+func (m *DocManager) SetSingle(ctx *DocContext, doc *DynamicDoc) error {
+	pool, err := sitePool(ctx)
+	if err != nil {
+		return err
+	}
+
+	if !doc.metaDef.IsSingle {
+		return fmt.Errorf("crud: SetSingle: doctype %q is not a Single", doc.metaDef.Name)
+	}
+	doctype := doc.metaDef.Name
+	uid := userID(ctx)
+
+	ctrl := m.controllers.Resolve(doctype)
+
+	if err := dispatchEvent(ctrl, EventBeforeValidate, ctx, doc); err != nil {
+		return fmt.Errorf("crud: SetSingle %q: BeforeValidate: %w", doctype, err)
+	}
+	if err := dispatchEvent(ctrl, EventValidate, ctx, doc); err != nil {
+		return fmt.Errorf("crud: SetSingle %q: Validate: %w", doctype, err)
+	}
+	if !isTruthyFlag(ctx, "skip_validation") {
+		if err := m.validator.ValidateDoc(ctx, doc, pool); err != nil {
+			return fmt.Errorf("crud: SetSingle %q: validation: %w", doctype, err)
+		}
+	}
+	if err := dispatchEvent(ctrl, EventBeforeSave, ctx, doc); err != nil {
+		return fmt.Errorf("crud: SetSingle %q: BeforeSave: %w", doctype, err)
+	}
+
+	txErr := orm.WithTransaction(ctx, pool, func(txCtx context.Context, tx pgx.Tx) error {
+		for _, f := range doc.metaDef.Fields {
+			if meta.ColumnType(f.FieldType) == "" {
+				continue
+			}
+			val := doc.Get(f.Name)
+			var valStr *string
+			if val != nil {
+				s := fmt.Sprintf("%v", val)
+				valStr = &s
+			}
+			_, err := tx.Exec(txCtx,
+				`INSERT INTO tab_singles ("doctype","field","value") VALUES ($1,$2,$3)
+				 ON CONFLICT ("doctype","field") DO UPDATE SET "value" = EXCLUDED."value"`,
+				doctype, f.Name, valStr,
+			)
+			if err != nil {
+				return fmt.Errorf("upsert tab_singles %q field %q: %w", doctype, f.Name, err)
+			}
+		}
+		payload, _ := doc.ToJSON()
+		if err := insertOutbox(txCtx, tx, "update", doctype, doctype, payload); err != nil {
+			return err
+		}
+		return insertAuditLog(txCtx, tx, doctype, doctype, "Update", uid, nil)
+	})
+	if txErr != nil {
+		return fmt.Errorf("crud: SetSingle %q: %w", doctype, txErr)
+	}
+
+	doc.resetDirtyState()
+
+	if err := dispatchEvent(ctrl, EventAfterSave, ctx, doc); err != nil {
+		return fmt.Errorf("crud: SetSingle %q: AfterSave: %w", doctype, err)
+	}
+	if err := dispatchEvent(ctrl, EventOnChange, ctx, doc); err != nil {
+		m.logger.Warn("crud: SetSingle OnChange error (non-fatal)",
+			"doctype", doctype, "error", err)
+	}
+
+	ctx.EventBus.Emit(doctype+":update", doc.AsMap())
+	return nil
+}
+
+// ─── Internal helpers ─────────────────────────────────────────────────────────
+
+// hasTableFieldKey returns true if values contains any key that is a Table
+// field on doc's MetaType. Used to detect incoming child row changes.
+func hasTableFieldKey(values map[string]any, doc *DynamicDoc) bool {
+	for k := range values {
+		if _, ok := doc.tableFields[k]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// filterScalarFields returns the subset of modifiedFields that correspond to
+// actual database columns (excludes Table/TableMultiSelect fields and layout
+// fields which have no column type).
+func filterScalarFields(doc *DynamicDoc, modifiedFields []string) []string {
+	var scalar []string
+	for _, f := range modifiedFields {
+		// Standard columns are always scalar.
+		if _, isTable := doc.tableFields[f]; isTable {
+			continue
+		}
+		scalar = append(scalar, f)
+	}
+	return scalar
+}
+
+// buildChangesJSON constructs the JSONB audit diff for an Update operation.
+// It compares the original snapshot against current values for each field in
+// modifiedFields and returns the JSON-encoded diff, or nil if nothing changed.
+func buildChangesJSON(doc *DynamicDoc, modifiedFields []string) []byte {
+	if len(modifiedFields) == 0 {
+		return nil
+	}
+	diff := make(map[string]any, len(modifiedFields))
+	for _, f := range modifiedFields {
+		// Skip system timestamp fields in the audit diff.
+		if f == "modified" || f == "modified_by" {
+			continue
+		}
+		diff[f] = map[string]any{
+			"old": doc.original[f],
+			"new": doc.values[f],
+		}
+	}
+	if len(diff) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(diff)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
+// isDocNotFound reports whether err wraps a *DocNotFoundError.
+func isDocNotFound(err error) bool {
+	var e *DocNotFoundError
+	return errors.As(err, &e)
+}

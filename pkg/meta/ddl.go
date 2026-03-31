@@ -224,5 +224,22 @@ func GenerateSystemTablesDDL() []DDLStatement {
 			SQL:     `CREATE TABLE IF NOT EXISTS tab_audit_log_default PARTITION OF tab_audit_log DEFAULT`,
 			Comment: "create default partition tab_audit_log_default",
 		},
+		{
+			// tab_outbox holds transactional outbox events. Every document write
+			// INSERTs a row here inside the same transaction, guaranteeing that the
+			// event is published if and only if the document write commits.
+			// The background moca-outbox process polls this table and publishes to
+			// Kafka (MS-15), then sets processed = true.
+			SQL: `CREATE TABLE IF NOT EXISTS tab_outbox (
+	"id"            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	"event_type"    TEXT NOT NULL,
+	"topic"         TEXT NOT NULL,
+	"partition_key" TEXT,
+	"payload"       JSONB NOT NULL,
+	"created_at"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	"processed"     BOOLEAN NOT NULL DEFAULT false
+)`,
+			Comment: "create system table tab_outbox",
+		},
 	}
 }
