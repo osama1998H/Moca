@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/moca-framework/moca/internal/config"
 	"github.com/moca-framework/moca/pkg/meta"
@@ -20,19 +21,27 @@ import (
 // ── connection defaults (mirror pkg/orm/postgres_test.go) ────────────────────
 
 const (
-	migratorTestHost     = "localhost"
-	migratorTestPort     = 5433
-	migratorTestUser     = "moca"
-	migratorTestPassword = "moca_test"
-	migratorTestDB       = "moca_test"
-	migratorTestSite     = "meta_test"
-	migratorTestSchema   = "tenant_meta_test"
+	migratorTestHost      = "localhost"
+	migratorTestPort      = 5433
+	migratorTestUser      = "moca"
+	migratorTestPassword  = "moca_test"
+	migratorTestDB        = "moca_test"
+	migratorTestSite      = "meta_test"
+	migratorTestSchema    = "tenant_meta_test"
+	registryTestRedisHost = "localhost"
+	registryTestRedisPort = 6379
 )
 
 // migratorAdminPool is a raw pool used only for fixture setup/teardown.
 var migratorAdminPool *pgxpool.Pool
 
-// TestMain sets up a dedicated tenant schema for migrator integration tests.
+// testRedisClient is a Redis client shared by registry integration tests.
+// It is nil when Redis is unavailable; registry tests must skip in that case.
+var testRedisClient *redis.Client
+
+// TestMain sets up shared fixtures for all pkg/meta integration tests:
+//   - PostgreSQL: moca_system schema + sites table + tenant schema
+//   - Redis: optional client for registry tests (nil when unavailable)
 func TestMain(m *testing.M) {
 	connStr := os.Getenv("PG_CONN_STRING")
 	if connStr == "" {
@@ -64,6 +73,25 @@ func TestMain(m *testing.M) {
 	if err := migratorSetupFixtures(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "migrator fixture setup failed: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Probe Redis — optional; registry tests skip when unavailable.
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = fmt.Sprintf("%s:%d", registryTestRedisHost, registryTestRedisPort)
+	}
+	rc := redis.NewClient(&redis.Options{Addr: redisAddr, DB: 0})
+	if err := rc.Ping(ctx).Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "INFO: Redis unavailable at %s: %v — registry tests will be skipped\n",
+			redisAddr, err)
+		rc.Close()
+		// testRedisClient remains nil; registry tests check for this.
+	} else {
+		testRedisClient = rc
+		defer func() {
+			testRedisClient.Close()
+			testRedisClient = nil
+		}()
 	}
 
 	exitCode := m.Run()
