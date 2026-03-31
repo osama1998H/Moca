@@ -10,7 +10,7 @@ LDFLAGS    := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildD
 GO := go
 
 .PHONY: build build-server build-worker build-scheduler build-moca build-outbox \
-        test test-integration lint clean \
+        test test-integration test-api-integration lint clean \
         spike-pg spike-redis spike-gowork spike-meili spike-cobra \
         help
 
@@ -26,6 +26,7 @@ help:
 	@echo "  build-outbox     Build moca-outbox binary"
 	@echo "  test             Run all tests with race detector"
 	@echo "  test-integration Run integration tests (requires Docker)"
+	@echo "  test-api-integration Run API integration tests (requires Docker)"
 	@echo "  lint             Run golangci-lint"
 	@echo "  clean            Remove build artifacts"
 	@echo ""
@@ -68,6 +69,12 @@ test:
 test-integration:
 	docker compose up -d --wait && \
 	$(GO) test -race -count=1 -tags=integration ./... ; \
+	docker compose down
+
+## test-api-integration: Run API integration tests against real PG + Redis
+test-api-integration:
+	docker compose up -d --wait && \
+	$(GO) test -race -count=1 -tags=integration ./pkg/api/... ; \
 	docker compose down
 
 ## lint: Run golangci-lint (requires golangci-lint to be installed)

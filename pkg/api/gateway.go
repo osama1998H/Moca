@@ -149,3 +149,11 @@ func WithVersionRouter(vr *VersionRouter) GatewayOption {
 func WithLogger(l *slog.Logger) GatewayOption {
 	return func(g *Gateway) { g.logger = l }
 }
+
+// SetVersionRouter sets the version router after gateway construction.
+// This resolves the circular construction dependency: ResourceHandler needs
+// Gateway, VersionRouter needs ResourceHandler, and Gateway.Handler() needs
+// VersionRouter for the middleware chain.
+func (g *Gateway) SetVersionRouter(vr *VersionRouter) {
+	g.versionRouter = vr
+}
