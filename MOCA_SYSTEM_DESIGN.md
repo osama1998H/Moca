@@ -18,7 +18,7 @@ Moca is a metadata-driven, multitenant business application platform where a Met
 
 | Layer | Technology | Rationale |
 |-------|-----------|-----------|
-| Backend Runtime | **Go 1.22+** | Compiled performance, strong concurrency, single binary deployment |
+| Backend Runtime | **Go 1.26+** | Compiled performance, strong concurrency, single binary deployment |
 | Frontend | **React.js 19+ (TypeScript)** | Component model maps naturally to metadata-driven rendering |
 | Primary Database | **PostgreSQL 16+** | JSONB for dynamic fields, row-level security, partitioning for multitenancy |
 | Cache | **Redis 7+ (cache mode)** | Metadata cache, session store, rate limiting, distributed locks |

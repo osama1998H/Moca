@@ -36,7 +36,7 @@ Each blocker below has been traced to its source in the design documents and ass
 
 ### Assumptions
 - Team of 2-4 Go developers, 1-2 frontend (React/TypeScript) developers.
-- PostgreSQL 16+, Redis 7+, Go 1.22+ available in all environments.
+- PostgreSQL 16+, Redis 7+, Go 1.26+ available in all environments.
 - Kafka and Meilisearch available for production; optional for development.
 - GitHub Actions for CI; GoReleaser for release binaries.
 - All design decisions from `MOCA_SYSTEM_DESIGN.md` ADR section (lines 2061-2105) are accepted as-is.

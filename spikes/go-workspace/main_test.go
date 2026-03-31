@@ -2,7 +2,7 @@
 //
 // No external services required. Tests validate Go build tooling behavior.
 //
-// Prerequisites: Go 1.22+ and internet access for go mod tidy (first run only).
+// Prerequisites: Go 1.26+ and internet access for go mod tidy (first run only).
 //
 // Run:  go test -v -count=1 ./...
 // Or:   make spike-gowork  (from repo root)
@@ -233,7 +233,7 @@ func TestValidateAppDependencies(t *testing.T) {
 	// Case 2: Synthetic module requiring testify v2.0.0 against stub-a (v1.8.0).
 	// This should detect a major version conflict (v1 vs v2).
 	syntheticContent := `module github.com/example/synthetic-app
-go 1.22
+go 1.26
 require github.com/stretchr/testify v2.0.0+incompatible
 `
 	syntheticMod, err := modfile.Parse("synthetic-app/go.mod", []byte(syntheticContent), nil)

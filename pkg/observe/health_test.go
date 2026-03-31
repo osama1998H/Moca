@@ -194,7 +194,7 @@ func TestHealthReadyEndpoint_503WhenBothDown(t *testing.T) {
 
 // ── Method routing ────────────────────────────────────────────────────────────
 
-// TestRegisterRoutes_MethodNotAllowed verifies that Go 1.22+ ServeMux returns
+// TestRegisterRoutes_MethodNotAllowed verifies that Go 1.26+ ServeMux returns
 // 405 for non-GET requests on method-specific routes.
 func TestRegisterRoutes_MethodNotAllowed(t *testing.T) {
 	mux := newTestChecker(healthy, healthy)

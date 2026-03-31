@@ -39,11 +39,11 @@ func NewHealthChecker(db, redis Pinger, version string, logger *slog.Logger) *He
 }
 
 // RegisterRoutes registers the three health endpoints on mux.
-// Uses Go 1.22+ method+path routing patterns.
+// Uses Go 1.26+ method+path routing patterns.
 //
-//   GET /health       — always 200; confirms the process is running
-//   GET /health/live  — always 200; Kubernetes liveness probe
-//   GET /health/ready — 200 when PG+Redis are reachable; 503 otherwise
+//	GET /health       — always 200; confirms the process is running
+//	GET /health/live  — always 200; Kubernetes liveness probe
+//	GET /health/ready — 200 when PG+Redis are reachable; 503 otherwise
 func (hc *HealthChecker) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", hc.handleHealth)
 	mux.HandleFunc("GET /health/live", hc.handleLive)

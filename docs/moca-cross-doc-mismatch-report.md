@@ -703,7 +703,7 @@ Add `db_pubsub: 3` to the `moca.yaml` Redis config. Update the framework design'
 
 **Document A reference:**
 - File: `MOCA_SYSTEM_DESIGN.md`
-- Section: §15 Package Layout (implicitly — framework uses Go 1.22+, potential CGo, etc.)
+- Section: §15 Package Layout (implicitly — framework uses Go 1.26+, potential CGo, etc.)
 - Lines: 1827–1962
 
 **Document B reference:**

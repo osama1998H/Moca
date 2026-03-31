@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white" alt="Go 1.22+">
+  <img src="https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white" alt="Go 1.26+">
   <img src="https://img.shields.io/badge/PostgreSQL-16+-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 16+">
   <img src="https://img.shields.io/badge/React-19+-61DAFB?logo=react&logoColor=black" alt="React 19+">
   <img src="https://img.shields.io/badge/Status-Design%20Phase-orange" alt="Status: Design Phase">
@@ -37,7 +37,7 @@ Moca is a spiritual successor to the [Frappe](https://frappeframework.com/) fram
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Go 1.22+ |
+| Backend | Go 1.26+ |
 | Frontend | React 19+ with TypeScript |
 | Database | PostgreSQL 16+ (schema-per-tenant, JSONB, RLS) |
 | Cache / Queue | Redis 7+ (cache + Redis Streams for jobs) |

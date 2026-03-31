@@ -50,7 +50,7 @@ MOCA is a metadata-driven, multitenant framework where a single `MetaType` defin
 - Bespoke merge function (no third-party dependency like `mergo`) since the struct shape is known at compile time.
 
 ### go.work version mismatch
-- Current `go.work` says `go 1.26.1` but `go.mod` says `go 1.22`. This should be reconciled during Task 1. The go.work directive should match the actual Go toolchain version in use.
+- Current `go.work` says `go 1.26.1` but `go.mod` says `go 1.26`. This should be reconciled during Task 1. The go.work directive should match the actual Go toolchain version in use.
 
 **No web research was needed.** All implementation details were derivable from the design documents and standard Go ecosystem knowledge.
 
@@ -76,7 +76,7 @@ MOCA is a metadata-driven, multitenant framework where a single `MetaType` defin
   - `go build ./cmd/...` succeeds and produces 5 binaries in `bin/`
 - **Risks / Unknowns:**
   - Minimal risk. Pure file creation.
-  - The `go.work` / `go.mod` Go version mismatch (1.26.1 vs 1.22) should be reconciled here.
+  - The `go.work` / `go.mod` Go version mismatch (1.26.1 vs 1.26) should be reconciled here.
 
 ---
 
@@ -167,7 +167,7 @@ MOCA is a metadata-driven, multitenant framework where a single `MetaType` defin
   - `go test ./internal/config/...` passes
   - `go vet ./...` and `golangci-lint run` clean
 - **Risks / Unknowns:**
-  - Test fixtures with env vars need `t.Setenv()` to inject test values (available in Go 1.17+, fine for 1.22+).
+  - Test fixtures with env vars need `t.Setenv()` to inject test values (available in Go 1.17+, fine for 1.26+).
   - The cmd/ wiring should handle "no moca.yaml found" gracefully (print message and exit 0, not crash). This is important because during development, engineers may run binaries outside a project directory.
 
 ## Recommended Execution Order
@@ -181,7 +181,7 @@ All tasks are sequential. Each builds on the previous.
 
 ## Open Questions
 
-1. **go.work Go version:** `go.work` says `go 1.26.1` but `go.mod` says `go 1.22`. Which version should be canonical? Recommend aligning both to the actual toolchain version in use.
+1. **go.work Go version:** `go.work` says `go 1.26.1` but `go.mod` says `go 1.26`. Which version should be canonical? Recommend aligning both to the actual toolchain version in use.
 2. **Semver constraint validation depth:** Should MS-01 fully parse semver constraint ranges (e.g., `>=1.0.0, <2.0.0`) or just validate they're non-empty strings? Full parsing requires a library or custom parser. Recommendation: validate non-empty + basic format check; defer full constraint evaluation to MS-09 (CLI App Commands).
 3. **Three-layer cascade scope:** Which config fields are overridable per-site vs project-global? The design docs show `common_site_config.yaml` and `site_config.yaml` but don't enumerate which fields they contain. Recommendation: for MS-01, implement the merge mechanism for all fields; restrict per-field overridability in future milestones when site management is implemented (MS-09/MS-12).
 4. **Existing moca-server binary:** There's a pre-built `moca-server` binary (2.5 MB) at the project root. Should it be removed or added to `.gitignore`? It appears to be an artifact from MS-00 spike work.

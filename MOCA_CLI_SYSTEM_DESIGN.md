@@ -627,7 +627,7 @@ Examples:
   $ moca version
   Moca CLI:        v1.0.0
   Moca Framework:  v1.0.0
-  Go:              go1.22.0
+  Go:              go1.26.0
   PostgreSQL:      16.2
   Redis:           7.2.4
   Kafka:           3.7.0
