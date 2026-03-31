@@ -5,14 +5,22 @@ package document_test
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
+	"github.com/moca-framework/moca/internal/config"
+	"github.com/moca-framework/moca/pkg/auth"
 	"github.com/moca-framework/moca/pkg/document"
+	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/moca-framework/moca/pkg/observe"
+	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/moca-framework/moca/pkg/tenancy"
 )
 
 // ── connection defaults ────────────────────────────────────────────────────────
@@ -30,6 +38,20 @@ const (
 // Sequences created through this pool land in the test schema and are cleaned
 // up when the schema is dropped in TestMain teardown.
 var namingTestPool *pgxpool.Pool
+
+// ── integration infrastructure (shared by naming + CRUD integration tests) ───
+
+var (
+	integDBManager   *orm.DBManager
+	integRegistry    *meta.Registry
+	integDocManager  *document.DocManager
+	integSite        *tenancy.SiteContext
+	integUser        *auth.User
+	integControllers *document.ControllerRegistry
+	integRedisClient *redis.Client
+)
+
+const integSiteName = "doc_integ"
 
 // TestMain sets up shared fixtures for all pkg/document integration tests:
 //   - PostgreSQL: creates the tenant_naming_test schema
@@ -92,6 +114,119 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	defer namingTestPool.Close()
+
+	// ── Full DocManager infrastructure for CRUD integration tests ────────
+
+	// 1. Create moca_system schema + sites table (required by orm.DBManager).
+	if _, err := adminPool.Exec(ctx, `
+		CREATE SCHEMA IF NOT EXISTS moca_system;
+		CREATE TABLE IF NOT EXISTS moca_system.sites (
+			name        TEXT PRIMARY KEY,
+			db_schema   TEXT NOT NULL,
+			status      TEXT NOT NULL DEFAULT 'active',
+			admin_email TEXT NOT NULL DEFAULT '',
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+		);
+	`); err != nil {
+		fmt.Fprintf(os.Stderr, "FATAL: create moca_system: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 2. Insert a site row pointing to the existing tenant schema.
+	if _, err := adminPool.Exec(ctx, `
+		INSERT INTO moca_system.sites (name, db_schema)
+		VALUES ($1, $2)
+		ON CONFLICT (name) DO UPDATE SET db_schema = EXCLUDED.db_schema
+	`, integSiteName, namingTestSchema); err != nil {
+		fmt.Fprintf(os.Stderr, "FATAL: insert site row: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 3. Create orm.DBManager.
+	logger := observe.NewLogger(slog.LevelWarn)
+	host := os.Getenv("PG_HOST")
+	if host == "" {
+		host = namingTestHost
+	}
+	integDBManager, err = orm.NewDBManager(ctx, config.DatabaseConfig{
+		Host:     host,
+		Port:     namingTestPort,
+		User:     namingTestUser,
+		Password: namingTestPassword,
+		SystemDB: namingTestDB,
+		PoolSize: 10,
+	}, logger)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "FATAL: NewDBManager: %v\n", err)
+		os.Exit(1)
+	}
+	defer integDBManager.Close()
+
+	// 4. Probe Redis at localhost:6380 (docker-compose external port).
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6380"
+	}
+	rc := redis.NewClient(&redis.Options{Addr: redisAddr, DB: 0})
+	if err := rc.Ping(ctx).Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "INFO: Redis unavailable at %s: %v — CRUD integration tests will be skipped\n",
+			redisAddr, err)
+		rc.Close()
+	} else {
+		integRedisClient = rc
+		defer func() {
+			integRedisClient.Close()
+			integRedisClient = nil
+		}()
+	}
+
+	// 5. Create meta.Registry.
+	integRegistry = meta.NewRegistry(integDBManager, integRedisClient, logger)
+
+	// 6. EnsureMetaTables (tab_doctype, tab_singles, tab_outbox, tab_audit_log, tab_version).
+	migrator := meta.NewMigrator(integDBManager, logger)
+	if err := migrator.EnsureMetaTables(ctx, integSiteName); err != nil {
+		fmt.Fprintf(os.Stderr, "FATAL: EnsureMetaTables: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 7. Register fixture MetaTypes.
+	fixtureJSONs := []string{
+		integTestOrderItemJSON,
+		integLinkedDocJSON,
+		integTestOrderJSON,
+		integValidationJSON,
+		integSingleJSON,
+		integConcurrentOrderJSON,
+	}
+	for _, js := range fixtureJSONs {
+		if _, err := integRegistry.Register(ctx, integSiteName, []byte(js)); err != nil {
+			fmt.Fprintf(os.Stderr, "FATAL: register fixture MetaType: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	// 8. Create NamingEngine, Validator, ControllerRegistry, DocManager.
+	naming := document.NewNamingEngine()
+	validator := document.NewValidator()
+	integControllers = document.NewControllerRegistry()
+	integDocManager = document.NewDocManager(integRegistry, integDBManager, naming, validator, integControllers, logger)
+
+	// 9. Build SiteContext with the tenant pool.
+	sitePool, err := integDBManager.ForSite(ctx, integSiteName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "FATAL: ForSite(%q): %v\n", integSiteName, err)
+		os.Exit(1)
+	}
+	integSite = &tenancy.SiteContext{
+		Name: integSiteName,
+		Pool: sitePool,
+	}
+	integUser = &auth.User{
+		Email:    "test@moca.dev",
+		FullName: "Test User",
+		Roles:    []string{"System Manager"},
+	}
 
 	exitCode := m.Run()
 
@@ -217,6 +352,75 @@ func TestNamingEngine_PatternConcurrency(t *testing.T) {
 
 	t.Logf("concurrent results: %v", results)
 }
+
+// ── fixture MetaType JSONs for CRUD integration tests ────────────────────────
+
+const integTestOrderJSON = `{
+	"name": "IntegTestOrder",
+	"module": "test",
+	"naming_rule": {"rule": "pattern", "pattern": "TO-.####"},
+	"fields": [
+		{"name": "customer",  "field_type": "Data",  "label": "Customer"},
+		{"name": "amount",    "field_type": "Float", "label": "Amount"},
+		{"name": "notes",     "field_type": "Text",  "label": "Notes"},
+		{"name": "items",     "field_type": "Table", "label": "Items", "options": "IntegTestOrderItem"}
+	]
+}`
+
+const integTestOrderItemJSON = `{
+	"name": "IntegTestOrderItem",
+	"module": "test",
+	"is_child_table": true,
+	"naming_rule": {"rule": "uuid"},
+	"fields": [
+		{"name": "item_name", "field_type": "Data", "label": "Item Name"},
+		{"name": "qty",       "field_type": "Int",  "label": "Quantity"}
+	]
+}`
+
+const integValidationJSON = `{
+	"name": "IntegValidation",
+	"module": "test",
+	"naming_rule": {"rule": "uuid"},
+	"fields": [
+		{"name": "title",      "field_type": "Data",  "label": "Title",      "required": true},
+		{"name": "code",       "field_type": "Data",  "label": "Code",       "validation_regex": "^[A-Z]{3}-[0-9]+$"},
+		{"name": "unique_key", "field_type": "Data",  "label": "Unique Key", "unique": true},
+		{"name": "linked_doc", "field_type": "Link",  "label": "Linked Doc", "options": "IntegLinkedDoc"},
+		{"name": "count",      "field_type": "Int",   "label": "Count"},
+		{"name": "active",     "field_type": "Check", "label": "Active"}
+	]
+}`
+
+const integLinkedDocJSON = `{
+	"name": "IntegLinkedDoc",
+	"module": "test",
+	"naming_rule": {"rule": "uuid"},
+	"fields": [
+		{"name": "label", "field_type": "Data", "label": "Label"}
+	]
+}`
+
+const integSingleJSON = `{
+	"name": "IntegSingle",
+	"module": "test",
+	"is_single": true,
+	"naming_rule": {"rule": "uuid"},
+	"fields": [
+		{"name": "site_name",  "field_type": "Data",  "label": "Site Name"},
+		{"name": "max_users",  "field_type": "Int",   "label": "Max Users"},
+		{"name": "is_enabled", "field_type": "Check", "label": "Is Enabled"}
+	]
+}`
+
+const integConcurrentOrderJSON = `{
+	"name": "IntegConcurrentOrder",
+	"module": "test",
+	"naming_rule": {"rule": "pattern", "pattern": "CO-.####"},
+	"fields": [
+		{"name": "title", "field_type": "Data", "label": "Title"}
+	]
+}`
 
 // TestNamingEngine_Pattern_NoHash_Integration verifies that an invalid pattern
 // with no '#' character is rejected even in an integration context (pool available).
