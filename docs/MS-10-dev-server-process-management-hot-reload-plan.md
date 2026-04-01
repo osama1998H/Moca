@@ -211,7 +211,7 @@ No web research needed. Key findings from codebase exploration:
 
 - **Task ID:** MS-10-T4
 - **Title:** Implement moca serve/stop/restart Commands and End-to-End Integration Tests
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Wire the CLI commands that compose all previous tasks, then validate the full workflow with integration tests.
 
