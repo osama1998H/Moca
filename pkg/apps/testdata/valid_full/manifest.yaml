@@ -1,0 +1,26 @@
+name: crm
+title: Moca CRM
+version: 1.2.3
+publisher: Acme Corp
+license: MIT
+description: Customer relationship management for Moca
+moca_version: ">=0.1.0"
+dependencies:
+  - app: core
+    min_version: ">=0.1.0"
+modules:
+  - name: Selling
+    label: Selling
+    icon: dollar-sign
+    color: green
+    category: Modules
+    doctypes:
+      - SalesOrder
+      - Quotation
+  - name: Buying
+    label: Buying
+    icon: shopping-cart
+    color: blue
+    category: Modules
+    doctypes:
+      - PurchaseOrder

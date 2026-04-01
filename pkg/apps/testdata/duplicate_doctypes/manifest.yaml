@@ -1,0 +1,12 @@
+name: dupdt
+version: 1.0.0
+moca_version: ">=0.1.0"
+modules:
+  - name: Sales
+    label: Sales
+    doctypes:
+      - Invoice
+  - name: Accounting
+    label: Accounting
+    doctypes:
+      - Invoice

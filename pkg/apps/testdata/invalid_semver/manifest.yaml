@@ -1,0 +1,3 @@
+name: badversion
+version: not-a-version
+moca_version: ">=0.1.0"

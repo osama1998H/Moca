@@ -1,0 +1,3 @@
+name: myapp
+version: 0.1.0
+moca_version: ">=0.1.0"
