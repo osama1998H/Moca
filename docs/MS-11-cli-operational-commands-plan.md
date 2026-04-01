@@ -100,7 +100,7 @@ No web research was needed. The design documents and existing codebase provide s
 
 - **Task ID:** MS-11-T2
 - **Title:** Configuration Management Commands and Config Sync
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Implement all 8 `moca config` subcommands and the YAML-to-DB config sync mechanism per the Config Sync Contract (System Design §5.1.1).
 
