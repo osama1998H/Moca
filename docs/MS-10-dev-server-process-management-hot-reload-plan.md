@@ -103,7 +103,7 @@ No web research needed. Key findings from codebase exploration:
 
 - **Task ID:** MS-10-T2
 - **Title:** Extract HTTP Server into Shared Package, Add Static Files and WebSocket Stub
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Extract the HTTP server setup from `cmd/moca-server/main.go` into `internal/serve/` so both the standalone binary and `moca serve` can reuse it.
 
