@@ -50,6 +50,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 
 ### Task 1
 - **Task ID:** MS-02-T1
+- **Status:** Completed
 - **Title:** Structured Logger and CI Docker Infrastructure
 - **Description:** Implement slog-based structured logging with tenant context fields, create a unified root-level docker-compose for CI integration tests, and add `pgx/v5` and `go-redis/v9` dependencies to `go.mod`.
 - **Why this task exists:** Every subsequent component (DBManager, Redis factory, health checks) needs a logger. Docker-compose and module dependencies are one-time prerequisites that unblock all other tasks.
@@ -67,6 +68,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 
 ### Task 2
 - **Task ID:** MS-02-T2
+- **Status:** Completed
 - **Title:** PostgreSQL DBManager and Transaction Manager
 - **Description:** Promote the validated spike's `DBManager` to production code in `pkg/orm/`, integrating with the config layer and structured logger. Add `User` and `Password` fields to `DatabaseConfig`. Implement `TxManager` with `WithTransaction(ctx, pool, fn)` including panic recovery and nested transaction detection.
 - **Why this task exists:** The per-tenant pool registry is the core multitenancy primitive. The transaction manager is required by system schema DDL (T3) and every downstream data operation.
@@ -87,6 +89,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 
 ### Task 3
 - **Task ID:** MS-02-T3
+- **Status:** Completed
 - **Title:** Redis Client Factory and System Schema DDL
 - **Description:** Implement the Redis 4-DB client factory in `internal/drivers/` and the idempotent `EnsureSystemSchema` function that creates the 3 `moca_system` tables.
 - **Why this task exists:** Redis clients are required by health checks and all downstream caching/queue work. The system schema DDL creates the global tables (`sites`, `apps`, `site_apps`) that tenant management and app registration depend on from MS-03 onward.
@@ -107,6 +110,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 
 ### Task 4
 - **Task ID:** MS-02-T4
+- **Status:** Completed
 - **Title:** Health Check Endpoints and End-to-End Integration Tests
 - **Description:** Implement the three health check HTTP handlers using stdlib `net/http`, then write the comprehensive integration test suite that validates all MS-02 acceptance criteria end-to-end and adds the `test-integration` Makefile target.
 - **Why this task exists:** Health checks are the final milestone deliverable and require both PG and Redis. The integration test suite proves all components work together and establishes the CI testing pattern for future milestones.

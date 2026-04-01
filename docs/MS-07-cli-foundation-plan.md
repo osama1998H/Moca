@@ -48,6 +48,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 ### Task 1: Cobra Root Command, `pkg/cli` Registry, `moca version`, `moca completion`
 
 - **Task ID:** MS-07-T1
+- **Status:** Completed
 - **Title:** Cobra Root Command + Command Registry + Version & Completion Commands
 - **Description:**
   Add `github.com/spf13/cobra` to `go.mod`. Promote the validated spike registry from `spikes/cobra-ext/framework/cmd/root.go` into `pkg/cli/registry.go`. Rewrite `cmd/moca/main.go` as a Cobra application with persistent global flags (`--site`, `--env`, `--project`, `--json`, `--table`, `--no-color`, `--verbose`). Implement `moca version` (CLI version, Go version, OS/Arch from ldflags) and `moca completion bash|zsh|fish|powershell` (using Cobra's built-in generation).
@@ -75,6 +76,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 ### Task 2: Context Resolver (Project, Site, Environment)
 
 - **Task ID:** MS-07-T2
+- **Status:** Completed
 - **Title:** Context Detection & Resolution Pipeline
 - **Description:**
   Implement `internal/context/` with three resolvers following the 6-level priority pipeline: (1) CLI flags, (2) env vars, (3) local state files, (4) project config, (5) directory-tree auto-detection, (6) defaults. The `CLIContext` struct carries `*config.ProjectConfig`, resolved site name, environment, and project root path. Wire the resolver into the root command's `PersistentPreRunE` using Go's `context.WithValue()` on `cmd.SetContext()` — no global state.
@@ -100,6 +102,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 ### Task 3: Output Layer (TTY, JSON, Table, Rich Errors)
 
 - **Task ID:** MS-07-T3
+- **Status:** Completed
 - **Title:** Output Formatting Layer + Rich Error System
 - **Description:**
   Implement `internal/output/` with: (a) a `Writer` that reads `--json`, `--table`, `--no-color` flags and dispatches to the correct formatter, (b) TTY-aware color output respecting `NO_COLOR` env var, (c) JSON output mode via `encoding/json`, (d) table output via stdlib `text/tabwriter`, (e) simple spinner/progress using `\r` line clearing, and (f) rich `CLIError` type implementing the `Error/Context/Cause/Fix/Reference` format from the design doc. The `CLIError` implements Go's `error` interface so `RunE` can return it; `main.go` checks for `*CLIError` in a custom error handler.
@@ -128,6 +131,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 ### Task 4: Register All 24 Command Groups + `moca doctor` Skeleton
 
 - **Task ID:** MS-07-T4
+- **Status:** Completed
 - **Title:** Command Group Scaffolding + Doctor Command
 - **Description:**
   Create placeholder command files for all 24 command groups plus top-level commands (`init`, `status`). Each group registers a parent command with subcommand stubs matching the design doc's command tree (§4.1). Each placeholder `RunE` returns a `CLIError` with `Error: "not implemented"` and `Fix: "This command will be available in a future release."`. Framework-internal commands use the explicit constructor pattern (`NewXxxCommand()`) called from a wiring file, reserving the `init()` pattern for app-contributed commands per ADR-005. Implement `moca doctor` skeleton with a `DoctorCheck` interface and 3–4 skeleton checks (project detected, config valid, PG reachable placeholder, Redis reachable placeholder) that print a status table.

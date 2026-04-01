@@ -48,6 +48,7 @@ No web research was needed. All implementation details are sufficiently specifie
 ### Task 1: Core QueryBuilder — Structure, 15 Operators, Parameterized SQL
 
 - **Task ID:** MS-05-T1
+- **Status:** Completed
 - **Title:** Core QueryBuilder with fluent API, all operators, and parameterized SQL generation
 - **Description:**
   Create `pkg/orm/query.go` with the `QueryBuilder` struct, `Filter`, `Operator`, `OrderClause` types, and the `Build()` method that generates parameterized SQL. Implement all 15 operators with correct `$N` placeholder management. Field validation checks fields against MetaType's known columns (real columns only in this task — `_extra` transparency is Task 2).
@@ -100,6 +101,7 @@ No web research was needed. All implementation details are sufficiently specifie
 ### Task 2: `_extra` JSONB Transparency with Type Casting
 
 - **Task ID:** MS-05-T2
+- **Status:** Completed
 - **Title:** Transparent `_extra` JSONB field access in QueryBuilder with type-aware casting
 - **Description:**
   Extend the QueryBuilder's field resolution to detect whether a field is a real column or lives in `_extra` JSONB, and generate the appropriate SQL expression. For `_extra` fields, generate `_extra->>'field_name'` for text access and `(_extra->>'field_name')::TYPE` for typed comparisons.
@@ -138,6 +140,7 @@ No web research was needed. All implementation details are sufficiently specifie
 ### Task 3: Link Field Auto-Joins (Depth ≤ 2)
 
 - **Task ID:** MS-05-T3
+- **Status:** Completed
 - **Title:** Automatic JOIN generation for Link field dot-notation filters
 - **Description:**
   When a filter or field uses dot notation (e.g., `customer.territory`), the QueryBuilder automatically resolves the Link chain: looks up the `customer` field on the source MetaType, verifies it is `FieldTypeLink`, reads `Options` to get the target DocType, loads that DocType's MetaType from the Registry, validates the sub-field, and generates a `LEFT JOIN`.
@@ -176,6 +179,7 @@ No web research was needed. All implementation details are sufficiently specifie
 ### Task 4: GetList Integration, ReportDef, and End-to-End Tests
 
 - **Task ID:** MS-05-T4
+- **Status:** Completed
 - **Title:** Wire QueryBuilder into GetList, implement ReportDef, write integration tests
 - **Description:**
   This task has three parts:

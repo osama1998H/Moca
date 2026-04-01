@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white" alt="Go 1.26+">
   <img src="https://img.shields.io/badge/PostgreSQL-16+-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 16+">
   <img src="https://img.shields.io/badge/React-19+-61DAFB?logo=react&logoColor=black" alt="React 19+">
-  <img src="https://img.shields.io/badge/Status-Design%20Phase-orange" alt="Status: Design Phase">
+  <img src="https://img.shields.io/badge/Status-MS--08%20In%20Progress-blue" alt="Status: MS-08 In Progress">
 </p>
 
 ---
@@ -96,7 +96,7 @@ docs/                 # Design documents & milestone plans
 
 ## Current Status
 
-Moca is in the **design and planning phase**. Implementation begins at **MS-00: Architecture Validation Spikes**, which establishes the Go workspace, build system, CI pipeline, and validates 5 high-risk architectural assumptions through spike prototypes.
+Moca has completed **MS-00 through MS-07** (Architecture Validation, Project Structure, PostgreSQL/Redis Foundation, Metadata Registry, Document Runtime, Query Engine, REST API Layer, and CLI Foundation). Active development continues with **MS-08: Hook Registry and App System Foundation**.
 
 See the [Roadmap](ROADMAP.md) for the full 30-milestone plan to v1.0.
 

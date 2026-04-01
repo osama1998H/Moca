@@ -48,6 +48,7 @@ Key existing infrastructure MS-03 builds upon:
 ### Task 1: Type Definitions -- MetaType, FieldDef, NamingStrategy, and Stub Types
 
 - **Task ID:** MS-03-T1
+- **Status:** Completed
 - **Title:** Type Definitions
 - **Description:** Define all core data types: `MetaType` struct, `FieldDef` struct with all 35 `FieldType` constants (29 storage + 6 layout-only), `NamingStrategy`/`NamingRule` enum, and stub types for downstream milestones (`PermRule`, `WorkflowMeta`, `DocHookDefs`, `APIConfig`, `ViewMeta`, `LayoutHint`).
 - **Why this task exists:** Every other component (compiler, registry, migrator) takes or returns MetaType/FieldDef values. This must come first.
@@ -73,6 +74,7 @@ Key existing infrastructure MS-03 builds upon:
 ### Task 2: Schema Compiler -- JSON to Validated MetaType
 
 - **Task ID:** MS-03-T2
+- **Status:** Completed
 - **Title:** Schema Compiler
 - **Description:** Implement `Compile(jsonBytes []byte) (*MetaType, error)` that parses JSON, validates against all business rules, and returns a compiled MetaType. Also implement `TableName(doctypeName string) string` for the `tab_{snake_case}` naming convention.
 - **Why this task exists:** The compiler is the gateway from raw definitions into validated MetaType structs. Both the Registry (for caching) and the Migrator (for DDL) depend on compiled MetaTypes.
@@ -107,6 +109,7 @@ Key existing infrastructure MS-03 builds upon:
 ### Task 3: Column Type Mapping, DDL Generation, and Schema Migrator
 
 - **Task ID:** MS-03-T3
+- **Status:** Completed
 - **Title:** DDL Generation and Migrator
 - **Description:** Implement FieldType-to-PostgreSQL column mapping, DDL generation for document tables (standard columns, child tables, system tables), and the schema migrator (diff two MetaTypes -> DDL statements -> apply in transaction).
 - **Why this task exists:** Bridges metadata to physical database schema. Without this, MetaType definitions cannot be materialized as tables and schema evolution requires manual DDL.
@@ -146,6 +149,7 @@ Key existing infrastructure MS-03 builds upon:
 ### Task 4: Three-Tier Cache Registry with End-to-End Integration Tests
 
 - **Task ID:** MS-03-T4
+- **Status:** Completed
 - **Title:** Three-Tier Cache Registry
 - **Description:** Implement the `Registry` -- the central access point for MetaType lookups -- backed by L1 in-memory (`sync.Map`), L2 Redis (`meta:{site}:{doctype}`), L3 PostgreSQL (`tab_doctype`). Includes MetaType registration (compile + migrate + cache), cache invalidation, schema version tracking, and comprehensive integration tests validating all MS-03 acceptance criteria.
 - **Why this task exists:** The Registry is how every other framework component accesses MetaType definitions. The three-tier cache ensures low-latency lookups while maintaining durability and cross-instance consistency.

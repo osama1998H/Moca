@@ -59,6 +59,7 @@ Key findings from codebase inspection:
 ### Task 1: Foundation Types -- Document, DynamicDoc, DocContext
 
 - **Task ID:** MS-04-T1
+- **Status:** Completed
 - **Title:** Foundation Types -- Document interface, DynamicDoc, DocContext, and stub types
 - **Description:**
   Implement the `Document` interface (10 methods), `DynamicDoc` struct (map-backed with dirty tracking and child table support), `DocContext` struct, and minimal concrete types in `pkg/tenancy`, `pkg/auth`, and `pkg/events` required for compilation.
@@ -97,6 +98,7 @@ Key findings from codebase inspection:
 ### Task 2: Naming Engine -- 6 Strategies with PG Sequence Support
 
 - **Task ID:** MS-04-T2
+- **Status:** Completed
 - **Title:** Naming Engine -- uuid, field, hash, autoincrement, pattern, custom
 - **Description:**
   Implement `NamingEngine` with all 6 naming strategies.
@@ -133,6 +135,7 @@ Key findings from codebase inspection:
 ### Task 3: Field-Level Validation and Type Coercion
 
 - **Task ID:** MS-04-T3
+- **Status:** Completed
 - **Title:** Field Validator -- Type Coercion and All Validation Rules
 - **Description:**
   Implement field-level validation and type coercion against `FieldDef` rules.
@@ -178,6 +181,7 @@ Key findings from codebase inspection:
 ### Task 4: Lifecycle Engine, Controller Resolution, and CRUD Operations
 
 - **Task ID:** MS-04-T4
+- **Status:** Completed
 - **Title:** Lifecycle Dispatcher, Controllers, and CRUD (Insert/Update/Delete/Get/GetList)
 - **Description:**
   Implement the lifecycle event dispatcher, controller resolution, and all CRUD operations. This is the core of MS-04 -- it wires together all previous tasks. Also adds `tab_outbox` DDL to `GenerateSystemTablesDDL()`.
@@ -279,6 +283,7 @@ Key findings from codebase inspection:
 ### Task 5: Integration Tests -- Full Lifecycle Validation
 
 - **Task ID:** MS-04-T5
+- **Status:** Completed
 - **Title:** Integration Tests -- End-to-End Document Runtime
 - **Description:**
   Comprehensive integration tests using Docker Compose PostgreSQL (port 5433) and Redis (port 6379), covering all MS-04 acceptance criteria.

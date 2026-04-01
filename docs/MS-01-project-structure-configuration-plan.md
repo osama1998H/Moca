@@ -59,6 +59,7 @@ MOCA is a metadata-driven, multitenant framework where a single `MetaType` defin
 ### Task 1: Directory Scaffolding and cmd/ Stubs
 
 - **Task ID:** MS-01-T1
+- **Status:** Completed
 - **Title:** Directory Scaffolding and cmd/ Stubs
 - **Description:**
   Create the full `pkg/` directory tree with `doc.go` placeholder files for all 15 packages defined in §15. Create 4 new `cmd/` entry points (`moca-worker`, `moca-scheduler`, `moca`, `moca-outbox`) following the existing `moca-server` stub pattern (version print + exit). Update the `Makefile` to build all 5 binaries. Verify `go build ./cmd/...` produces 5 binaries.
@@ -83,6 +84,7 @@ MOCA is a metadata-driven, multitenant framework where a single `MetaType` defin
 ### Task 2: moca.yaml Typed Structs and YAML Parser
 
 - **Task ID:** MS-01-T2
+- **Status:** Completed
 - **Title:** moca.yaml Typed Structs and YAML Parser
 - **Description:**
   Implement the full `ProjectConfig` struct hierarchy in `internal/config/types.go` mapping 1:1 to the moca.yaml schema from §3.1. Implement YAML parsing in `internal/config/parse.go` using `gopkg.in/yaml.v3`. Implement environment variable expansion in `internal/config/envexpand.go` — a pre-processing step that replaces `${VAR_NAME}` patterns in raw YAML bytes before decoding. Implement user-friendly error wrapping in `internal/config/errors.go`.
@@ -108,6 +110,7 @@ MOCA is a metadata-driven, multitenant framework where a single `MetaType` defin
 ### Task 3: Validation and Config Inheritance/Merging
 
 - **Task ID:** MS-01-T3
+- **Status:** Completed
 - **Title:** Validation and Config Inheritance/Merging
 - **Description:**
   Implement config validation in `internal/config/validate.go` that walks the `ProjectConfig` struct and accumulates `[]ValidationError` with dot-path field names. Implement config merging in `internal/config/merge.go` for two scenarios: (1) `staging.inherits: production` overlay and (2) three-layer cascade (moca.yaml → common_site_config.yaml → site_config.yaml).
@@ -143,6 +146,7 @@ MOCA is a metadata-driven, multitenant framework where a single `MetaType` defin
 ### Task 4: cmd/ Wiring, Integration, and Test Suite
 
 - **Task ID:** MS-01-T4
+- **Status:** Completed
 - **Title:** cmd/ Wiring, Integration, and Test Suite
 - **Description:**
   Wire all 5 `cmd/*/main.go` binaries to load `moca.yaml` from the current directory, validate it, resolve inheritance, and print the resolved config. Build a comprehensive test suite covering parsing, env expansion, validation, and merging. Create test fixture YAML files in `internal/config/testdata/`.

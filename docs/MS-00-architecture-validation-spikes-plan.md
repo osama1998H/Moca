@@ -82,6 +82,7 @@ Web research was conducted for four library decisions. Key findings:
 ### Task 1: Project Scaffold and CI Pipeline
 
 - **Task ID:** MS-00-T1
+- **Status:** Completed
 - **Title:** Initialize Go Module, Workspace, and CI Pipeline
 - **Description:**
   Create the root Go module (`github.com/moca-framework/moca`), the `go.work` file composing the framework and a stub `apps/core` module, the `spikes/` directory structure, and the GitHub Actions CI pipeline.
@@ -112,6 +113,7 @@ Web research was conducted for four library decisions. Key findings:
 ### Task 2: PostgreSQL Schema-Per-Tenant Isolation Spike
 
 - **Task ID:** MS-00-T2
+- **Status:** Completed
 - **Title:** Spike 1 -- Validate pgxpool Per-Tenant Pool Registry Under Concurrent Access
 - **Description:**
   Build a self-contained spike in `spikes/pg-tenant/` that validates the per-site pool registry pattern from `blocker-resolution-strategies.md`. This is the highest-risk spike because the entire multitenancy model depends on it.
@@ -155,6 +157,7 @@ Web research was conducted for four library decisions. Key findings:
 ### Task 3: Redis Streams Consumer Group Spike
 
 - **Task ID:** MS-00-T3
+- **Status:** Completed
 - **Title:** Spike 2 -- Validate Redis Streams Consumer Groups with Dead-Letter Queue Pattern
 - **Description:**
   Build a self-contained spike in `spikes/redis-streams/` that validates Redis Streams as a job queue replacement for dedicated brokers (ADR-002).
@@ -196,6 +199,7 @@ Web research was conducted for four library decisions. Key findings:
 ### Task 4: Go Workspace Composition and Cobra CLI Extension Spike
 
 - **Task ID:** MS-00-T4
+- **Status:** Completed
 - **Title:** Spike 3 + Spike 5 -- Validate go.work Multi-Module Composition and Cobra Command Extension
 - **Description:**
   Build a combined spike in `spikes/go-workspace/` and `spikes/cobra-ext/` that validates two related concerns: (1) multiple app modules compiling into a single binary via `go.work`, and (2) apps registering Cobra CLI commands that appear in the root command tree.
@@ -250,6 +254,7 @@ Web research was conducted for four library decisions. Key findings:
 ### Task 5: Meilisearch Multi-Index Tenant Isolation Spike
 
 - **Task ID:** MS-00-T5
+- **Status:** Completed
 - **Title:** Spike 4 -- Validate Meilisearch Prefix-Based Tenant Isolation and Bulk Indexing
 - **Description:**
   Build a self-contained spike in `spikes/meilisearch/` that validates Meilisearch as the full-text search engine (ADR-006) with tenant isolation.

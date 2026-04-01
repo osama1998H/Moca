@@ -50,6 +50,7 @@ No web research was needed. The design documents are comprehensive and the imple
 ### Task 1
 
 - **Task ID:** MS-06-T1
+- **Status:** Completed
 - **Title:** Gateway, Middleware Chain, Rate Limiter, Auth Interfaces
 - **Description:** Build the core HTTP gateway (`pkg/api/gateway.go`) that owns the `http.ServeMux`, the middleware chain, and placeholder auth/permission interfaces. The middleware chain executes: Request ID → CORS → Tenant Resolution → Rate Limit → Auth → Handler. Also implement the Redis sliding window rate limiter and populate `RateLimitConfig` fields.
 - **Why this task exists:** Everything else depends on the gateway and middleware. The auth/permission interfaces must be defined first so CRUD handlers (T2) and MS-14 can code against them. Rate limiting is a middleware concern and belongs here.
@@ -79,6 +80,7 @@ No web research was needed. The design documents are comprehensive and the imple
 ### Task 2
 
 - **Task ID:** MS-06-T2
+- **Status:** Completed
 - **Title:** REST CRUD Handlers, Query Parameter Parsing, Response Envelope
 - **Description:** Implement `pkg/api/rest.go` with auto-generated REST handlers that bridge HTTP requests to `DocManager`. Includes query-string parsing for filters/pagination (Frappe-style `[["field","op","value"]]` JSON), a standard response envelope, error mapping, and the `/api/v1/meta/{doctype}` introspection endpoint.
 - **Why this task exists:** This is the core value proposition — define a MetaType and get REST endpoints. The handlers translate HTTP verbs and query params into `DocManager` calls and `ListOptions`.
@@ -116,6 +118,7 @@ No web research was needed. The design documents are comprehensive and the imple
 ### Task 3
 
 - **Task ID:** MS-06-T3
+- **Status:** Completed
 - **Title:** Transformer Pipeline and API Version Router
 - **Description:** Implement the `Transformer` interface and built-in transformers (field filtering, alias remapping, read-only enforcement). Implement the version router that dispatches to version-specific transformer chains. Each API version has its own transformer chain derived from `APIVersion.FieldMapping` and `APIVersion.ExcludeFields`.
 - **Why this task exists:** Transformers ensure no internal fields leak, aliases work, and read-only fields can't be written. Versioning enables backwards-compatible API evolution. These are tightly coupled — each version has its own transformer chain.
@@ -142,6 +145,7 @@ No web research was needed. The design documents are comprehensive and the imple
 ### Task 4
 
 - **Task ID:** MS-06-T4
+- **Status:** Completed
 - **Title:** moca-server HTTP Startup and Full-Stack Integration Tests
 - **Description:** Wire the Gateway into `cmd/moca-server/main.go` so the binary starts an HTTP server with graceful shutdown. Write comprehensive integration tests exercising the full stack: HTTP request → middleware → handler → DocManager → PostgreSQL → response.
 - **Why this task exists:** Transforms the framework from a library into a runnable server. Integration tests are the acceptance criteria proof — they verify the entire request lifecycle.

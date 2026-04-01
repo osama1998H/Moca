@@ -176,6 +176,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-00: Architecture Validation Spikes and Project Scaffold
 
+- **Status:** Completed
 - **Goal:** Validate the 5 highest-risk architectural assumptions and establish the Go project skeleton with CI.
 - **Why now:** Every subsequent milestone depends on these assumptions. Discovering a fundamental flaw after building 10 milestones would be catastrophic.
 - **Scope:**
@@ -219,6 +220,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-01: Project Structure, Configuration, and Go Module Layout
 
+- **Status:** Completed
 - **Goal:** Establish the canonical directory structure, `moca.yaml` parsing, configuration resolution, and the 5 `cmd/` entry points as empty stubs.
 - **Why now:** Every file written from this point needs a home. The configuration system is read by nearly every other package.
 - **Scope:**
@@ -256,6 +258,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-02: PostgreSQL Foundation and Redis Connection Layer
 
+- **Status:** Completed
 - **Goal:** Implement the DB connection pool manager (per-tenant schema isolation), Redis client manager (4 logical DBs), system schema DDL, and basic health checks.
 - **Why now:** MetaType storage (MS-03) and document storage (MS-04) both depend on a working database layer.
 - **Scope:**
@@ -297,6 +300,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-03: Metadata Registry -- MetaType, FieldDef, Compiler, Redis Cache
 
+- **Status:** Completed
 - **Goal:** Implement MetaType and FieldDef types, the schema compiler (JSON -> validated MetaType), the in-memory + Redis-backed metadata registry, and the schema migrator (MetaType diff -> DDL).
 - **Why now:** MetaType is the foundational primitive. Document Runtime (MS-04), API layer (MS-06), and permission engine (MS-14) all depend on compiled MetaType definitions.
 - **Scope:**
@@ -338,6 +342,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-04: Document Runtime -- DynamicDoc, Lifecycle Engine, Naming, Validation
 
+- **Status:** Completed
 - **Goal:** Implement the Document interface, DynamicDoc (map-backed), 18-event lifecycle engine, naming engine (6 strategies), and field-level validation.
 - **Why now:** The Document is what users interact with. The API layer (MS-06) generates REST endpoints for Document CRUD.
 - **Scope:**
@@ -379,6 +384,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-05: Query Engine and Report Foundation
 
+- **Status:** Completed
 - **Goal:** Implement the dynamic query builder with 15 filter operators, `_extra` JSONB transparency, Link field auto-joins, pagination, and the ReportDef structure.
 - **Why now:** GetList from MS-04 uses hardcoded SQL. The query builder enables the API layer (MS-06) to translate URL parameters into safe, parameterized SQL.
 - **Scope:**
@@ -420,6 +426,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-06: REST API Layer -- Auto-Generated CRUD, Middleware, Rate Limiting
 
+- **Status:** Completed
 - **Goal:** Implement auto-generated REST API for any MetaType, middleware chain, request/response transformers, API versioning, and rate limiting. First externally-usable surface.
 - **Why now:** After this milestone, a developer defines a MetaType JSON and the framework generates a full REST API. Unblocks the React frontend (MS-17).
 - **Scope:**
@@ -465,6 +472,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-07: CLI Foundation -- Context Resolver, Output Layer, Cobra Scaffold
 
+- **Status:** Completed
 - **Goal:** Build CLI infrastructure: project/site/env detection, output formatting (TTY/JSON/Table/Progress), rich errors, and full Cobra command tree scaffold.
 - **Why now:** Can start in parallel with MS-04/MS-05. CLI scaffold must exist before real commands (MS-09).
 - **Scope:**
@@ -512,6 +520,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-08: Hook Registry and App System Foundation
 
+- **Status:** Not Started
 - **Goal:** Implement HookRegistry (priority-ordered, dependency-aware), AppManifest parser, app directory scanner, and the `apps/core` framework app with core DocTypes (User, Role, DocType, Module, SystemSettings).
 - **Why now:** Hooks wire app-provided lifecycle behavior into Document Runtime. Core app provides the minimum MetaTypes for the system to function.
 - **Scope:**
@@ -554,6 +563,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-09: CLI Project Init, Site, and App Commands (Init, Create, Drop, Install, Migrate)
 
+- **Status:** Not Started
 - **Goal:** Implement `moca init` (project bootstrapping), `moca site create/drop/list/use`, `moca app install/uninstall`, and `moca db migrate` -- making the framework usable from the command line for the first time.
 - **Why now:** Developer can define MetaTypes and has a working API but no CLI to bootstrap projects, create sites, or install apps. `moca init` is the very first command any user runs.
 - **Scope:**
@@ -602,6 +612,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-10: Dev Server, Process Management, and Hot Reload
 
+- **Status:** Not Started
 - **Goal:** Implement `moca serve` (single-process dev server), MetaType filesystem hot reload, and `moca stop/restart`.
 - **Why now:** Developer experience milestone. After this: `moca init` -> `moca site create` -> `moca serve` -> edit MetaType JSON -> see changes immediately.
 - **Scope:**
@@ -644,6 +655,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-11: CLI Operational Commands -- Site Ops, Database, Backup, Config, Cache
 
+- **Status:** Not Started
 - **Goal:** Implement secondary site operations, backup/restore, configuration management, cache operations, and database utilities.
 - **Why now:** Essential operational commands for real development. Includes site management commands deferred from MS-09. Can run in parallel with frontend work (MS-17).
 - **Scope:**
@@ -701,6 +713,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-12: Multitenancy -- Site Resolver Middleware, Per-Site Isolation
 
+- **Status:** Not Started
 - **Goal:** Implement server-side tenant resolution (subdomain/header/path), per-site DB pool management, per-site Redis key prefixing, and multi-site serving from a single process.
 - **Why now:** Up to now the server handles a single site. Multitenancy is a core requirement before permissions (per-tenant) and Beta.
 - **Scope:**
@@ -739,6 +752,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-13: CLI App Scaffolding, User Management, and Developer Tools
 
+- **Status:** Not Started
 - **Goal:** Implement `moca app new` (scaffold), `moca app get` (download from git), `moca user` commands, `moca dev execute/request`, and `moca build server/app`.
 - **Why now:** Developers need to create apps and manage users. Build commands needed for Go workspace model.
 - **Scope:**
@@ -783,6 +797,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-14: Permission Engine -- Role-Based, Field-Level, Row-Level
 
+- **Status:** Not Started
 - **Goal:** Implement complete permission resolution: role-based DocType perms, field-level read/write, row-level matching, custom rules, PostgreSQL RLS, and session/JWT auth.
 - **Why now:** API is functional but unprotected. Before Beta, every endpoint must enforce permissions.
 - **Scope:**
@@ -829,6 +844,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-15: Background Jobs, Scheduler, Kafka/Redis Events, Search Sync
 
+- **Status:** Not Started
 - **Goal:** Implement background jobs (Redis Streams workers, DLQ), cron scheduler, Kafka event producer (with Redis fallback), transactional outbox, and Meilisearch sync.
 - **Why now:** Many features produce async work (audit, search, webhooks, email). Scheduler enables recurring tasks. Events enable integration backbone.
 - **Scope:**
@@ -877,6 +893,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-16: CLI Queue, Events, Search, Monitor, and Log Commands
 
+- **Status:** Not Started
 - **Goal:** CLI commands for managing queues, events, search, monitoring, and logs.
 - **Why now:** MS-15 adds async systems. Operators need CLI visibility.
 - **Scope:**
@@ -915,6 +932,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-17: React Desk Foundation -- App Shell, MetaProvider, FormView, ListView
 
+- **Status:** Not Started
 - **Goal:** Build the React Desk app shell, providers (Meta, Doc, Auth), metadata-driven FormView and ListView, and the field type component library. First time users see the Desk UI.
 - **Why now:** REST API (MS-06) and auth (MS-14) are ready. Frontend can now consume metadata and render dynamic forms.
 - **Scope:**
@@ -962,6 +980,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-18: API Keys, Webhooks, Custom Endpoints, APIConfig per DocType
 
+- **Status:** Not Started
 - **Goal:** API key management, webhook dispatch, per-DocType APIConfig (custom middleware, custom endpoints), whitelisted API methods.
 - **Why now:** External integrations need API keys and webhooks. Per-DocType customization is a key differentiator.
 - **Scope:**
@@ -996,6 +1015,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-19: Desk Real-Time, Custom Field Types, Version Tracking
 
+- **Status:** Not Started
 - **Goal:** WebSocket real-time updates, custom field type registry for app extensions, and document version tracking.
 - **Why now:** Desk is functional but static. Real-time prevents stale-data conflicts. Custom fields enable app UI extensions.
 - **Scope:**
@@ -1028,6 +1048,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-20: GraphQL, Dashboard, Report, Translation, File Storage
 
+- **Status:** Not Started
 - **Goal:** GraphQL auto-generation, Dashboard/Report views, translation system, S3 file storage.
 - **Why now:** Rounds out the platform for Beta. GraphQL is a differentiator. Reports make it useful for business users.
 - **Scope:**
@@ -1066,6 +1087,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-21: Deployment, Infrastructure Generation, and Production Processes
 
+- **Status:** Not Started
 - **Goal:** `moca deploy setup/update/rollback`, infrastructure config generation (Caddy, NGINX, systemd, Docker, K8s), and 5-process production architecture.
 - **Why now:** System is functionally complete. Needs to be deployable to production.
 - **Scope:**
@@ -1107,6 +1129,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-22: Security Hardening -- OAuth2, SAML/OIDC, Encryption, Notifications
 
+- **Status:** Not Started
 - **Goal:** Enterprise SSO (OAuth2, SAML, OIDC), sensitive field encryption, email/in-app notifications, backup encryption.
 - **Why now:** Beta-blocking security requirements. Enterprise customers need SSO. Encryption is compliance-required.
 - **Scope:**
@@ -1143,6 +1166,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-23: Workflow Engine
 
+- **Status:** Not Started
 - **Goal:** State machine, transitions with role-based access, approval chains, SLA timers, and Desk workflow UI.
 - **Why now:** Core business requirement for submittable documents. Ties permissions, lifecycle, and notifications together.
 - **Scope:**
@@ -1173,6 +1197,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-24: Observability, Metrics, and Profiling
 
+- **Status:** Not Started
 - **Goal:** Prometheus metrics, OpenTelemetry tracing, comprehensive `moca doctor`, and `moca dev bench/profile`.
 - **Why now:** Before v1.0, the system must be observable in production.
 - **Scope:**
@@ -1204,6 +1229,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-25: Testing Framework, Coverage, and Test Data Generation
 
+- **Status:** Not Started
 - **Goal:** Testing infrastructure: `moca test run`, `moca test factory`, coverage, and comprehensive integration tests.
 - **Why now:** Before v1.0, critical paths must be tested. Test factory enables app developers to generate realistic data.
 - **Scope:**
@@ -1232,6 +1258,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-26: Documentation, Packaging, and v1.0 Polish
 
+- **Status:** Not Started
 - **Goal:** Developer docs, API reference, deployment guide, release packaging (binaries, Docker, install script), and final polish.
 - **Why now:** Final milestone before v1.0. All features implemented and tested.
 - **Scope:**
@@ -1265,6 +1292,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-27: Portal SSR Layer (Post-v1.0)
 
+- **Status:** Not Started
 - **Goal:** Server-side rendered Portal for public-facing pages (customer portals, websites) with Go template rendering.
 - **Why deferred:** Desk serves internal users first. Most initial deployments prioritize internal tools.
 - **Deliverables:** `pkg/ui/portal.go`, PortalPage/PortalController, SSR templates, portal translations.
@@ -1276,6 +1304,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-28: Advanced Features -- VirtualDoc, CDC, Dev Console, Playwright (Post-v1.0)
 
+- **Status:** Not Started
 - **Goal:** VirtualDoc (external data sources), CDC topics, opt-in event sourcing, `moca dev console` (Go REPL), `moca dev playground`, `moca app publish`, `moca test run-ui` (Playwright).
 - **Why deferred:** Valuable but not essential for v1.0. VirtualDoc needs stable Document interface. CDC needs Kafka maturity.
 - **Dependencies:** v1.0
@@ -1286,6 +1315,8 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 ---
 
 ### MS-29: Plugin Marketplace and WASM Sandboxing (Post-v1.0)
+
+- **Status:** Not Started
 
 - **Goal:** WASM-based sandboxed plugin execution for untrusted code, app marketplace with discovery/ratings/scanning.
 - **Why deferred:** Requires v1.0 ecosystem maturity. Architecturally complex.
