@@ -1,0 +1,76 @@
+{
+  "name": "User",
+  "module": "Core",
+  "label": "User",
+  "description": "System user account with authentication credentials and role assignments.",
+  "naming_rule": {
+    "rule": "field",
+    "field_name": "email"
+  },
+  "title_field": "full_name",
+  "sort_field": "creation",
+  "sort_order": "desc",
+  "search_fields": ["email", "full_name"],
+  "track_changes": true,
+  "fields": [
+    {
+      "name": "email",
+      "field_type": "Data",
+      "label": "Email",
+      "required": true,
+      "unique": true,
+      "in_list_view": true,
+      "searchable": true
+    },
+    {
+      "name": "full_name",
+      "field_type": "Data",
+      "label": "Full Name",
+      "in_list_view": true,
+      "searchable": true
+    },
+    {
+      "name": "password",
+      "field_type": "Password",
+      "label": "Password",
+      "hidden": true
+    },
+    {
+      "name": "enabled",
+      "field_type": "Check",
+      "label": "Enabled",
+      "default": 1,
+      "in_list_view": true
+    },
+    {
+      "name": "language",
+      "field_type": "Data",
+      "label": "Language"
+    },
+    {
+      "name": "time_zone",
+      "field_type": "Data",
+      "label": "Time Zone"
+    },
+    {
+      "name": "user_type",
+      "field_type": "Select",
+      "label": "User Type",
+      "options": "System\nWebsite",
+      "in_list_view": true,
+      "in_filter": true
+    },
+    {
+      "name": "roles",
+      "field_type": "Table",
+      "label": "Roles",
+      "options": "HasRole"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "doctype_perm": 63
+    }
+  ]
+}

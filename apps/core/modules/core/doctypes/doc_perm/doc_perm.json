@@ -1,0 +1,32 @@
+{
+  "name": "DocPerm",
+  "module": "Core",
+  "label": "DocPerm",
+  "description": "Child table defining role-based permissions for a DocType.",
+  "is_child_table": true,
+  "fields": [
+    {
+      "name": "role",
+      "field_type": "Link",
+      "label": "Role",
+      "options": "Role",
+      "required": true,
+      "in_list_view": true
+    },
+    {
+      "name": "doctype_perm",
+      "field_type": "Int",
+      "label": "Permission Flags"
+    },
+    {
+      "name": "match_field",
+      "field_type": "Data",
+      "label": "Match Field"
+    },
+    {
+      "name": "match_value",
+      "field_type": "Data",
+      "label": "Match Value"
+    }
+  ]
+}

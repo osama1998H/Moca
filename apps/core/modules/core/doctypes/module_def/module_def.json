@@ -1,0 +1,51 @@
+{
+  "name": "ModuleDef",
+  "module": "Core",
+  "label": "Module Def",
+  "description": "Defines a module namespace within an app.",
+  "naming_rule": {
+    "rule": "field",
+    "field_name": "module_name"
+  },
+  "sort_field": "creation",
+  "sort_order": "asc",
+  "fields": [
+    {
+      "name": "module_name",
+      "field_type": "Data",
+      "label": "Module Name",
+      "required": true,
+      "unique": true,
+      "in_list_view": true,
+      "searchable": true
+    },
+    {
+      "name": "label",
+      "field_type": "Data",
+      "label": "Label",
+      "in_list_view": true
+    },
+    {
+      "name": "app_name",
+      "field_type": "Data",
+      "label": "App Name",
+      "in_list_view": true
+    },
+    {
+      "name": "icon",
+      "field_type": "Data",
+      "label": "Icon"
+    },
+    {
+      "name": "color",
+      "field_type": "Data",
+      "label": "Color"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "doctype_perm": 63
+    }
+  ]
+}

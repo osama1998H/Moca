@@ -1,0 +1,90 @@
+{
+  "name": "DocField",
+  "module": "Core",
+  "label": "DocField",
+  "description": "Child table defining a single field within a DocType.",
+  "is_child_table": true,
+  "fields": [
+    {
+      "name": "field_name",
+      "field_type": "Data",
+      "label": "Field Name",
+      "required": true,
+      "in_list_view": true
+    },
+    {
+      "name": "field_type",
+      "field_type": "Select",
+      "label": "Field Type",
+      "options": "Data\nText\nLongText\nMarkdown\nCode\nHTMLEditor\nInt\nFloat\nCurrency\nPercent\nRating\nDate\nDatetime\nTime\nDuration\nCheck\nSelect\nLink\nDynamicLink\nTable\nTableMultiSelect\nAttach\nAttachImage\nColor\nGeolocation\nJSON\nPassword\nSignature\nBarcode\nSectionBreak\nColumnBreak\nTabBreak\nHTML\nButton\nHeading",
+      "required": true,
+      "in_list_view": true
+    },
+    {
+      "name": "label",
+      "field_type": "Data",
+      "label": "Label",
+      "in_list_view": true
+    },
+    {
+      "name": "options",
+      "field_type": "Data",
+      "label": "Options"
+    },
+    {
+      "name": "reqd",
+      "field_type": "Check",
+      "label": "Required"
+    },
+    {
+      "name": "is_unique",
+      "field_type": "Check",
+      "label": "Unique"
+    },
+    {
+      "name": "hidden",
+      "field_type": "Check",
+      "label": "Hidden"
+    },
+    {
+      "name": "read_only",
+      "field_type": "Check",
+      "label": "Read Only"
+    },
+    {
+      "name": "in_list_view",
+      "field_type": "Check",
+      "label": "In List View"
+    },
+    {
+      "name": "in_filter",
+      "field_type": "Check",
+      "label": "In Filter"
+    },
+    {
+      "name": "searchable",
+      "field_type": "Check",
+      "label": "Searchable"
+    },
+    {
+      "name": "db_index",
+      "field_type": "Check",
+      "label": "DB Index"
+    },
+    {
+      "name": "default_value",
+      "field_type": "Data",
+      "label": "Default Value"
+    },
+    {
+      "name": "depends_on",
+      "field_type": "Data",
+      "label": "Depends On"
+    },
+    {
+      "name": "max_length",
+      "field_type": "Int",
+      "label": "Max Length"
+    }
+  ]
+}

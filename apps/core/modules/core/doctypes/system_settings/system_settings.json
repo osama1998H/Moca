@@ -1,0 +1,50 @@
+{
+  "name": "SystemSettings",
+  "module": "Core",
+  "label": "System Settings",
+  "description": "Global system configuration for a Moca site.",
+  "is_single": true,
+  "fields": [
+    {
+      "name": "site_name",
+      "field_type": "Data",
+      "label": "Site Name"
+    },
+    {
+      "name": "default_language",
+      "field_type": "Data",
+      "label": "Default Language"
+    },
+    {
+      "name": "time_zone",
+      "field_type": "Data",
+      "label": "Time Zone"
+    },
+    {
+      "name": "date_format",
+      "field_type": "Data",
+      "label": "Date Format"
+    },
+    {
+      "name": "enable_password_policy",
+      "field_type": "Check",
+      "label": "Enable Password Policy"
+    },
+    {
+      "name": "password_min_length",
+      "field_type": "Int",
+      "label": "Password Minimum Length"
+    },
+    {
+      "name": "session_expiry",
+      "field_type": "Int",
+      "label": "Session Expiry (hours)"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "doctype_perm": 63
+    }
+  ]
+}

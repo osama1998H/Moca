@@ -1,0 +1,35 @@
+{
+  "name": "Role",
+  "module": "Core",
+  "label": "Role",
+  "description": "A named role that can be assigned to users for permission control.",
+  "naming_rule": {
+    "rule": "field",
+    "field_name": "role_name"
+  },
+  "sort_field": "creation",
+  "sort_order": "asc",
+  "fields": [
+    {
+      "name": "role_name",
+      "field_type": "Data",
+      "label": "Role Name",
+      "required": true,
+      "unique": true,
+      "in_list_view": true,
+      "searchable": true
+    },
+    {
+      "name": "disabled",
+      "field_type": "Check",
+      "label": "Disabled",
+      "in_list_view": true
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "doctype_perm": 63
+    }
+  ]
+}

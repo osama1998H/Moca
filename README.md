@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="logo-with-golang-avatar.png" width="400" alt="Moca Framework + Go">
+  <img
+    src="logo-with-golang-avatar.png"
+    width="400"
+    alt="Moca Framework + Go"
+  >
 </p>
 
 <h1 align="center">Moca</h1>
@@ -17,7 +21,7 @@
 
 ---
 
-<img src="logo.png" width="80" align="right" alt="Moca logo">
+<img src="logo.png" width="80" align="right" alt="Moca logo"   style="border-radius: 10%;">
 
 Moca is a spiritual successor to the [Frappe](https://frappeframework.com/) framework (the engine behind [ERPNext](https://erpnext.com/)), redesigned from scratch with Go, PostgreSQL, and React. A single **MetaType** definition drives database schema, validation, document lifecycle, permissions, API generation, search indexing, and UI rendering.
 

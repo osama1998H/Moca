@@ -1,0 +1,19 @@
+name: core
+title: "Moca Core"
+version: "0.1.0"
+publisher: "Moca Framework"
+license: "MIT"
+description: "Core framework doctypes and system configuration"
+moca_version: ">=0.1.0"
+modules:
+  - name: Core
+    label: Core
+    doctypes:
+      - User
+      - Role
+      - DocType
+      - ModuleDef
+      - SystemSettings
+      - HasRole
+      - DocField
+      - DocPerm

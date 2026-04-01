@@ -1,0 +1,99 @@
+{
+  "name": "DocType",
+  "module": "Core",
+  "label": "DocType",
+  "description": "Metadata definition for a document type. Describes the schema, behaviour, and UI of all documents in the system.",
+  "track_changes": true,
+  "fields": [
+    {
+      "name": "dt_module",
+      "field_type": "Data",
+      "label": "Module",
+      "in_list_view": true
+    },
+    {
+      "name": "dt_label",
+      "field_type": "Data",
+      "label": "Label"
+    },
+    {
+      "name": "dt_description",
+      "field_type": "Text",
+      "label": "Description"
+    },
+    {
+      "name": "fields",
+      "field_type": "Table",
+      "label": "Fields",
+      "options": "DocField"
+    },
+    {
+      "name": "permissions",
+      "field_type": "Table",
+      "label": "Permissions",
+      "options": "DocPerm"
+    },
+    {
+      "name": "is_submittable",
+      "field_type": "Check",
+      "label": "Is Submittable"
+    },
+    {
+      "name": "is_single",
+      "field_type": "Check",
+      "label": "Is Single"
+    },
+    {
+      "name": "is_child_table",
+      "field_type": "Check",
+      "label": "Is Child Table"
+    },
+    {
+      "name": "is_virtual",
+      "field_type": "Check",
+      "label": "Is Virtual"
+    },
+    {
+      "name": "dt_track_changes",
+      "field_type": "Check",
+      "label": "Track Changes"
+    },
+    {
+      "name": "dt_naming_rule",
+      "field_type": "Data",
+      "label": "Naming Rule"
+    },
+    {
+      "name": "dt_title_field",
+      "field_type": "Data",
+      "label": "Title Field"
+    },
+    {
+      "name": "dt_sort_field",
+      "field_type": "Data",
+      "label": "Sort Field"
+    },
+    {
+      "name": "dt_sort_order",
+      "field_type": "Select",
+      "label": "Sort Order",
+      "options": "asc\ndesc"
+    },
+    {
+      "name": "dt_search_fields",
+      "field_type": "Data",
+      "label": "Search Fields"
+    },
+    {
+      "name": "dt_image_field",
+      "field_type": "Data",
+      "label": "Image Field"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "doctype_perm": 63
+    }
+  ]
+}
