@@ -147,15 +147,17 @@ func GenerateTableDDL(mt *MetaType) []DDLStatement {
 	return stmts
 }
 
-// GenerateSystemTablesDDL generates DDL for the 4 per-tenant system tables:
+// GenerateSystemTablesDDL generates DDL for the 5 per-tenant system tables:
 //   - tab_doctype: stores MetaType definitions as JSONB
 //   - tab_singles: key-value store for Single DocTypes
 //   - tab_version: change history for tracked documents
 //   - tab_audit_log: immutable append-only audit trail (partitioned by timestamp)
+//   - tab_migration_log: tracks applied SQL migrations per app with batch grouping
 //
 // Also generates:
 //   - idx_version_ref: index on tab_version(ref_doctype, docname)
 //   - tab_audit_log_default: default partition for tab_audit_log so inserts work immediately
+//   - idx_migration_log_batch: index on tab_migration_log(batch) for rollback queries
 //
 // All statements use CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS for idempotency.
 //
@@ -240,6 +242,28 @@ func GenerateSystemTablesDDL() []DDLStatement {
 	"processed"     BOOLEAN NOT NULL DEFAULT false
 )`,
 			Comment: "create system table tab_outbox",
+		},
+		{
+			// tab_migration_log tracks applied SQL migrations per app. Each row
+			// records one migration's UP/DOWN SQL so that rollback can reverse it.
+			// Migrations are grouped into batches (one Apply call = one batch) for
+			// batch-level rollback. The UNIQUE constraint on (app, version) prevents
+			// duplicate application.
+			SQL: `CREATE TABLE IF NOT EXISTS tab_migration_log (
+	"id"         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	"app"        TEXT NOT NULL,
+	"version"    TEXT NOT NULL,
+	"batch"      INTEGER NOT NULL,
+	"up_sql"     TEXT NOT NULL,
+	"down_sql"   TEXT NOT NULL DEFAULT '',
+	"applied_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	UNIQUE ("app", "version")
+)`,
+			Comment: "create system table tab_migration_log",
+		},
+		{
+			SQL:     `CREATE INDEX IF NOT EXISTS idx_migration_log_batch ON tab_migration_log ("batch")`,
+			Comment: "create index idx_migration_log_batch on tab_migration_log",
 		},
 	}
 }

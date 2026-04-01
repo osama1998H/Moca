@@ -277,10 +277,11 @@ func TestGenerateTableDDL_ColumnsSanitized(t *testing.T) {
 func TestGenerateSystemTablesDDL_AllTablesPresent(t *testing.T) {
 	stmts := meta.GenerateSystemTablesDDL()
 
-	// Expect exactly 7 statements: tab_doctype, tab_singles, tab_version,
-	// idx_version_ref, tab_audit_log, tab_audit_log_default, tab_outbox.
-	if len(stmts) != 7 {
-		t.Errorf("GenerateSystemTablesDDL() returned %d statements; want 7", len(stmts))
+	// Expect exactly 9 statements: tab_doctype, tab_singles, tab_version,
+	// idx_version_ref, tab_audit_log, tab_audit_log_default, tab_outbox,
+	// tab_migration_log, idx_migration_log_batch.
+	if len(stmts) != 9 {
+		t.Errorf("GenerateSystemTablesDDL() returned %d statements; want 9", len(stmts))
 		for i, s := range stmts {
 			t.Logf("  [%d] %s", i, s.Comment)
 		}
@@ -295,6 +296,8 @@ func TestGenerateSystemTablesDDL_AllTablesPresent(t *testing.T) {
 		"tab_audit_log",
 		"tab_audit_log_default",
 		"tab_outbox",
+		"tab_migration_log",
+		"idx_migration_log_batch",
 	}
 	for _, ec := range expectedComments {
 		if _, ok := findStmtByComment(stmts, ec); !ok {

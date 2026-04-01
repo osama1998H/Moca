@@ -331,7 +331,7 @@ func TestApply_Idempotent(t *testing.T) {
 	t.Logf("Apply is idempotent")
 }
 
-// TestEnsureMetaTables_AllSystemTables verifies all 4 system tables are created.
+// TestEnsureMetaTables_AllSystemTables verifies all 5 system tables are created.
 func TestEnsureMetaTables_AllSystemTables(t *testing.T) {
 	ctx := context.Background()
 	m := newMigratorForTest(t)
@@ -340,14 +340,14 @@ func TestEnsureMetaTables_AllSystemTables(t *testing.T) {
 		t.Fatalf("EnsureMetaTables: %v", err)
 	}
 
-	// Verify all 4 system tables exist.
-	for _, tbl := range []string{"tab_doctype", "tab_singles", "tab_version", "tab_audit_log"} {
+	// Verify all 5 system tables exist.
+	for _, tbl := range []string{"tab_doctype", "tab_singles", "tab_version", "tab_audit_log", "tab_migration_log"} {
 		if !tableExists(ctx, t, tbl) {
 			t.Errorf("system table %q was not created", tbl)
 		}
 	}
 
-	t.Logf("All 4 system tables created by EnsureMetaTables")
+	t.Logf("All 5 system tables created by EnsureMetaTables")
 }
 
 // TestEnsureMetaTables_AuditLogIsPartitioned verifies tab_audit_log is a partitioned table.
