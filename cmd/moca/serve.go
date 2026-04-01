@@ -1,13 +1,11 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -121,7 +119,7 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	defer func() { _ = process.RemovePID(projectRoot) }()
 
 	// ── Signal handling ─────────────────────────────────────────────────
-	ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
 	defer stop()
 
 	// ── Startup banner ──────────────────────────────────────────────────
@@ -156,55 +154,3 @@ func enabledStr(enabled bool) string {
 	return "disabled"
 }
 
-// stopServer stops a running Moca server by sending a signal and polling.
-// Returns nil if no server was running (stale PID cleaned up).
-// Returns a sentinel errNoServer if no PID file exists.
-func stopServer(projectRoot string, timeout time.Duration, force bool) error {
-	pid, err := process.ReadPID(projectRoot)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return errNoServer
-		}
-		// Could be a parse error — treat as no server.
-		return errNoServer
-	}
-
-	if !process.IsRunning(pid) {
-		_ = process.RemovePID(projectRoot)
-		return nil // stale PID cleaned up
-	}
-
-	sig := syscall.SIGTERM
-	if force {
-		sig = syscall.SIGKILL
-	}
-	if err := syscall.Kill(pid, sig); err != nil {
-		return fmt.Errorf("send signal to PID %d: %w", pid, err)
-	}
-
-	// Poll until process exits or timeout.
-	deadline := time.After(timeout)
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			if !process.IsRunning(pid) {
-				_ = process.RemovePID(projectRoot)
-				return nil
-			}
-		case <-deadline:
-			if !force {
-				// Escalate to SIGKILL.
-				_ = syscall.Kill(pid, syscall.SIGKILL)
-				time.Sleep(1 * time.Second)
-				_ = process.RemovePID(projectRoot)
-				return nil
-			}
-			return fmt.Errorf("process %d did not stop within %s", pid, timeout)
-		}
-	}
-}
-
-var errNoServer = errors.New("no running server")
