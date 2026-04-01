@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white" alt="Go 1.26+">
   <img src="https://img.shields.io/badge/PostgreSQL-16+-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 16+">
   <img src="https://img.shields.io/badge/React-19+-61DAFB?logo=react&logoColor=black" alt="React 19+">
-  <img src="https://img.shields.io/badge/Status-MS--08%20In%20Progress-blue" alt="Status: MS-08 In Progress">
+  <img src="https://img.shields.io/badge/Release-v0.1.0--mvp-green" alt="Release: v0.1.0-mvp">
 </p>
 
 ---
@@ -24,6 +24,47 @@
 <img src="logo.png" width="80" align="right" alt="Moca logo"   style="border-radius: 10%;">
 
 Moca is a spiritual successor to the [Frappe](https://frappeframework.com/) framework (the engine behind [ERPNext](https://erpnext.com/)), redesigned from scratch with Go, PostgreSQL, and React. A single **MetaType** definition drives database schema, validation, document lifecycle, permissions, API generation, search indexing, and UI rendering.
+
+## Installation
+
+Install the Moca CLI and all binaries with a single command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/moca-framework/moca/main/install.sh | sh
+```
+
+Or install a specific version:
+
+```bash
+MOCA_VERSION=0.1.0-mvp curl -fsSL https://raw.githubusercontent.com/moca-framework/moca/main/install.sh | sh
+```
+
+Or download directly from [GitHub Releases](https://github.com/moca-framework/moca/releases).
+
+### From Source
+
+```bash
+git clone https://github.com/moca-framework/moca.git
+cd moca
+make build    # Builds all 5 binaries to bin/
+```
+
+## Quick Start
+
+```bash
+# 1. Initialize a new project
+moca init my-erp
+
+# 2. Create a site (requires running PostgreSQL and Redis)
+cd my-erp
+moca site create mysite.localhost --admin-password secret123
+
+# 3. Start the development server
+moca serve
+
+# 4. Define a MetaType, save the JSON file, and watch it hot-reload
+#    The REST API is auto-generated at http://localhost:8000/api/v1/resource/{doctype}
+```
 
 ## Why Moca?
 
@@ -81,7 +122,7 @@ docs/                 # Design documents & milestone plans
 
 ## Key Architectural Decisions
 
-- **Schema-per-tenant** — each tenant gets its own PostgreSQL schema, enforced via `pgxpool BeforeAcquire` resetting `search_path` on every connection
+- **Schema-per-tenant** — each tenant gets its own PostgreSQL schema, enforced via `pgxpool AfterConnect` setting `search_path` per pool (one pool per tenant)
 - **MetaType-driven** — every MetaType auto-generates table DDL, CRUD routes, GraphQL schema, search index config, and React views
 - **`_extra` JSONB column** — every document table includes a dynamic field column, avoiding schema migrations for customizations
 - **Transactional outbox** — DB writes and event publishing kept consistent via an outbox table polled by `moca-outbox`
@@ -100,9 +141,23 @@ docs/                 # Design documents & milestone plans
 
 ## Current Status
 
-Moca has completed **MS-00 through MS-07** (Architecture Validation, Project Structure, PostgreSQL/Redis Foundation, Metadata Registry, Document Runtime, Query Engine, REST API Layer, and CLI Foundation). Active development continues with **MS-08: Hook Registry and App System Foundation**.
+**MVP complete (v0.1.0-mvp)** — MS-00 through MS-10 are fully implemented and tested:
 
-See the [Roadmap](ROADMAP.md) for the full 30-milestone plan to v1.0.
+| Milestone | What it delivers |
+|-----------|-----------------|
+| MS-00 | Architecture validation spikes (5 ADRs) |
+| MS-01 | Project structure, `moca.yaml` config system |
+| MS-02 | PostgreSQL per-tenant pools, Redis client factory, health checks |
+| MS-03 | MetaType registry, schema compiler, DDL migrator, 3-tier cache |
+| MS-04 | Document lifecycle (16 events), naming, validation, CRUD |
+| MS-05 | Query builder (15 operators), JSONB transparency, auto-joins |
+| MS-06 | REST API layer, rate limiting, transformers, versioning |
+| MS-07 | CLI foundation (24+ commands), context resolver, output formatters |
+| MS-08 | Hook registry, app manifest system, core doctypes |
+| MS-09 | `moca init`, site/app/db CLI commands, migration runner |
+| MS-10 | Dev server, hot reload, process supervisor |
+
+See the [Roadmap](ROADMAP.md) for the full 30-milestone plan to v1.0 and the [Changelog](CHANGELOG.md) for detailed release notes.
 
 ## License
 

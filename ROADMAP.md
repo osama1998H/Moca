@@ -21,7 +21,7 @@ Each blocker below has been traced to its source in the design documents and ass
 
 2. **PostgreSQL schema-per-tenant isolation** -- validated in MS-00 Spike 1.
    - **Risk:** `SET search_path` is a per-connection setting. pgxpool reuses connections across goroutines. Without explicit per-acquisition reset, goroutine B can inherit goroutine A's search_path and query the wrong tenant's data. Prepared statement caches may also leak across schemas.
-   - **Solution:** Use pgxpool's `BeforeAcquire` callback to reset `search_path` to `public` before every connection acquisition. Then set the correct tenant schema explicitly before each query via a `TenantConn` wrapper. Disable or namespace prepared statement caching per-schema.
+   - **Solution:** Use pgxpool's `AfterConnect` callback to permanently set `search_path` per pool (one pool per tenant). Separate pools per tenant naturally isolate prepared statement caches. See ADR-001 for validated approach.
    - **Source:** `MOCA_SYSTEM_DESIGN.md` lines 830-832 (schema-per-tenant), line 1414 (`DBPool *pgxpool.Pool` in SiteContext), lines 2063-2067 (ADR-001).
 
 3. **Config sync contract** (YAML on disk vs DB at runtime) -- implemented in MS-11.
@@ -196,14 +196,14 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
   5. **Cobra CLI extension discovery** -- apps register commands via `init()` at build time
 - **Acceptance Criteria:**
   - `go build ./...` succeeds from workspace root
-  - Spike 1 (PostgreSQL): Two concurrent goroutines using different tenant schemas via pgxpool never cross-contaminate data. `BeforeAcquire` callback resets `search_path` before every acquisition. Prepared statement cache does not leak across schemas.
+  - Spike 1 (PostgreSQL): Two concurrent goroutines using different tenant schemas via pgxpool never cross-contaminate data. `AfterConnect` callback sets `search_path` per pool (one pool per tenant). Prepared statement cache does not leak across schemas.
   - Spike 2 (Redis Streams): Enqueues 100 jobs, consumes with consumer group, acknowledges all. Dead-letter queue receives failed jobs after 3 retries.
   - Spike 3 (go.work): Two app modules with **intentionally conflicting dependency versions** produce a documented resolution (either clean build with MVS, or documented `replace` directive strategy). Happy-path: two modules compile into single binary. Conflict-path: build failure is caught and a resolution strategy is documented in ADR.
   - Spike 4 (Meilisearch): Creates index with tenant prefix, indexes 1000 docs, searches with typo tolerance, verifies tenant isolation (site A's docs invisible to site B's index).
   - Spike 5 (Cobra extension): Command registered via `init()` in stub app appears in root command tree.
 - **Dependencies:** None
 - **Risks:**
-  - pgxpool `search_path` with prepared statements: solution is `BeforeAcquire` reset + per-query explicit `SET search_path` + schema-namespaced statement cache
+  - pgxpool `search_path` with prepared statements: solution is `AfterConnect` per-pool `SET search_path` + separate pool per tenant (naturally isolates prepared statement caches)
   - Go workspace dependency conflicts: solution is MVS (Minimal Version Selection) for minor versions + `replace` directives in `go.work` for major conflicts + `moca app get` pre-install compatibility check
 - **Suggested Implementation Order:**
   1. Initialize `go.mod`, `go.work`, CI pipeline
@@ -304,7 +304,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 - **Goal:** Implement MetaType and FieldDef types, the schema compiler (JSON -> validated MetaType), the in-memory + Redis-backed metadata registry, and the schema migrator (MetaType diff -> DDL).
 - **Why now:** MetaType is the foundational primitive. Document Runtime (MS-04), API layer (MS-06), and permission engine (MS-14) all depend on compiled MetaType definitions.
 - **Scope:**
-  - IN: `pkg/meta/metatype.go`, `pkg/meta/fielddef.go` (33 FieldTypes), `pkg/meta/compiler.go`, `pkg/meta/registry.go` (L1 in-memory / L2 Redis / L3 PostgreSQL), `pkg/meta/migrator.go` (diff -> ALTER TABLE DDL), `tab_doctype` table.
+  - IN: `pkg/meta/metatype.go`, `pkg/meta/fielddef.go` (35 FieldTypes: 29 storage + 6 layout-only), `pkg/meta/compiler.go`, `pkg/meta/registry.go` (L1 in-memory / L2 Redis / L3 PostgreSQL), `pkg/meta/migrator.go` (diff -> ALTER TABLE DDL), `tab_doctype` table.
   - OUT: No hot reload (MS-10), no API route generation, no search index config.
 - **Deliverables:**
   1. `MetaType` struct with all fields from §3.1.1
@@ -343,10 +343,10 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 ### MS-04: Document Runtime -- DynamicDoc, Lifecycle Engine, Naming, Validation
 
 - **Status:** Completed
-- **Goal:** Implement the Document interface, DynamicDoc (map-backed), 18-event lifecycle engine, naming engine (6 strategies), and field-level validation.
+- **Goal:** Implement the Document interface, DynamicDoc (map-backed), 16-event lifecycle engine (14 DocEvent constants + 2 rename methods), naming engine (6 strategies), and field-level validation.
 - **Why now:** The Document is what users interact with. The API layer (MS-06) generates REST endpoints for Document CRUD.
 - **Scope:**
-  - IN: `pkg/document/document.go` (Document interface, DynamicDoc), `pkg/document/lifecycle.go` (18 events, dispatcher), `pkg/document/naming.go` (AutoIncrement, Pattern, ByField, ByHash, UUID, Custom), `pkg/document/validator.go` (required, type coercion, regex, min/max, unique, link), `pkg/document/controller.go` (controller resolution). CRUD: Insert, Update, Delete, Get, GetList.
+  - IN: `pkg/document/document.go` (Document interface, DynamicDoc), `pkg/document/lifecycle.go` (14 DocEvent constants + 2 rename methods, dispatcher), `pkg/document/naming.go` (AutoIncrement, Pattern, ByField, ByHash, UUID, Custom), `pkg/document/validator.go` (required, type coercion, regex, min/max, unique, link), `pkg/document/controller.go` (controller resolution). CRUD: Insert, Update, Delete, Get, GetList.
   - OUT: No VirtualDoc (MS-28), no workflow integration, no version tracking.
 - **Deliverables:**
   1. Document interface and DynamicDoc with Get/Set/IsNew/IsModified/ModifiedFields/AsMap/ToJSON, child table support
@@ -520,7 +520,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-08: Hook Registry and App System Foundation
 
-- **Status:** Not Started
+- **Status:** Completed
 - **Goal:** Implement HookRegistry (priority-ordered, dependency-aware), AppManifest parser, app directory scanner, and the `apps/core` framework app with core DocTypes (User, Role, DocType, Module, SystemSettings).
 - **Why now:** Hooks wire app-provided lifecycle behavior into Document Runtime. Core app provides the minimum MetaTypes for the system to function.
 - **Scope:**
@@ -563,7 +563,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-09: CLI Project Init, Site, and App Commands (Init, Create, Drop, Install, Migrate)
 
-- **Status:** Not Started
+- **Status:** Completed
 - **Goal:** Implement `moca init` (project bootstrapping), `moca site create/drop/list/use`, `moca app install/uninstall`, and `moca db migrate` -- making the framework usable from the command line for the first time.
 - **Why now:** Developer can define MetaTypes and has a working API but no CLI to bootstrap projects, create sites, or install apps. `moca init` is the very first command any user runs.
 - **Scope:**
@@ -612,7 +612,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 
 ### MS-10: Dev Server, Process Management, and Hot Reload
 
-- **Status:** Not Started
+- **Status:** Completed
 - **Goal:** Implement `moca serve` (single-process dev server), MetaType filesystem hot reload, and `moca stop/restart`.
 - **Why now:** Developer experience milestone. After this: `moca init` -> `moca site create` -> `moca serve` -> edit MetaType JSON -> see changes immediately.
 - **Scope:**

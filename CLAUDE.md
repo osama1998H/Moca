@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Moca** is a metadata-driven, multitenant, full-stack business application framework built in Go. It is a spiritual successor to the [Frappe](https://frappeframework.com/) framework (behind ERPNext), redesigned from scratch. A single `MetaType` definition drives database schema, validation, document lifecycle, permissions, API generation, search indexing, and React UI rendering.
 
-**Current state:** MS-00 through MS-07 are complete (Architecture Validation, Project Structure, PostgreSQL/Redis, Metadata Registry, Document Runtime, Query Engine, REST API, CLI Foundation). Active development continues with MS-08 (Hook Registry and App System Foundation).
+**Current state:** MVP complete (v0.1.0-mvp). MS-00 through MS-10 are fully implemented and tested (Architecture Validation, Project Structure, PostgreSQL/Redis, Metadata Registry, Document Runtime, Query Engine, REST API, CLI Foundation, Hook Registry & App System, CLI Site/App Commands, Dev Server & Hot Reload). Next up: MS-11 (CLI Operational Commands) and MS-12 (Multitenancy).
 
 ## Build & Development Commands
 
@@ -42,6 +42,13 @@ Integration tests use the `integration` build tag and require Docker (`docker-co
 | `docs/MS-02-postgresql-foundation-redis-connection-layer-plan.md` | MS-02: PostgreSQL & Redis foundation |
 | `docs/MS-03-metadata-registry-plan.md` | MS-03: Metadata registry |
 | `docs/MS-04-document-runtime-plan.md` | MS-04: Document runtime |
+| `docs/MS-05-query-engine-and-report-foundation-plan.md` | MS-05: Query engine & reports |
+| `docs/MS-06-rest-api-layer-plan.md` | MS-06: REST API layer |
+| `docs/MS-07-cli-foundation-plan.md` | MS-07: CLI foundation |
+| `docs/MS-08-hook-registry-and-app-system-foundation-plan.md` | MS-08: Hook registry & app system |
+| `docs/MS-09-cli-project-init-site-and-app-commands-plan.md` | MS-09: CLI init, site, app commands |
+| `docs/MS-10-dev-server-process-management-hot-reload-plan.md` | MS-10: Dev server & hot reload |
+| `docs/MVP-VALIDATION-REPORT.md` | MVP release validation audit (MS-00 through MS-10) |
 | `docs/moca-database-decision-report.md` | ADR: PostgreSQL 16+ with schema-per-tenant over CockroachDB |
 | `docs/blocker-resolution-strategies.md` | Solutions for 4 critical architectural blockers |
 
@@ -73,19 +80,25 @@ pkg/
   document/          # Document interface, lifecycle, naming, validation, CRUD
   orm/               # PostgreSQL adapter, dynamic query builder, transactions, schema DDL
   observe/           # Structured logging (slog), health checks
-  api/               # REST + GraphQL gateway (planned)
-  auth/              # Session, JWT, OAuth2, SSO, permissions (planned)
-  hooks/             # HookRegistry, doc events, API middleware hooks (planned)
-  workflow/          # State machine, SLA timers, approval chains (planned)
-  tenancy/           # Site resolver middleware, SiteContext (planned)
-  queue/             # Redis Streams producer/consumer, DLQ (planned)
-  events/            # Kafka producer/consumer, transactional outbox (planned)
-  search/            # Meilisearch indexer and query (planned)
-  storage/           # S3/MinIO adapter (planned)
+  api/               # REST API gateway, middleware, rate limiting, transformers
+  auth/              # Auth stubs (NoopAuthenticator placeholder — full auth in MS-14)
+  hooks/             # HookRegistry, priority sorting, dependency resolution, DocEventDispatcher
+  apps/              # AppManifest parser, app loader, installer
+  tenancy/           # SiteManager (create/drop/list sites), SiteContext
+  cli/               # Cobra command registry, thread-safe registration
+  workflow/          # State machine, SLA timers, approval chains (planned — MS-23)
+  queue/             # Redis Streams producer/consumer, DLQ (planned — MS-15)
+  events/            # Event emitter stub (full Kafka in MS-15)
+  search/            # Meilisearch indexer and query (planned — MS-15)
+  storage/           # S3/MinIO adapter (planned — MS-21)
 internal/
   config/            # YAML config parser, validation, merge, env expansion
-  drivers/           # Redis driver wrappers
-apps/core/           # Core framework doctypes (own go.mod, part of go.work)
+  drivers/           # Redis driver wrappers (4-DB client factory)
+  context/           # CLI context resolver (project/site/env detection)
+  output/            # CLI output formatters (TTY, JSON, Table, Progress, rich errors)
+  process/           # Goroutine supervisor, PID file management
+  serve/             # HTTP server extraction (composes DB, Redis, Registry, Gateway)
+apps/core/           # Core framework doctypes (User, Role, DocType, Module, SystemSettings)
 spikes/              # MS-00 validation prototypes (5 spikes, all passing)
 ```
 
