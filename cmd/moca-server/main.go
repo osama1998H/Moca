@@ -17,6 +17,7 @@ import (
 	"github.com/moca-framework/moca/internal/drivers"
 	"github.com/moca-framework/moca/pkg/api"
 	"github.com/moca-framework/moca/pkg/document"
+	"github.com/moca-framework/moca/pkg/hooks"
 	"github.com/moca-framework/moca/pkg/meta"
 	"github.com/moca-framework/moca/pkg/observe"
 	"github.com/moca-framework/moca/pkg/orm"
@@ -80,6 +81,9 @@ func run() error {
 	validator := document.NewValidator()
 	controllers := document.NewControllerRegistry()
 	docManager := document.NewDocManager(registry, dbManager, naming, validator, controllers, logger)
+
+	hookRegistry := hooks.NewHookRegistry()
+	docManager.SetHookDispatcher(hooks.NewDocEventDispatcher(hookRegistry))
 
 	// ── Build API gateway ───────────────────────────────────────────────
 	rateLimiter := api.NewRateLimiter(redisClients.Cache, logger)

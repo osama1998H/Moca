@@ -369,13 +369,30 @@ func applyValues(doc *DynamicDoc, values map[string]any) error {
 //
 // All public methods are safe for concurrent use.
 type DocManager struct {
-	registry     *meta.Registry
-	db           *orm.DBManager
-	queryAdapter orm.MetaProvider
-	naming       *NamingEngine
-	validator    *Validator
-	controllers  *ControllerRegistry
-	logger       *slog.Logger
+	registry       *meta.Registry
+	db             *orm.DBManager
+	queryAdapter   orm.MetaProvider
+	naming         *NamingEngine
+	validator      *Validator
+	controllers    *ControllerRegistry
+	hookDispatcher HookDispatcher // nil = no hooks
+	logger         *slog.Logger
+}
+
+// SetHookDispatcher configures an optional hook dispatcher that fires
+// registered hooks after controller dispatch at each lifecycle point.
+// Pass nil to disable hooks.
+func (m *DocManager) SetHookDispatcher(d HookDispatcher) {
+	m.hookDispatcher = d
+}
+
+// dispatchHooks calls the hook dispatcher if one is configured.
+// Returns nil when no dispatcher is set (hooks are optional).
+func (m *DocManager) dispatchHooks(ctx *DocContext, doc Document, doctype string, event DocEvent) error {
+	if m.hookDispatcher == nil {
+		return nil
+	}
+	return m.hookDispatcher.Dispatch(ctx, doc, doctype, event)
 }
 
 // NewDocManager constructs a DocManager. All parameters are required.
@@ -607,6 +624,9 @@ func (m *DocManager) Insert(ctx *DocContext, doctype string, values map[string]a
 	if err != nil {
 		return nil, fmt.Errorf("crud: Insert %q: BeforeInsert: %w", doctype, err)
 	}
+	if err = m.dispatchHooks(ctx, doc, doctype, EventBeforeInsert); err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: BeforeInsert hook: %w", doctype, err)
+	}
 
 	// 4. Generate document name (outside TX so sequences are never rolled back).
 	name, err := m.naming.GenerateName(ctx, doc, pool)
@@ -633,9 +653,15 @@ func (m *DocManager) Insert(ctx *DocContext, doctype string, values map[string]a
 	if err != nil {
 		return nil, fmt.Errorf("crud: Insert %q: BeforeValidate: %w", doctype, err)
 	}
+	if err = m.dispatchHooks(ctx, doc, doctype, EventBeforeValidate); err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: BeforeValidate hook: %w", doctype, err)
+	}
 	err = dispatchEvent(ctrl, EventValidate, ctx, doc)
 	if err != nil {
 		return nil, fmt.Errorf("crud: Insert %q: Validate: %w", doctype, err)
+	}
+	if err = m.dispatchHooks(ctx, doc, doctype, EventValidate); err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: Validate hook: %w", doctype, err)
 	}
 	if !isTruthyFlag(ctx, "skip_validation") {
 		err = m.validator.ValidateDoc(ctx, doc, pool)
@@ -646,6 +672,9 @@ func (m *DocManager) Insert(ctx *DocContext, doctype string, values map[string]a
 	err = dispatchEvent(ctrl, EventBeforeSave, ctx, doc)
 	if err != nil {
 		return nil, fmt.Errorf("crud: Insert %q: BeforeSave: %w", doctype, err)
+	}
+	if err = m.dispatchHooks(ctx, doc, doctype, EventBeforeSave); err != nil {
+		return nil, fmt.Errorf("crud: Insert %q: BeforeSave hook: %w", doctype, err)
 	}
 
 	// 7. Build the outbox payload before the transaction.
@@ -687,15 +716,25 @@ func (m *DocManager) Insert(ctx *DocContext, doctype string, values map[string]a
 	if err != nil {
 		return nil, fmt.Errorf("crud: Insert %q %q: AfterInsert: %w", doctype, name, err)
 	}
+	if err = m.dispatchHooks(ctx, doc, doctype, EventAfterInsert); err != nil {
+		return nil, fmt.Errorf("crud: Insert %q %q: AfterInsert hook: %w", doctype, name, err)
+	}
 	err = dispatchEvent(ctrl, EventAfterSave, ctx, doc)
 	if err != nil {
 		return nil, fmt.Errorf("crud: Insert %q %q: AfterSave: %w", doctype, name, err)
+	}
+	if err = m.dispatchHooks(ctx, doc, doctype, EventAfterSave); err != nil {
+		return nil, fmt.Errorf("crud: Insert %q %q: AfterSave hook: %w", doctype, name, err)
 	}
 
 	// 11. OnChange is fire-and-forget: errors are logged, not returned.
 	err = dispatchEvent(ctrl, EventOnChange, ctx, doc)
 	if err != nil {
 		m.logger.Warn("crud: Insert OnChange error (non-fatal)",
+			"doctype", doctype, "name", name, "error", err)
+	}
+	if err = m.dispatchHooks(ctx, doc, doctype, EventOnChange); err != nil {
+		m.logger.Warn("crud: Insert OnChange hook error (non-fatal)",
 			"doctype", doctype, "name", name, "error", err)
 	}
 
@@ -752,9 +791,15 @@ func (m *DocManager) Update(ctx *DocContext, doctype, name string, values map[st
 	if err != nil {
 		return nil, fmt.Errorf("crud: Update %q %q: BeforeValidate: %w", doctype, name, err)
 	}
+	if err = m.dispatchHooks(ctx, doc, doctype, EventBeforeValidate); err != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: BeforeValidate hook: %w", doctype, name, err)
+	}
 	err = dispatchEvent(ctrl, EventValidate, ctx, doc)
 	if err != nil {
 		return nil, fmt.Errorf("crud: Update %q %q: Validate: %w", doctype, name, err)
+	}
+	if err = m.dispatchHooks(ctx, doc, doctype, EventValidate); err != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: Validate hook: %w", doctype, name, err)
 	}
 	if !isTruthyFlag(ctx, "skip_validation") {
 		err = m.validator.ValidateDoc(ctx, doc, pool)
@@ -766,9 +811,15 @@ func (m *DocManager) Update(ctx *DocContext, doctype, name string, values map[st
 	if err != nil {
 		return nil, fmt.Errorf("crud: Update %q %q: BeforeSave: %w", doctype, name, err)
 	}
+	if err = m.dispatchHooks(ctx, doc, doctype, EventBeforeSave); err != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: BeforeSave hook: %w", doctype, name, err)
+	}
 	err = dispatchEvent(ctrl, EventOnUpdate, ctx, doc)
 	if err != nil {
 		return nil, fmt.Errorf("crud: Update %q %q: OnUpdate: %w", doctype, name, err)
+	}
+	if err = m.dispatchHooks(ctx, doc, doctype, EventOnUpdate); err != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: OnUpdate hook: %w", doctype, name, err)
 	}
 
 	// 8. Build audit diff from the fields that were modified before hooks ran.
@@ -827,10 +878,17 @@ func (m *DocManager) Update(ctx *DocContext, doctype, name string, values map[st
 	if err := dispatchEvent(ctrl, EventAfterSave, ctx, doc); err != nil {
 		return nil, fmt.Errorf("crud: Update %q %q: AfterSave: %w", doctype, name, err)
 	}
+	if err := m.dispatchHooks(ctx, doc, doctype, EventAfterSave); err != nil {
+		return nil, fmt.Errorf("crud: Update %q %q: AfterSave hook: %w", doctype, name, err)
+	}
 
 	// 14. OnChange is fire-and-forget.
 	if err := dispatchEvent(ctrl, EventOnChange, ctx, doc); err != nil {
 		m.logger.Warn("crud: Update OnChange error (non-fatal)",
+			"doctype", doctype, "name", name, "error", err)
+	}
+	if err := m.dispatchHooks(ctx, doc, doctype, EventOnChange); err != nil {
+		m.logger.Warn("crud: Update OnChange hook error (non-fatal)",
 			"doctype", doctype, "name", name, "error", err)
 	}
 
@@ -861,6 +919,9 @@ func (m *DocManager) Delete(ctx *DocContext, doctype, name string) error {
 	if err := dispatchEvent(ctrl, EventOnTrash, ctx, doc); err != nil {
 		return fmt.Errorf("crud: Delete %q %q: OnTrash: %w", doctype, name, err)
 	}
+	if err := m.dispatchHooks(ctx, doc, doctype, EventOnTrash); err != nil {
+		return fmt.Errorf("crud: Delete %q %q: OnTrash hook: %w", doctype, name, err)
+	}
 
 	// 3. Transaction: DELETE children + parent + outbox + audit.
 	tableSQL := fmt.Sprintf("DELETE FROM %s WHERE %s = $1",
@@ -887,6 +948,10 @@ func (m *DocManager) Delete(ctx *DocContext, doctype, name string) error {
 	// 4. AfterDelete is non-fatal (data already deleted; log errors only).
 	if err := dispatchEvent(ctrl, EventAfterDelete, ctx, doc); err != nil {
 		m.logger.Warn("crud: Delete AfterDelete error (non-fatal)",
+			"doctype", doctype, "name", name, "error", err)
+	}
+	if err := m.dispatchHooks(ctx, doc, doctype, EventAfterDelete); err != nil {
+		m.logger.Warn("crud: Delete AfterDelete hook error (non-fatal)",
 			"doctype", doctype, "name", name, "error", err)
 	}
 
