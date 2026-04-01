@@ -1,8 +1,16 @@
 package apps
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+)
+
+// Sentinel errors for app installation operations.
+var (
+	ErrAppNotFound         = errors.New("app not found")
+	ErrAppAlreadyInstalled = errors.New("app already installed on site")
+	ErrAppNotInstalled     = errors.New("app not installed on site")
 )
 
 // ManifestError represents a manifest parsing or loading error with file path context.

@@ -1,0 +1,19 @@
+{
+  "name": "TestDoc",
+  "module": "TestModule",
+  "label": "Test Document",
+  "fields": [
+    {
+      "name": "title",
+      "field_type": "Data",
+      "label": "Title",
+      "required": true
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "doctype_perm": 63
+    }
+  ]
+}

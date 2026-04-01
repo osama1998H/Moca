@@ -60,6 +60,7 @@ No web research was needed. The design documents, existing codebase, and ROADMAP
 ### Task 1: Migration Runner with Version Tracking
 
 - **Task ID:** MS-09-T1
+- **Status:** Completed
 - **Title:** Migration Runner with Version Tracking and DependsOn Ordering
 - **Description:**
   Build `pkg/orm/migrate.go` containing a `MigrationRunner` that executes SQL migration files against a site's database, tracks applied versions in a `tab_migration_log` table, supports DependsOn ordering via topological sort, and provides dry-run and rollback capabilities.
@@ -101,6 +102,7 @@ No web research was needed. The design documents, existing codebase, and ROADMAP
 ### Task 2: Site Manager and App Installer Service Layer
 
 - **Task ID:** MS-09-T2
+- **Status:** Completed
 - **Title:** SiteManager (9-Step Lifecycle) and AppInstaller (Install/Uninstall)
 - **Description:**
   Build two service-layer packages that orchestrate the site and app lifecycles, consuming the infrastructure from Task 1 and existing packages.

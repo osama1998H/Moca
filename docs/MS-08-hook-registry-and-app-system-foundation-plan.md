@@ -56,6 +56,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 ### Task 1: Core HookRegistry with Priority Sorting and Dependency Resolution
 
 - **Task ID:** MS-08-T1
+- **Status:** Completed
 - **Title:** Core HookRegistry with priority ordering and topological dependency sort
 - **Description:**
   Implement the core `HookRegistry` in `pkg/hooks/registry.go` and the topological sort in `pkg/hooks/topo.go`.
@@ -104,6 +105,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 ### Task 2: DocEvent Dispatcher Integration with Document Lifecycle
 
 - **Task ID:** MS-08-T2
+- **Status:** Completed
 - **Title:** Wire HookRegistry into document CRUD lifecycle via DocEventDispatcher
 - **Description:**
   Create the bridge between HookRegistry and the document lifecycle engine.
@@ -149,6 +151,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 ### Task 3: AppManifest Parser and App Directory Loader
 
 - **Task ID:** MS-08-T3
+- **Status:** Completed
 - **Title:** AppManifest YAML parser/validator and app directory scanner
 - **Description:**
   Implement the app packaging infrastructure.
@@ -199,6 +202,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 ### Task 4: Core App -- Manifest, DocType Definitions, and Controllers
 
 - **Task ID:** MS-08-T4
+- **Status:** Completed
 - **Title:** apps/core with manifest.yaml, 5 DocType JSON definitions, User controller, and bootstrap sequence
 - **Description:**
   Build the `apps/core` framework app -- the minimum set of system doctypes every Moca deployment needs.
@@ -278,6 +282,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 ### Task 5: End-to-End Integration Tests
 
 - **Task ID:** MS-08-T5
+- **Status:** Completed
 - **Title:** Integration tests verifying all acceptance criteria
 - **Description:**
   Write integration tests that verify the full MS-08 deliverable against real infrastructure.
