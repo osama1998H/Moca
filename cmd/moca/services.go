@@ -1,0 +1,191 @@
+package main
+
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+	"strings"
+
+	"golang.org/x/term"
+
+	"github.com/moca-framework/moca/apps/core"
+	"github.com/moca-framework/moca/internal/config"
+	clicontext "github.com/moca-framework/moca/internal/context"
+	"github.com/moca-framework/moca/internal/drivers"
+	"github.com/moca-framework/moca/internal/output"
+	"github.com/moca-framework/moca/pkg/apps"
+	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/spf13/cobra"
+)
+
+// Services holds all constructed service instances for CLI commands.
+// Commands call newServices to build the full dependency graph from config,
+// then defer Services.Close().
+type Services struct {
+	DB       *orm.DBManager
+	Redis    *drivers.RedisClients
+	Migrator *meta.Migrator
+	Registry *meta.Registry
+	Runner   *orm.MigrationRunner
+	Sites    *tenancy.SiteManager
+	Apps     *apps.AppInstaller
+	Logger   *slog.Logger
+}
+
+// Close releases all connections. Redis is closed before DB.
+func (s *Services) Close() {
+	if s.Redis != nil {
+		_ = s.Redis.Close()
+	}
+	if s.DB != nil {
+		s.DB.Close()
+	}
+}
+
+// newServices constructs the full service dependency graph from project config.
+// Redis connection failure is non-fatal (logged as warning, services degrade gracefully).
+func newServices(ctx context.Context, cfg *config.ProjectConfig, verbose bool) (*Services, error) {
+	level := slog.LevelInfo
+	if verbose {
+		level = slog.LevelDebug
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+
+	db, err := orm.NewDBManager(ctx, cfg.Infrastructure.Database, logger)
+	if err != nil {
+		return nil, output.NewCLIError("Cannot connect to PostgreSQL").
+			WithErr(err).
+			WithCause(err.Error()).
+			WithFix(fmt.Sprintf("Ensure PostgreSQL is running on %s:%d.",
+				cfg.Infrastructure.Database.Host, cfg.Infrastructure.Database.Port))
+	}
+
+	redis := drivers.NewRedisClients(cfg.Infrastructure.Redis, logger)
+	var redisCache = redis.Cache
+	if err := redis.Ping(ctx); err != nil {
+		logger.Warn("Redis unavailable, running without cache", slog.String("error", err.Error()))
+		redisCache = nil
+	}
+
+	migrator := meta.NewMigrator(db, logger)
+	registry := meta.NewRegistry(db, redisCache, logger)
+	runner := orm.NewMigrationRunner(db, logger)
+	sites := tenancy.NewSiteManager(db, migrator, registry, redisCache, logger, core.BootstrapCoreMeta)
+	installer := apps.NewAppInstaller(db, migrator, registry, runner, redisCache, logger)
+
+	return &Services{
+		DB:       db,
+		Redis:    redis,
+		Migrator: migrator,
+		Registry: registry,
+		Runner:   runner,
+		Sites:    sites,
+		Apps:     installer,
+		Logger:   logger,
+	}, nil
+}
+
+// requireProject extracts CLIContext from the command and returns an error
+// if no project was detected.
+func requireProject(cmd *cobra.Command) (*clicontext.CLIContext, error) {
+	ctx := clicontext.FromCommand(cmd)
+	if ctx == nil || ctx.Project == nil {
+		return nil, output.NewCLIError("No Moca project found").
+			WithContext("Looked for moca.yaml in current and parent directories").
+			WithFix("Run 'moca init' to create a project, or cd into a project directory.")
+	}
+	return ctx, nil
+}
+
+// resolveSiteName determines the target site name from --site flag or CLIContext.
+func resolveSiteName(cmd *cobra.Command, ctx *clicontext.CLIContext) (string, error) {
+	if site, _ := cmd.Flags().GetString("site"); site != "" {
+		return site, nil
+	}
+	if ctx.Site != "" {
+		return ctx.Site, nil
+	}
+	return "", output.NewCLIError("No site specified").
+		WithFix("Pass --site <name> or run 'moca site use <name>' to set a default.")
+}
+
+// confirmPrompt asks the user to confirm a destructive action.
+// Returns true if the user enters "y" or "yes". Returns error in non-TTY contexts.
+func confirmPrompt(msg string) (bool, error) {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return false, output.NewCLIError("Cannot confirm in non-interactive mode").
+			WithFix("Pass --force to skip confirmation.")
+	}
+	fmt.Fprintf(os.Stderr, "%s [y/N]: ", msg)
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		return false, nil
+	}
+	answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
+	return answer == "y" || answer == "yes", nil
+}
+
+// readPassword prompts for a password without echoing input.
+// Returns error in non-TTY contexts.
+func readPassword(prompt string) (string, error) {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		return "", output.NewCLIError("Cannot prompt for password in non-interactive mode").
+			WithFix("Pass --admin-password <password> on the command line.")
+	}
+	fmt.Fprint(os.Stderr, prompt)
+	pw, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr) // newline after hidden input
+	if err != nil {
+		return "", fmt.Errorf("read password: %w", err)
+	}
+	return string(pw), nil
+}
+
+// formatBytes formats a byte count into a human-readable string.
+func formatBytes(b int64) string {
+	const (
+		kb = 1024
+		mb = kb * 1024
+		gb = mb * 1024
+	)
+	switch {
+	case b >= gb:
+		return fmt.Sprintf("%.1f GB", float64(b)/float64(gb))
+	case b >= mb:
+		return fmt.Sprintf("%.1f MB", float64(b)/float64(mb))
+	case b >= kb:
+		return fmt.Sprintf("%.1f KB", float64(b)/float64(kb))
+	default:
+		return fmt.Sprintf("%d B", b)
+	}
+}
+
+// gatherMigrations scans apps and converts manifest migrations to orm.AppMigration slice.
+func gatherMigrations(appsDir string) ([]orm.AppMigration, error) {
+	appInfos, err := apps.ScanApps(appsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var migrations []orm.AppMigration
+	for _, ai := range appInfos {
+		if ai.Manifest == nil {
+			continue
+		}
+		for _, m := range ai.Manifest.Migrations {
+			migrations = append(migrations, orm.AppMigration{
+				AppName:   ai.Name,
+				Version:   m.Version,
+				UpSQL:     m.Up,
+				DownSQL:   m.Down,
+				DependsOn: m.DependsOn,
+			})
+		}
+	}
+	return migrations, nil
+}

@@ -165,6 +165,7 @@ No web research was needed. The design documents, existing codebase, and ROADMAP
 ### Task 3: CLI Command Implementations
 
 - **Task ID:** MS-09-T3
+- **Status:** Completed
 - **Title:** Implement moca init, site, app, and db CLI Commands
 - **Description:**
   Replace all placeholder `newSubcommand()` / `notImplemented()` implementations with real Cobra commands that wire CLI flags, validate context, call the service layer, and format output.
@@ -233,6 +234,7 @@ No web research was needed. The design documents, existing codebase, and ROADMAP
 ### Task 4: Integration Tests (Full CLI Workflow)
 
 - **Task ID:** MS-09-T4
+- **Status:** Completed
 - **Title:** Integration Tests for Migration Runner, Site Lifecycle, App Installation, and CLI Commands
 - **Description:**
   Build integration tests that exercise the full MS-09 workflow end-to-end against real PostgreSQL and Redis instances (via Docker, using existing `docker-compose.yml`).
