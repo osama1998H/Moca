@@ -110,7 +110,7 @@ func (m *SiteManager) CreateSite(ctx context.Context, cfg SiteCreateConfig) (ret
 	}
 
 	siteName := cfg.Name
-	schemaName := schemaNameForSite(siteName)
+	schemaName := SchemaNameForSite(siteName)
 
 	// Check for duplicate before starting.
 	exists, err := m.siteExists(ctx, siteName)
@@ -197,7 +197,7 @@ func (m *SiteManager) CreateSite(ctx context.Context, cfg SiteCreateConfig) (ret
 // DropSite removes a site: drops the PostgreSQL schema, deletes Redis keys,
 // and removes the site from moca_system.
 func (m *SiteManager) DropSite(ctx context.Context, name string, _ SiteDropOptions) error {
-	schemaName := schemaNameForSite(name)
+	schemaName := SchemaNameForSite(name)
 
 	// Drop the PostgreSQL schema.
 	quotedSchema := pgx.Identifier{schemaName}.Sanitize()
@@ -364,8 +364,9 @@ func sanitizeForSchema(name string) string {
 	return s
 }
 
-// schemaNameForSite returns the full PostgreSQL schema name for a site.
-func schemaNameForSite(siteName string) string {
+// SchemaNameForSite returns the full PostgreSQL schema name for a site.
+// The schema name is "tenant_" followed by a sanitized version of the site name.
+func SchemaNameForSite(siteName string) string {
 	return "tenant_" + sanitizeForSchema(siteName)
 }
 

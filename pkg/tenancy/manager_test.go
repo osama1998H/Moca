@@ -49,9 +49,9 @@ func TestSchemaNameForSite(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.site, func(t *testing.T) {
-			got := schemaNameForSite(tt.site)
+			got := SchemaNameForSite(tt.site)
 			if got != tt.expected {
-				t.Errorf("schemaNameForSite(%q) = %q, want %q", tt.site, got, tt.expected)
+				t.Errorf("SchemaNameForSite(%q) = %q, want %q", tt.site, got, tt.expected)
 			}
 		})
 	}

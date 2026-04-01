@@ -3,6 +3,7 @@
     src="logo-with-golang-avatar.png"
     width="400"
     alt="Moca Framework + Go"
+    style="border-radius: 10%;"
   >
 </p>
 
@@ -15,6 +16,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white" alt="Go 1.26+">
   <img src="https://img.shields.io/badge/PostgreSQL-16+-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 16+">
+    <img src="https://img.shields.io/badge/Redis-7+-4169E1?logo=redis&logoColor=Red" alt="Redis 7+">
   <img src="https://img.shields.io/badge/React-19+-61DAFB?logo=react&logoColor=black" alt="React 19+">
   <img src="https://img.shields.io/badge/Release-v0.1.0--mvp-green" alt="Release: v0.1.0-mvp">
 </p>
