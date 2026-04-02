@@ -51,8 +51,8 @@ func TestAllCommandGroupsRegistered(t *testing.T) {
 }
 
 // TestPlaceholderSubcommandsReturnNotImplemented verifies that placeholder
-// subcommands return the expected CLIError. Uses "site browse" which remains
-// a placeholder after MS-09-T3 implemented the core site commands.
+// subcommands return the expected CLIError. Uses "site migrate" which remains
+// a placeholder after MS-11-T4 implemented the site operational commands.
 func TestPlaceholderSubcommandsReturnNotImplemented(t *testing.T) {
 	cli.ResetForTesting()
 
@@ -65,7 +65,7 @@ func TestPlaceholderSubcommandsReturnNotImplemented(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"site", "browse"})
+	root.SetArgs([]string{"site", "migrate"})
 
 	err := root.Execute()
 	if err == nil {

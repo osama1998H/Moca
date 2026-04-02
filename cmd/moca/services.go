@@ -74,7 +74,11 @@ func newServices(ctx context.Context, cfg *config.ProjectConfig, verbose bool) (
 	migrator := meta.NewMigrator(db, logger)
 	registry := meta.NewRegistry(db, redisCache, logger)
 	runner := orm.NewMigrationRunner(db, logger)
-	sites := tenancy.NewSiteManager(db, migrator, registry, redisCache, logger, core.BootstrapCoreMeta)
+	redisPubSub := redis.PubSub
+	if redisCache == nil {
+		redisPubSub = nil
+	}
+	sites := tenancy.NewSiteManager(db, migrator, registry, redisCache, redisPubSub, logger, core.BootstrapCoreMeta)
 	installer := apps.NewAppInstaller(db, migrator, registry, runner, redisCache, logger)
 
 	return &Services{

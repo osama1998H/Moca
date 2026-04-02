@@ -61,6 +61,12 @@ type SiteInfo struct {
 	DBSizeBytes int64          `json:"db_size_bytes"`
 }
 
+// CloneOptions controls CloneSite behavior.
+type CloneOptions struct {
+	Exclude   []string // DocType table names to exclude from clone
+	Anonymize bool     // Anonymize PII data in the clone
+}
+
 // SiteManager orchestrates site lifecycle operations: creation, deletion,
 // listing, and active-site selection. It composes lower-level primitives
 // (DBManager, Migrator, Registry) into the 9-step creation workflow.
@@ -68,19 +74,21 @@ type SiteManager struct {
 	db          *orm.DBManager
 	migrator    *meta.Migrator
 	registry    *meta.Registry
-	redis       *redis.Client
+	redis       *redis.Client // Cache DB (0), may be nil
+	redisPubSub *redis.Client // PubSub DB (3), may be nil
 	logger      *slog.Logger
 	bootstrapFn BootstrapFunc
 }
 
 // NewSiteManager creates a SiteManager.
-// redis may be nil; Redis-dependent steps degrade gracefully.
+// redisCache and redisPubSub may be nil; Redis-dependent steps degrade gracefully.
 // bootstrapFn should be core.BootstrapCoreMeta (injected to avoid import cycles).
 func NewSiteManager(
 	db *orm.DBManager,
 	migrator *meta.Migrator,
 	registry *meta.Registry,
 	redisCache *redis.Client,
+	redisPubSub *redis.Client,
 	logger *slog.Logger,
 	bootstrapFn BootstrapFunc,
 ) *SiteManager {
@@ -89,6 +97,7 @@ func NewSiteManager(
 		migrator:    migrator,
 		registry:    registry,
 		redis:       redisCache,
+		redisPubSub: redisPubSub,
 		logger:      logger,
 		bootstrapFn: bootstrapFn,
 	}
@@ -331,6 +340,345 @@ func (m *SiteManager) SetActiveSite(projectRoot, siteName string) error {
 		return fmt.Errorf("set active site: write file: %w", err)
 	}
 	return nil
+}
+
+// EnableSite re-enables a disabled site by setting status to "active",
+// clearing maintenance metadata from config, and publishing a config.changed event.
+func (m *SiteManager) EnableSite(ctx context.Context, name string) error {
+	exists, err := m.siteExists(ctx, name)
+	if err != nil {
+		return fmt.Errorf("enable site: check existence: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("enable site %q: %w", name, ErrSiteNotFound)
+	}
+
+	tag, err := m.db.SystemPool().Exec(ctx, `
+		UPDATE sites
+		SET status = 'active',
+		    config = config - 'maintenance_message' - 'maintenance_allow_ips',
+		    modified_at = NOW()
+		WHERE name = $1`, name,
+	)
+	if err != nil {
+		return fmt.Errorf("enable site %q: update status: %w", name, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("enable site %q: %w", name, ErrSiteNotFound)
+	}
+
+	// Clear maintenance Redis key and publish config event.
+	if m.redis != nil {
+		_ = m.redis.Del(ctx, fmt.Sprintf("maintenance:%s", name)).Err()
+	}
+	m.publishConfigEvent(ctx, name)
+
+	m.logger.InfoContext(ctx, "site enabled", slog.String("site", name))
+	return nil
+}
+
+// DisableSite puts a site into maintenance mode by setting status to "disabled",
+// storing the maintenance message and allowed IPs in config, and publishing
+// a config.changed event.
+func (m *SiteManager) DisableSite(ctx context.Context, name, message string, allowIPs []string) error {
+	exists, err := m.siteExists(ctx, name)
+	if err != nil {
+		return fmt.Errorf("disable site: check existence: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("disable site %q: %w", name, ErrSiteNotFound)
+	}
+
+	// Build maintenance metadata to merge into config.
+	maintenance := map[string]any{}
+	if message != "" {
+		maintenance["maintenance_message"] = message
+	}
+	if len(allowIPs) > 0 {
+		maintenance["maintenance_allow_ips"] = allowIPs
+	}
+	maintenanceJSON, err := json.Marshal(maintenance)
+	if err != nil {
+		return fmt.Errorf("disable site: marshal maintenance: %w", err)
+	}
+
+	tag, execErr := m.db.SystemPool().Exec(ctx, `
+		UPDATE sites
+		SET status = 'disabled',
+		    config = config || $1::jsonb,
+		    modified_at = NOW()
+		WHERE name = $2`, maintenanceJSON, name,
+	)
+	if execErr != nil {
+		return fmt.Errorf("disable site %q: update status: %w", name, execErr)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("disable site %q: %w", name, ErrSiteNotFound)
+	}
+
+	// Set maintenance Redis key and publish config event.
+	if m.redis != nil {
+		_ = m.redis.Set(ctx, fmt.Sprintf("maintenance:%s", name), maintenanceJSON, 0).Err()
+	}
+	m.publishConfigEvent(ctx, name)
+
+	m.logger.InfoContext(ctx, "site disabled",
+		slog.String("site", name),
+		slog.String("message", message),
+	)
+	return nil
+}
+
+// RenameSite renames a site by altering the PostgreSQL schema, updating system
+// tables (in a single transaction), and performing best-effort Redis key migration
+// and filesystem directory rename.
+func (m *SiteManager) RenameSite(ctx context.Context, oldName, newName, projectRoot string) error {
+	if newName == "" {
+		return fmt.Errorf("rename site: new name is required")
+	}
+
+	// Check target doesn't already exist.
+	exists, err := m.siteExists(ctx, newName)
+	if err != nil {
+		return fmt.Errorf("rename site: check target: %w", err)
+	}
+	if exists {
+		return fmt.Errorf("rename site %q to %q: target %w", oldName, newName, ErrSiteExists)
+	}
+
+	// Check source exists.
+	exists, err = m.siteExists(ctx, oldName)
+	if err != nil {
+		return fmt.Errorf("rename site: check source: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("rename site %q: %w", oldName, ErrSiteNotFound)
+	}
+
+	oldSchema := SchemaNameForSite(oldName)
+	newSchema := SchemaNameForSite(newName)
+
+	// Transactional: rename schema + update system tables.
+	err = orm.WithTransaction(ctx, m.db.SystemPool(), func(ctx context.Context, tx pgx.Tx) error {
+		quotedOld := pgx.Identifier{oldSchema}.Sanitize()
+		quotedNew := pgx.Identifier{newSchema}.Sanitize()
+
+		if _, execErr := tx.Exec(ctx,
+			fmt.Sprintf("ALTER SCHEMA %s RENAME TO %s", quotedOld, quotedNew),
+		); execErr != nil {
+			return fmt.Errorf("alter schema: %w", execErr)
+		}
+
+		if _, execErr := tx.Exec(ctx,
+			"UPDATE sites SET name = $1, db_schema = $2, modified_at = NOW() WHERE name = $3",
+			newName, newSchema, oldName,
+		); execErr != nil {
+			return fmt.Errorf("update sites: %w", execErr)
+		}
+
+		if _, execErr := tx.Exec(ctx,
+			"UPDATE site_apps SET site_name = $1 WHERE site_name = $2",
+			newName, oldName,
+		); execErr != nil {
+			return fmt.Errorf("update site_apps: %w", execErr)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("rename site %q to %q: %w", oldName, newName, err)
+	}
+
+	// Best-effort: migrate Redis keys.
+	m.renameRedisKeys(ctx, oldName, newName)
+
+	// Best-effort: rename filesystem directory.
+	if projectRoot != "" {
+		oldDir := filepath.Join(projectRoot, "sites", oldName)
+		newDir := filepath.Join(projectRoot, "sites", newName)
+		if _, statErr := os.Stat(oldDir); statErr == nil {
+			if renameErr := os.Rename(oldDir, newDir); renameErr != nil {
+				m.logger.WarnContext(ctx, "rename site: filesystem rename failed",
+					slog.String("old", oldDir),
+					slog.String("new", newDir),
+					slog.Any("error", renameErr),
+				)
+			}
+		}
+	}
+
+	// Best-effort: update .moca/current_site if it points to the old name.
+	if projectRoot != "" {
+		currentSitePath := filepath.Join(projectRoot, ".moca", "current_site")
+		if data, readErr := os.ReadFile(currentSitePath); readErr == nil {
+			if strings.TrimSpace(string(data)) == oldName {
+				_ = os.WriteFile(currentSitePath, []byte(newName), 0o644)
+			}
+		}
+	}
+
+	m.logger.InfoContext(ctx, "site renamed",
+		slog.String("old", oldName),
+		slog.String("new", newName),
+	)
+	return nil
+}
+
+// CloneSite creates a copy of a site's schema and data, optionally anonymizing PII.
+// Uses SQL-based schema cloning (no external pg_dump binary required).
+func (m *SiteManager) CloneSite(ctx context.Context, source, target string, opts CloneOptions) error {
+	// Verify source exists.
+	sourceInfo, err := m.GetSiteInfo(ctx, source)
+	if err != nil {
+		return fmt.Errorf("clone site: %w", err)
+	}
+
+	// Verify target doesn't exist.
+	exists, err := m.siteExists(ctx, target)
+	if err != nil {
+		return fmt.Errorf("clone site: check target: %w", err)
+	}
+	if exists {
+		return fmt.Errorf("clone site: target %q: %w", target, ErrSiteExists)
+	}
+
+	sourceSchema := SchemaNameForSite(source)
+	targetSchema := SchemaNameForSite(target)
+
+	// Step 1: Create target schema.
+	m.logger.InfoContext(ctx, "clone: creating target schema", slog.String("target", targetSchema))
+	if schemaErr := m.createSchema(ctx, targetSchema); schemaErr != nil {
+		return fmt.Errorf("clone site: create schema: %w", schemaErr)
+	}
+
+	// Cleanup on failure.
+	cleanup := true
+	defer func() {
+		if cleanup {
+			m.cleanupPartialSite(context.Background(), target, targetSchema)
+		}
+	}()
+
+	// Step 2: Get all tables in source schema.
+	tables, err := m.listSchemaTables(ctx, sourceSchema)
+	if err != nil {
+		return fmt.Errorf("clone site: list tables: %w", err)
+	}
+
+	// Build exclude set.
+	excludeSet := make(map[string]bool, len(opts.Exclude))
+	for _, e := range opts.Exclude {
+		excludeSet["tab_"+sanitizeForSchema(strings.ToLower(e))] = true
+	}
+
+	// Step 3: Clone each table (structure + data).
+	pool := m.db.SystemPool()
+	for _, tableName := range tables {
+		if excludeSet[tableName] {
+			m.logger.InfoContext(ctx, "clone: skipping excluded table", slog.String("table", tableName))
+			continue
+		}
+
+		quotedSource := pgx.Identifier{sourceSchema, tableName}.Sanitize()
+		quotedTarget := pgx.Identifier{targetSchema, tableName}.Sanitize()
+
+		// Create table with same structure.
+		if _, execErr := pool.Exec(ctx,
+			fmt.Sprintf("CREATE TABLE %s (LIKE %s INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING IDENTITY INCLUDING INDEXES)",
+				quotedTarget, quotedSource),
+		); execErr != nil {
+			return fmt.Errorf("clone site: create table %q: %w", tableName, execErr)
+		}
+
+		// Copy data.
+		if _, execErr := pool.Exec(ctx,
+			fmt.Sprintf("INSERT INTO %s SELECT * FROM %s", quotedTarget, quotedSource),
+		); execErr != nil {
+			return fmt.Errorf("clone site: copy data %q: %w", tableName, execErr)
+		}
+	}
+
+	// Step 4: Register target in moca_system.
+	m.logger.InfoContext(ctx, "clone: registering target site", slog.String("target", target))
+	if regErr := m.registerClonedSite(ctx, sourceInfo, target, targetSchema); regErr != nil {
+		return fmt.Errorf("clone site: register: %w", regErr)
+	}
+
+	// Step 5: Setup Redis config for target.
+	if sourceInfo.Config != nil {
+		if redisErr := m.setupRedisConfig(ctx, target, sourceInfo.Config); redisErr != nil {
+			m.logger.WarnContext(ctx, "clone: redis config setup failed", slog.Any("error", redisErr))
+		}
+	}
+
+	// Step 6: Anonymize if requested.
+	if opts.Anonymize {
+		m.logger.InfoContext(ctx, "clone: anonymizing target data", slog.String("target", target))
+		if anonErr := m.anonymizeSite(ctx, target, sourceInfo.AdminEmail); anonErr != nil {
+			return fmt.Errorf("clone site: anonymize: %w", anonErr)
+		}
+	}
+
+	cleanup = false
+	m.logger.InfoContext(ctx, "site cloned",
+		slog.String("source", source),
+		slog.String("target", target),
+		slog.Bool("anonymized", opts.Anonymize),
+	)
+	return nil
+}
+
+// ReinstallSite drops and recreates a site, preserving its configuration.
+// Returns the list of previously installed apps so the caller can reinstall them.
+// Backup creation (if desired) should be done by the caller before calling this.
+func (m *SiteManager) ReinstallSite(ctx context.Context, name string, adminPassword string) (previousApps []string, retErr error) {
+	// Get site info before dropping.
+	siteInfo, err := m.GetSiteInfo(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("reinstall site: %w", err)
+	}
+
+	// Get installed apps.
+	rows, err := m.db.SystemPool().Query(ctx,
+		"SELECT app_name FROM site_apps WHERE site_name = $1 AND app_name != 'core' ORDER BY installed_at",
+		name,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("reinstall site: list apps: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var appName string
+		if scanErr := rows.Scan(&appName); scanErr != nil {
+			return nil, fmt.Errorf("reinstall site: scan app: %w", scanErr)
+		}
+		previousApps = append(previousApps, appName)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reinstall site: rows: %w", err)
+	}
+
+	// Drop site.
+	if dropErr := m.DropSite(ctx, name, SiteDropOptions{Force: true}); dropErr != nil {
+		return nil, fmt.Errorf("reinstall site: drop: %w", dropErr)
+	}
+
+	// Recreate with preserved config.
+	if createErr := m.CreateSite(ctx, SiteCreateConfig{
+		Name:          name,
+		AdminEmail:    siteInfo.AdminEmail,
+		AdminPassword: adminPassword,
+		Plan:          siteInfo.Plan,
+		Config:        siteInfo.Config,
+	}); createErr != nil {
+		return previousApps, fmt.Errorf("reinstall site: recreate: %w", createErr)
+	}
+
+	m.logger.InfoContext(ctx, "site reinstalled",
+		slog.String("site", name),
+		slog.Int("previous_apps", len(previousApps)),
+	)
+	return previousApps, nil
 }
 
 // ── private helpers ─────────────────────────────────────────────────────────
@@ -581,4 +929,150 @@ func randomID(prefix string) (string, error) {
 		return "", fmt.Errorf("generate random id: %w", err)
 	}
 	return prefix + "-" + hex.EncodeToString(b), nil
+}
+
+// publishConfigEvent sends a config.changed event on the PubSub channel for a site.
+func (m *SiteManager) publishConfigEvent(ctx context.Context, siteName string) {
+	if m.redisPubSub == nil {
+		return
+	}
+	channel := fmt.Sprintf("pubsub:config:%s", siteName)
+	payload := fmt.Sprintf(`{"event":"config.changed","site":"%s"}`, siteName)
+	if err := m.redisPubSub.Publish(ctx, channel, payload).Err(); err != nil {
+		m.logger.WarnContext(ctx, "failed to publish config.changed event",
+			slog.String("site", siteName),
+			slog.String("channel", channel),
+			slog.Any("error", err),
+		)
+	}
+}
+
+// renameRedisKeys migrates Redis keys from oldName to newName (best-effort).
+func (m *SiteManager) renameRedisKeys(ctx context.Context, oldName, newName string) {
+	if m.redis == nil {
+		return
+	}
+
+	// Copy config key.
+	oldKey := fmt.Sprintf("config:%s", oldName)
+	newKey := fmt.Sprintf("config:%s", newName)
+	if val, err := m.redis.Get(ctx, oldKey).Result(); err == nil {
+		_ = m.redis.Set(ctx, newKey, val, 0).Err()
+	}
+
+	// Delete all old keys.
+	m.deleteRedisKeys(ctx, oldName)
+}
+
+// listSchemaTables returns all table names in the given PostgreSQL schema.
+func (m *SiteManager) listSchemaTables(ctx context.Context, schemaName string) ([]string, error) {
+	rows, err := m.db.SystemPool().Query(ctx, `
+		SELECT tablename FROM pg_tables
+		WHERE schemaname = $1
+		ORDER BY tablename`, schemaName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tables []string
+	for rows.Next() {
+		var name string
+		if scanErr := rows.Scan(&name); scanErr != nil {
+			return nil, scanErr
+		}
+		tables = append(tables, name)
+	}
+	return tables, rows.Err()
+}
+
+// registerClonedSite inserts system records for a cloned site, copying app
+// associations from the source.
+func (m *SiteManager) registerClonedSite(ctx context.Context, source *SiteInfo, targetName, targetSchema string) error {
+	configJSON, err := json.Marshal(source.Config)
+	if err != nil {
+		configJSON = []byte("{}")
+	}
+
+	return orm.WithTransaction(ctx, m.db.SystemPool(), func(ctx context.Context, tx pgx.Tx) error {
+		if _, execErr := tx.Exec(ctx, `
+			INSERT INTO sites (name, db_schema, status, plan, config, admin_email)
+			VALUES ($1, $2, 'active', $3, $4, $5)`,
+			targetName, targetSchema, source.Plan, configJSON, source.AdminEmail,
+		); execErr != nil {
+			return fmt.Errorf("insert cloned site: %w", execErr)
+		}
+
+		// Copy app associations from source.
+		for _, appName := range source.Apps {
+			if _, execErr := tx.Exec(ctx, `
+				INSERT INTO site_apps (site_name, app_name, app_version)
+				SELECT $1, app_name, app_version FROM site_apps
+				WHERE site_name = $2 AND app_name = $3`,
+				targetName, source.Name, appName,
+			); execErr != nil {
+				return fmt.Errorf("copy site_app %q: %w", appName, execErr)
+			}
+		}
+
+		return nil
+	})
+}
+
+// anonymizeSite runs anonymization queries on core DocType tables.
+func (m *SiteManager) anonymizeSite(ctx context.Context, siteName, adminEmail string) error {
+	pool, err := m.db.ForSite(ctx, siteName)
+	if err != nil {
+		return fmt.Errorf("get site pool: %w", err)
+	}
+
+	schema := SchemaNameForSite(siteName)
+
+	// Anonymize tab_user: randomize email, hash password, clear full_name.
+	// Preserve the admin user.
+	if m.tableExistsInSchema(ctx, schema, "tab_user") {
+		dummyHash, _ := bcrypt.GenerateFromPassword([]byte("anonymized"), bcrypt.DefaultCost)
+		if _, execErr := pool.Exec(ctx, `
+			UPDATE tab_user
+			SET email = 'user_' || substr(md5(name), 1, 8) || '@example.com',
+			    full_name = 'User ' || substr(md5(name), 1, 6),
+			    password = $1
+			WHERE name != $2`,
+			string(dummyHash), adminEmail,
+		); execErr != nil {
+			m.logger.WarnContext(ctx, "anonymize: tab_user update failed", slog.Any("error", execErr))
+		}
+	}
+
+	// Anonymize tab_contact if it exists.
+	if m.tableExistsInSchema(ctx, schema, "tab_contact") {
+		if _, execErr := pool.Exec(ctx, `
+			UPDATE tab_contact
+			SET email_id = 'contact_' || substr(md5(name), 1, 8) || '@example.com',
+			    phone = '555-0000'`); execErr != nil {
+			m.logger.WarnContext(ctx, "anonymize: tab_contact update failed", slog.Any("error", execErr))
+		}
+	}
+
+	// Anonymize tab_address if it exists.
+	if m.tableExistsInSchema(ctx, schema, "tab_address") {
+		if _, execErr := pool.Exec(ctx, `
+			UPDATE tab_address
+			SET address_line1 = '123 Anonymized St'`); execErr != nil {
+			m.logger.WarnContext(ctx, "anonymize: tab_address update failed", slog.Any("error", execErr))
+		}
+	}
+
+	return nil
+}
+
+// tableExistsInSchema checks if a table exists in the given PostgreSQL schema.
+func (m *SiteManager) tableExistsInSchema(ctx context.Context, schemaName, tableName string) bool {
+	var exists bool
+	_ = m.db.SystemPool().QueryRow(ctx,
+		"SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = $2)",
+		schemaName, tableName,
+	).Scan(&exists)
+	return exists
 }

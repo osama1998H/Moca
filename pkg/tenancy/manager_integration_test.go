@@ -149,7 +149,7 @@ func newTestSiteManager(t *testing.T) (*tenancy.SiteManager, *orm.DBManager) {
 	migrator := meta.NewMigrator(db, logger)
 	registry := meta.NewRegistry(db, tmRedisClient, logger)
 
-	sm := tenancy.NewSiteManager(db, migrator, registry, tmRedisClient, logger, core.BootstrapCoreMeta)
+	sm := tenancy.NewSiteManager(db, migrator, registry, tmRedisClient, tmRedisClient, logger, core.BootstrapCoreMeta)
 	return sm, db
 }
 
@@ -484,5 +484,411 @@ func TestSiteManager_SetActiveSite(t *testing.T) {
 
 	if string(data) != "my_test_site" {
 		t.Errorf("current_site: got %q, want %q", string(data), "my_test_site")
+	}
+}
+
+func TestSiteManager_EnableDisableSite(t *testing.T) {
+	sm, _ := newTestSiteManager(t)
+	ctx := context.Background()
+	name := uniqueSiteName(t)
+	cleanupTestSite(t, sm, name)
+
+	// Create site.
+	if err := sm.CreateSite(ctx, tenancy.SiteCreateConfig{
+		Name:          name,
+		AdminEmail:    "admin@test.dev",
+		AdminPassword: "secret123",
+	}); err != nil {
+		t.Fatalf("CreateSite: %v", err)
+	}
+
+	// Verify site starts as active.
+	info, err := sm.GetSiteInfo(ctx, name)
+	if err != nil {
+		t.Fatalf("GetSiteInfo: %v", err)
+	}
+	if info.Status != "active" {
+		t.Fatalf("expected active status, got %q", info.Status)
+	}
+
+	// Disable the site.
+	if err := sm.DisableSite(ctx, name, "Scheduled maintenance", []string{"127.0.0.1"}); err != nil {
+		t.Fatalf("DisableSite: %v", err)
+	}
+
+	// Verify disabled status.
+	info, err = sm.GetSiteInfo(ctx, name)
+	if err != nil {
+		t.Fatalf("GetSiteInfo after disable: %v", err)
+	}
+	if info.Status != "disabled" {
+		t.Errorf("expected disabled status, got %q", info.Status)
+	}
+	if msg, ok := info.Config["maintenance_message"].(string); !ok || msg != "Scheduled maintenance" {
+		t.Errorf("expected maintenance_message='Scheduled maintenance', got %v", info.Config["maintenance_message"])
+	}
+
+	// Verify maintenance Redis key.
+	maintenanceKey := fmt.Sprintf("maintenance:%s", name)
+	val, redisErr := tmRedisClient.Get(ctx, maintenanceKey).Result()
+	if redisErr != nil {
+		t.Errorf("expected maintenance redis key, got err: %v", redisErr)
+	} else if !strings.Contains(val, "Scheduled maintenance") {
+		t.Errorf("maintenance redis key doesn't contain message: %s", val)
+	}
+
+	// Re-enable the site.
+	if err := sm.EnableSite(ctx, name); err != nil {
+		t.Fatalf("EnableSite: %v", err)
+	}
+
+	// Verify active status and maintenance metadata removed.
+	info, err = sm.GetSiteInfo(ctx, name)
+	if err != nil {
+		t.Fatalf("GetSiteInfo after enable: %v", err)
+	}
+	if info.Status != "active" {
+		t.Errorf("expected active status after enable, got %q", info.Status)
+	}
+	if _, hasMsg := info.Config["maintenance_message"]; hasMsg {
+		t.Error("maintenance_message should be removed after enable")
+	}
+	if _, hasIPs := info.Config["maintenance_allow_ips"]; hasIPs {
+		t.Error("maintenance_allow_ips should be removed after enable")
+	}
+
+	// Verify maintenance Redis key removed.
+	_, redisErr = tmRedisClient.Get(ctx, maintenanceKey).Result()
+	if redisErr != redis.Nil {
+		t.Errorf("expected maintenance redis key to be deleted, got err: %v", redisErr)
+	}
+}
+
+func TestSiteManager_EnableSite_NotFound(t *testing.T) {
+	sm, _ := newTestSiteManager(t)
+	ctx := context.Background()
+
+	err := sm.EnableSite(ctx, "nonexistent_site_xyz")
+	if err == nil {
+		t.Fatal("expected error for nonexistent site")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got: %v", err)
+	}
+}
+
+func TestSiteManager_DisableSite_NotFound(t *testing.T) {
+	sm, _ := newTestSiteManager(t)
+	ctx := context.Background()
+
+	err := sm.DisableSite(ctx, "nonexistent_site_xyz", "test", nil)
+	if err == nil {
+		t.Fatal("expected error for nonexistent site")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got: %v", err)
+	}
+}
+
+func TestSiteManager_RenameSite(t *testing.T) {
+	sm, _ := newTestSiteManager(t)
+	ctx := context.Background()
+	oldName := uniqueSiteName(t)
+	newName := uniqueSiteName(t)
+	cleanupTestSite(t, sm, oldName)
+	cleanupTestSite(t, sm, newName)
+
+	tmpDir := t.TempDir()
+
+	// Create site.
+	if err := sm.CreateSite(ctx, tenancy.SiteCreateConfig{
+		Name:          oldName,
+		AdminEmail:    "admin@test.dev",
+		AdminPassword: "secret123",
+		Config:        map[string]any{"timezone": "UTC"},
+	}); err != nil {
+		t.Fatalf("CreateSite: %v", err)
+	}
+
+	// Create sites directory for filesystem rename test.
+	oldDir := filepath.Join(tmpDir, "sites", oldName)
+	if err := os.MkdirAll(oldDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// Set active site to old name.
+	if err := sm.SetActiveSite(tmpDir, oldName); err != nil {
+		t.Fatalf("SetActiveSite: %v", err)
+	}
+
+	// Rename.
+	if err := sm.RenameSite(ctx, oldName, newName, tmpDir); err != nil {
+		t.Fatalf("RenameSite: %v", err)
+	}
+
+	// Old schema should be gone.
+	oldSchema := "tenant_" + oldName
+	if schemaExists(t, oldSchema) {
+		t.Error("old schema still exists after rename")
+	}
+
+	// New schema should exist.
+	newSchema := "tenant_" + newName
+	if !schemaExists(t, newSchema) {
+		t.Error("new schema does not exist after rename")
+	}
+
+	// Old site row should be gone, new one should exist.
+	if siteRowExists(t, oldName) {
+		t.Error("old site row still exists after rename")
+	}
+	if !siteRowExists(t, newName) {
+		t.Error("new site row does not exist after rename")
+	}
+
+	// Redis config should use new name.
+	val, redisErr := tmRedisClient.Get(ctx, fmt.Sprintf("config:%s", newName)).Result()
+	if redisErr != nil {
+		t.Errorf("expected config key for new name, got err: %v", redisErr)
+	} else if !strings.Contains(val, "timezone") {
+		t.Errorf("config key doesn't contain expected data: %s", val)
+	}
+
+	// Old Redis config should be gone.
+	_, redisErr = tmRedisClient.Get(ctx, fmt.Sprintf("config:%s", oldName)).Result()
+	if redisErr != redis.Nil {
+		t.Errorf("expected old config key to be deleted, got: %v", redisErr)
+	}
+
+	// Filesystem: old dir gone, new dir exists.
+	if _, statErr := os.Stat(oldDir); !os.IsNotExist(statErr) {
+		t.Error("old site directory still exists after rename")
+	}
+	newDir := filepath.Join(tmpDir, "sites", newName)
+	if _, statErr := os.Stat(newDir); os.IsNotExist(statErr) {
+		t.Error("new site directory does not exist after rename")
+	}
+
+	// .moca/current_site should be updated.
+	currentSite, readErr := os.ReadFile(filepath.Join(tmpDir, ".moca", "current_site"))
+	if readErr != nil {
+		t.Fatalf("read current_site: %v", readErr)
+	}
+	if string(currentSite) != newName {
+		t.Errorf("current_site: got %q, want %q", string(currentSite), newName)
+	}
+}
+
+func TestSiteManager_RenameSite_TargetExists(t *testing.T) {
+	sm, _ := newTestSiteManager(t)
+	ctx := context.Background()
+	name1 := uniqueSiteName(t)
+	name2 := uniqueSiteName(t)
+	cleanupTestSite(t, sm, name1)
+	cleanupTestSite(t, sm, name2)
+
+	for _, name := range []string{name1, name2} {
+		if err := sm.CreateSite(ctx, tenancy.SiteCreateConfig{
+			Name:          name,
+			AdminEmail:    "admin@test.dev",
+			AdminPassword: "secret123",
+		}); err != nil {
+			t.Fatalf("CreateSite(%s): %v", name, err)
+		}
+	}
+
+	err := sm.RenameSite(ctx, name1, name2, "")
+	if err == nil {
+		t.Fatal("expected error when renaming to existing site")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("expected 'already exists' error, got: %v", err)
+	}
+}
+
+func TestSiteManager_CloneSite(t *testing.T) {
+	sm, db := newTestSiteManager(t)
+	ctx := context.Background()
+	source := uniqueSiteName(t)
+	target := uniqueSiteName(t)
+	cleanupTestSite(t, sm, source)
+	cleanupTestSite(t, sm, target)
+
+	// Create source site.
+	if err := sm.CreateSite(ctx, tenancy.SiteCreateConfig{
+		Name:          source,
+		AdminEmail:    "admin@test.dev",
+		AdminPassword: "secret123",
+		Config:        map[string]any{"timezone": "US/Eastern"},
+	}); err != nil {
+		t.Fatalf("CreateSite: %v", err)
+	}
+
+	// Clone without anonymization.
+	if err := sm.CloneSite(ctx, source, target, tenancy.CloneOptions{}); err != nil {
+		t.Fatalf("CloneSite: %v", err)
+	}
+
+	// Verify target schema exists.
+	targetSchema := "tenant_" + target
+	if !schemaExists(t, targetSchema) {
+		t.Fatal("target schema does not exist after clone")
+	}
+
+	// Verify target registered in system.
+	if !siteRowExists(t, target) {
+		t.Fatal("target site row does not exist after clone")
+	}
+
+	// Verify target has core tables.
+	coreTables := []string{"tab_user", "tab_role", "tab_has_role"}
+	for _, tbl := range coreTables {
+		if !tableExistsInTenantSchema(t, targetSchema, tbl) {
+			t.Errorf("target missing table %s", tbl)
+		}
+	}
+
+	// Verify data was cloned (admin user exists in target).
+	targetPool, err := db.ForSite(ctx, target)
+	if err != nil {
+		t.Fatalf("ForSite target: %v", err)
+	}
+	var email string
+	err = targetPool.QueryRow(ctx, "SELECT email FROM tab_user WHERE email = 'admin@test.dev'").Scan(&email)
+	if err != nil {
+		t.Fatalf("admin user not found in clone: %v", err)
+	}
+
+	// Verify source is unchanged.
+	sourceSchema := "tenant_" + source
+	if !schemaExists(t, sourceSchema) {
+		t.Fatal("source schema should still exist after clone")
+	}
+
+	// Verify Redis config for target.
+	val, redisErr := tmRedisClient.Get(ctx, fmt.Sprintf("config:%s", target)).Result()
+	if redisErr != nil {
+		t.Errorf("expected config key for target, got err: %v", redisErr)
+	} else if !strings.Contains(val, "US/Eastern") {
+		t.Errorf("target config should match source, got: %s", val)
+	}
+}
+
+func TestSiteManager_CloneSite_WithAnonymize(t *testing.T) {
+	sm, db := newTestSiteManager(t)
+	ctx := context.Background()
+	source := uniqueSiteName(t)
+	target := uniqueSiteName(t)
+	cleanupTestSite(t, sm, source)
+	cleanupTestSite(t, sm, target)
+
+	// Create source site.
+	if err := sm.CreateSite(ctx, tenancy.SiteCreateConfig{
+		Name:          source,
+		AdminEmail:    "admin@test.dev",
+		AdminPassword: "secret123",
+	}); err != nil {
+		t.Fatalf("CreateSite: %v", err)
+	}
+
+	// Clone with anonymization.
+	if err := sm.CloneSite(ctx, source, target, tenancy.CloneOptions{Anonymize: true}); err != nil {
+		t.Fatalf("CloneSite with anonymize: %v", err)
+	}
+
+	// Admin user should be preserved (not anonymized).
+	targetPool, err := db.ForSite(ctx, target)
+	if err != nil {
+		t.Fatalf("ForSite target: %v", err)
+	}
+	var email string
+	err = targetPool.QueryRow(ctx, "SELECT email FROM tab_user WHERE email = 'admin@test.dev'").Scan(&email)
+	if err != nil {
+		t.Fatalf("admin user should be preserved in anonymized clone: %v", err)
+	}
+}
+
+func TestSiteManager_CloneSite_TargetExists(t *testing.T) {
+	sm, _ := newTestSiteManager(t)
+	ctx := context.Background()
+	name1 := uniqueSiteName(t)
+	name2 := uniqueSiteName(t)
+	cleanupTestSite(t, sm, name1)
+	cleanupTestSite(t, sm, name2)
+
+	for _, name := range []string{name1, name2} {
+		if err := sm.CreateSite(ctx, tenancy.SiteCreateConfig{
+			Name:          name,
+			AdminEmail:    "admin@test.dev",
+			AdminPassword: "secret123",
+		}); err != nil {
+			t.Fatalf("CreateSite(%s): %v", name, err)
+		}
+	}
+
+	err := sm.CloneSite(ctx, name1, name2, tenancy.CloneOptions{})
+	if err == nil {
+		t.Fatal("expected error when cloning to existing site")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("expected 'already exists' error, got: %v", err)
+	}
+}
+
+func TestSiteManager_ReinstallSite(t *testing.T) {
+	sm, db := newTestSiteManager(t)
+	ctx := context.Background()
+	name := uniqueSiteName(t)
+	cleanupTestSite(t, sm, name)
+
+	// Create site.
+	if err := sm.CreateSite(ctx, tenancy.SiteCreateConfig{
+		Name:          name,
+		AdminEmail:    "admin@test.dev",
+		AdminPassword: "secret123",
+		Plan:          "business",
+		Config:        map[string]any{"timezone": "US/Eastern"},
+	}); err != nil {
+		t.Fatalf("CreateSite: %v", err)
+	}
+
+	// Reinstall.
+	prevApps, err := sm.ReinstallSite(ctx, name, "newpassword")
+	if err != nil {
+		t.Fatalf("ReinstallSite: %v", err)
+	}
+
+	// No non-core apps should be in previous list.
+	if len(prevApps) != 0 {
+		t.Errorf("expected 0 previous apps, got %v", prevApps)
+	}
+
+	// Verify site still exists with preserved config.
+	info, err := sm.GetSiteInfo(ctx, name)
+	if err != nil {
+		t.Fatalf("GetSiteInfo after reinstall: %v", err)
+	}
+	if info.Status != "active" {
+		t.Errorf("expected active status after reinstall, got %q", info.Status)
+	}
+	if info.Plan != "business" {
+		t.Errorf("expected plan 'business' preserved, got %q", info.Plan)
+	}
+	if info.AdminEmail != "admin@test.dev" {
+		t.Errorf("expected admin email preserved, got %q", info.AdminEmail)
+	}
+
+	// Verify new password works.
+	pool, err := db.ForSite(ctx, name)
+	if err != nil {
+		t.Fatalf("ForSite: %v", err)
+	}
+	var password string
+	err = pool.QueryRow(ctx, "SELECT password FROM tab_user WHERE email = 'admin@test.dev'").Scan(&password)
+	if err != nil {
+		t.Fatalf("query admin password: %v", err)
+	}
+	if bcryptErr := bcrypt.CompareHashAndPassword([]byte(password), []byte("newpassword")); bcryptErr != nil {
+		t.Errorf("new password doesn't match: %v", bcryptErr)
 	}
 }
