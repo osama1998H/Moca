@@ -125,16 +125,17 @@ type MetaProvider interface {
 //	    Limit(50).
 //	    Build(ctx)
 type QueryBuilder struct {
-	provider MetaProvider
-	err      error // first error wins; subsequent fluent calls are no-ops
-	site     string
-	doctype  string
-	fields   []string
-	filters  []Filter
-	orderBy  []OrderClause
-	groupBy  []string
-	limit    int
-	offset   int
+	provider  MetaProvider
+	err       error // first error wins; subsequent fluent calls are no-ops
+	site      string
+	doctype   string
+	fields    []string
+	filters   []Filter
+	orFilters []Filter // OR-ed among themselves, AND-ed with main filters
+	orderBy   []OrderClause
+	groupBy   []string
+	limit     int
+	offset    int
 }
 
 // NewQueryBuilder creates a QueryBuilder for the given site.
@@ -187,6 +188,30 @@ func (qb *QueryBuilder) Where(filters ...Filter) *QueryBuilder {
 		}
 	}
 	qb.filters = append(qb.filters, filters...)
+	return qb
+}
+
+// WhereOr appends filters that are OR-ed among themselves and AND-ed with
+// the main WHERE clause. This is used for row-level permission matching where
+// multiple match conditions from different roles should be combined with OR.
+//
+// Example: WhereOr(Filter{Field:"company",Op:"=",Value:"Acme"}, Filter{Field:"territory",Op:"=",Value:"West"})
+// produces: AND ("company" = $N OR "territory" = $M)
+func (qb *QueryBuilder) WhereOr(filters ...Filter) *QueryBuilder {
+	if qb.err != nil {
+		return qb
+	}
+	for _, f := range filters {
+		if _, ok := validOperators[f.Operator]; !ok {
+			qb.err = fmt.Errorf("querybuilder: unknown operator %q", f.Operator)
+			return qb
+		}
+		if f.Operator == OpFullText {
+			qb.err = errors.New("querybuilder: full-text search (@@) not available until MS-15")
+			return qb
+		}
+	}
+	qb.orFilters = append(qb.orFilters, filters...)
 	return qb
 }
 
@@ -721,6 +746,9 @@ func (qb *QueryBuilder) resolveAllJoins(ctx context.Context, sourceQM *QueryMeta
 	for _, f := range qb.filters {
 		collect(f.Field)
 	}
+	for _, f := range qb.orFilters {
+		collect(f.Field)
+	}
 	for _, o := range qb.orderBy {
 		collect(o.Field)
 	}
@@ -774,8 +802,10 @@ func (qb *QueryBuilder) buildSelectClause(rq *resolvedQuery) (string, error) {
 }
 
 // buildWhereClause generates the WHERE SQL and args from the builder's filters.
+// AND-filters are joined with AND. OR-filters produce a parenthesized group
+// (f1 OR f2 OR ...) that is AND-ed with the rest.
 func (qb *QueryBuilder) buildWhereClause(qm *QueryMeta, js *joinState) (string, []any, error) {
-	if len(qb.filters) == 0 {
+	if len(qb.filters) == 0 && len(qb.orFilters) == 0 {
 		return "", nil, nil
 	}
 
@@ -794,6 +824,24 @@ func (qb *QueryBuilder) buildWhereClause(qm *QueryMeta, js *joinState) (string, 
 		}
 		parts = append(parts, sql)
 		args = append(args, newArgs...)
+	}
+
+	// OR-group: (cond1 OR cond2 OR ...) — AND-ed with the main filters.
+	if len(qb.orFilters) > 0 {
+		var orParts []string
+		for _, f := range qb.orFilters {
+			fa, err := qb.resolveFieldForClause(f.Field, qm, js)
+			if err != nil {
+				return "", nil, err
+			}
+			sql, newArgs, err := buildFilterSQL(f, fa, &argIdx)
+			if err != nil {
+				return "", nil, err
+			}
+			orParts = append(orParts, sql)
+			args = append(args, newArgs...)
+		}
+		parts = append(parts, "("+strings.Join(orParts, " OR ")+")")
 	}
 
 	return strings.Join(parts, " AND "), args, nil

@@ -147,7 +147,7 @@ No web research was needed. The design documents and existing codebase provide s
 
 - **Task ID:** MS-14-T4
 - **Title:** Row-Level Permission Matching via QueryBuilder WHERE Injection
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:** Implement row-level matching: when a PermRule has `match_field`/`match_value`, inject WHERE clauses into QueryBuilder so list queries only return documents where `doc.{match_field} = user.{match_value}`. Extend `User` struct with `UserDefaults map[string]string` to carry user attributes (company, territory, etc.). Hook into `DocManager.GetList` and enforce on single-document Get/Update/Delete. Multiple match conditions from different roles are OR-ed.
 - **Why this task exists:** Row-level filtering is architecturally distinct — it affects the query layer (`pkg/orm/query.go`) rather than the API layer. It must be applied consistently across all CRUD operations and is the last application-layer defense before RLS.
 - **Dependencies:** MS-14-T1 (needs `EffectivePerms` with match data), MS-14-T3 (should follow basic permission checking)

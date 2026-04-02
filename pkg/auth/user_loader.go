@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -36,13 +37,14 @@ func (ul *UserLoader) LoadByEmail(ctx context.Context, site *tenancy.SiteContext
 		return nil, "", fmt.Errorf("auth: site %q has no database pool", site.Name)
 	}
 
-	// Load user record.
+	// Load user record including _extra JSONB for user defaults.
 	var fullName, passwordHash string
 	var enabled bool
+	var extraJSON []byte
 	err := pool.QueryRow(ctx,
-		`SELECT "full_name", "password", "enabled" FROM "tabUser" WHERE "name" = $1`,
+		`SELECT "full_name", "password", "enabled", COALESCE("_extra", '{}') FROM "tabUser" WHERE "name" = $1`,
 		email,
-	).Scan(&fullName, &passwordHash, &enabled)
+	).Scan(&fullName, &passwordHash, &enabled, &extraJSON)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, "", ErrUserNotFound
@@ -52,6 +54,17 @@ func (ul *UserLoader) LoadByEmail(ctx context.Context, site *tenancy.SiteContext
 
 	if !enabled {
 		return nil, "", ErrUserNotFound
+	}
+
+	// Extract user_defaults from _extra JSONB.
+	var userDefaults map[string]string
+	if len(extraJSON) > 0 {
+		var extra map[string]json.RawMessage
+		if jsonErr := json.Unmarshal(extraJSON, &extra); jsonErr == nil {
+			if raw, ok := extra["user_defaults"]; ok {
+				_ = json.Unmarshal(raw, &userDefaults) // best-effort
+			}
+		}
 	}
 
 	// Load roles from HasRole child table.
@@ -77,9 +90,10 @@ func (ul *UserLoader) LoadByEmail(ctx context.Context, site *tenancy.SiteContext
 	}
 
 	user := &User{
-		Email:    email,
-		FullName: fullName,
-		Roles:    roles,
+		Email:        email,
+		FullName:     fullName,
+		Roles:        roles,
+		UserDefaults: userDefaults,
 	}
 
 	return user, passwordHash, nil

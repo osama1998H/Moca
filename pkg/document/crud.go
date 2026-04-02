@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/osama1998H/moca/pkg/auth"
 	"github.com/osama1998H/moca/pkg/meta"
 	"github.com/osama1998H/moca/pkg/orm"
 )
@@ -359,6 +360,14 @@ func applyValues(doc *DynamicDoc, values map[string]any) error {
 	return nil
 }
 
+// ─── PermResolver interface ──────────────────────────────────────────────────
+
+// PermResolver resolves effective permissions for a user on a doctype.
+// This interface decouples DocManager from the concrete auth.CachedPermissionResolver.
+type PermResolver interface {
+	Resolve(ctx context.Context, site string, user *auth.User, doctype string) (*auth.EffectivePerms, error)
+}
+
 // ─── DocManager ──────────────────────────────────────────────────────────────
 
 // DocManager is the main entry point for all document CRUD operations. It
@@ -375,6 +384,7 @@ type DocManager struct {
 	validator      *Validator
 	controllers    *ControllerRegistry
 	hookDispatcher HookDispatcher // nil = no hooks
+	permResolver   PermResolver   // nil = no row-level filtering
 	logger         *slog.Logger
 }
 
@@ -383,6 +393,44 @@ type DocManager struct {
 // Pass nil to disable hooks.
 func (m *DocManager) SetHookDispatcher(d HookDispatcher) {
 	m.hookDispatcher = d
+}
+
+// SetPermResolver configures an optional permission resolver for row-level
+// filtering. When set, CRUD operations enforce row-level match conditions.
+// Pass nil to disable row-level filtering.
+func (m *DocManager) SetPermResolver(r PermResolver) {
+	m.permResolver = r
+}
+
+// resolveRowLevelFilters returns ORM filters for row-level permission matching.
+// Returns nil filters if no resolver is set, user is Administrator, or no
+// match conditions exist.
+func (m *DocManager) resolveRowLevelFilters(ctx *DocContext, doctype string) ([]orm.Filter, *auth.EffectivePerms, error) {
+	if m.permResolver == nil || ctx.User == nil || auth.IsAdministrator(ctx.User) {
+		return nil, nil, nil
+	}
+	ep, err := m.permResolver.Resolve(ctx, ctx.Site.Name, ctx.User, doctype)
+	if err != nil {
+		return nil, nil, fmt.Errorf("crud: resolve row-level perms for %q: %w", doctype, err)
+	}
+	filters := auth.RowLevelFilters(ep, ctx.User)
+	return filters, ep, nil
+}
+
+// checkRowLevelAccessForDoc verifies a loaded document passes row-level checks.
+// Returns DocNotFoundError (not 403) to avoid information leakage.
+func (m *DocManager) checkRowLevelAccessForDoc(ctx *DocContext, doctype, name string, doc *DynamicDoc) error {
+	if m.permResolver == nil || ctx.User == nil || auth.IsAdministrator(ctx.User) {
+		return nil
+	}
+	ep, err := m.permResolver.Resolve(ctx, ctx.Site.Name, ctx.User, doctype)
+	if err != nil {
+		return fmt.Errorf("crud: resolve row-level perms for %q: %w", doctype, err)
+	}
+	if !auth.CheckRowLevelAccess(ep, ctx.User, doc.AsMap()) {
+		return &DocNotFoundError{Doctype: doctype, Name: name}
+	}
+	return nil
 }
 
 // dispatchHooks calls the hook dispatcher if one is configured.
@@ -1022,6 +1070,11 @@ func (m *DocManager) Get(ctx *DocContext, doctype, name string) (*DynamicDoc, er
 	}
 	doc.resetDirtyState() // re-snapshot after children are loaded
 
+	// Row-level permission check: return 404 (not 403) to avoid info leakage.
+	if err := m.checkRowLevelAccessForDoc(ctx, doctype, name, doc); err != nil {
+		return nil, err
+	}
+
 	return doc, nil
 }
 
@@ -1102,10 +1155,19 @@ func (m *DocManager) GetList(ctx *DocContext, doctype string, opts ListOptions) 
 	}
 	allFilters = append(allFilters, opts.AdvancedFilters...)
 
+	// Row-level permission filters (OR-ed among themselves).
+	rowFilters, _, rlErr := m.resolveRowLevelFilters(ctx, doctype)
+	if rlErr != nil {
+		return nil, 0, rlErr
+	}
+
 	// Build a base QueryBuilder with filters and groupBy.
 	base := orm.NewQueryBuilder(m.queryAdapter, ctx.Site.Name).For(doctype)
 	if len(allFilters) > 0 {
 		base = base.Where(allFilters...)
+	}
+	if len(rowFilters) > 0 {
+		base = base.WhereOr(rowFilters...)
 	}
 	if len(opts.GroupBy) > 0 {
 		base = base.GroupBy(opts.GroupBy...)
@@ -1129,6 +1191,9 @@ func (m *DocManager) GetList(ctx *DocContext, doctype string, opts ListOptions) 
 	}
 	if len(allFilters) > 0 {
 		qb = qb.Where(allFilters...)
+	}
+	if len(rowFilters) > 0 {
+		qb = qb.WhereOr(rowFilters...)
 	}
 	if len(opts.GroupBy) > 0 {
 		qb = qb.GroupBy(opts.GroupBy...)

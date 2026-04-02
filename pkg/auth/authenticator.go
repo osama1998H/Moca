@@ -66,9 +66,10 @@ func (a *MocaAuthenticator) Authenticate(r *http.Request) (*User, error) {
 			return nil, err
 		}
 		return &User{
-			Email:    claims.Email,
-			FullName: claims.FullName,
-			Roles:    claims.Roles,
+			Email:        claims.Email,
+			FullName:     claims.FullName,
+			Roles:        claims.Roles,
+			UserDefaults: claims.UserDefaults,
 		}, nil
 	}
 
@@ -77,9 +78,10 @@ func (a *MocaAuthenticator) Authenticate(r *http.Request) (*User, error) {
 		sess, err := a.sessions.Get(r.Context(), cookie.Value)
 		if err == nil {
 			return &User{
-				Email:    sess.Email,
-				FullName: sess.FullName,
-				Roles:    sess.Roles,
+				Email:        sess.Email,
+				FullName:     sess.FullName,
+				Roles:        sess.Roles,
+				UserDefaults: sess.UserDefaults,
 			}, nil
 		}
 		a.logger.Debug("session lookup failed",

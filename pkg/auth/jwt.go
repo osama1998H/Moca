@@ -28,10 +28,11 @@ type TokenPair struct {
 // AccessClaims are the JWT claims embedded in access tokens.
 type AccessClaims struct {
 	jwt.RegisteredClaims
-	Email    string   `json:"email"`
-	FullName string   `json:"full_name"`
-	Site     string   `json:"site"`
-	Roles    []string `json:"roles"`
+	UserDefaults map[string]string `json:"user_defaults,omitempty"`
+	Email        string            `json:"email"`
+	FullName     string            `json:"full_name"`
+	Site         string            `json:"site"`
+	Roles        []string          `json:"roles"`
 }
 
 // RefreshClaims are the JWT claims embedded in refresh tokens.
@@ -70,10 +71,11 @@ func IssueTokenPair(cfg JWTConfig, user *User, site string) (*TokenPair, error) 
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(cfg.AccessTokenTTL)),
 		},
-		Email:    user.Email,
-		FullName: user.FullName,
-		Roles:    user.Roles,
-		Site:     site,
+		Email:        user.Email,
+		FullName:     user.FullName,
+		Roles:        user.Roles,
+		UserDefaults: user.UserDefaults,
+		Site:         site,
 	}
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
 	accessStr, err := accessToken.SignedString([]byte(cfg.Secret))

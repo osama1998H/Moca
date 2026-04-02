@@ -26,11 +26,12 @@ const (
 
 // Session represents stored session data in Redis.
 type Session struct {
-	Email     string   `json:"email"`
-	FullName  string   `json:"full_name"`
-	Site      string   `json:"site"`
-	Roles     []string `json:"roles"`
-	CreatedAt int64    `json:"created_at"`
+	UserDefaults map[string]string `json:"user_defaults,omitempty"`
+	Email        string            `json:"email"`
+	FullName     string            `json:"full_name"`
+	Site         string            `json:"site"`
+	Roles        []string          `json:"roles"`
+	CreatedAt    int64             `json:"created_at"`
 }
 
 // SessionManager handles session CRUD using a Redis client (DB 2).
@@ -57,11 +58,12 @@ func (sm *SessionManager) Create(ctx context.Context, user *User, site string) (
 	}
 
 	sess := Session{
-		Email:     user.Email,
-		FullName:  user.FullName,
-		Roles:     user.Roles,
-		Site:      site,
-		CreatedAt: time.Now().Unix(),
+		Email:        user.Email,
+		FullName:     user.FullName,
+		Roles:        user.Roles,
+		UserDefaults: user.UserDefaults,
+		Site:         site,
+		CreatedAt:    time.Now().Unix(),
 	}
 	data, err := json.Marshal(sess)
 	if err != nil {
