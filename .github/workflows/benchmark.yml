@@ -42,7 +42,7 @@ jobs:
           --health-retries 10
 
     env:
-      BENCH_PKGS: ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api
+      BENCH_PKGS: ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks
       PG_HOST: localhost
       REDIS_ADDR: localhost:6380
 
@@ -66,12 +66,14 @@ jobs:
 
       - name: Benchmark base branch
         run: |
+          set -o pipefail
           git checkout ${{ github.event.pull_request.base.sha }}
           go test -run=^$ -tags=integration -bench=. -benchmem -count=10 -timeout=20m \
             ${BENCH_PKGS} | tee /tmp/bench-base.txt
 
       - name: Benchmark PR branch
         run: |
+          set -o pipefail
           git checkout ${{ github.event.pull_request.head.sha }}
           go test -run=^$ -tags=integration -bench=. -benchmem -count=10 -timeout=20m \
             ${BENCH_PKGS} | tee /tmp/bench-pr.txt
@@ -130,6 +132,7 @@ jobs:
           printf '%s\n' "$RESULT"
 
       - name: Comment on PR
+        if: github.event.pull_request.head.repo.full_name == github.repository
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: benchmark

@@ -8,7 +8,7 @@ BUILD_DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS    := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(BUILD_DATE)
 
 GO := go
-BENCH_PKGS := ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api
+BENCH_PKGS := ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks
 
 .PHONY: build build-server build-worker build-scheduler build-moca build-outbox \
         test test-integration test-api-integration lint clean \
@@ -86,13 +86,13 @@ test-api-integration:
 
 ## bench: Run Tier 1 benchmarks without Docker
 bench:
-	$(GO) test -run=^$$ -bench=. -benchmem -count=5 -timeout=10m $(BENCH_PKGS) | tee bench-latest.txt
+	bash -o pipefail -ec '$(GO) test -run=^$$ -bench=. -benchmem -count=5 -timeout=10m $(BENCH_PKGS) | tee bench-latest.txt'
 
 ## bench-integration: Run Docker-backed Tier 1 integration benchmarks
 bench-integration:
-	docker compose up -d --wait && \
-	$(GO) test -run=^$$ -tags=integration -bench=. -benchmem -count=10 -timeout=20m $(BENCH_PKGS) | tee bench-latest.txt ; \
-	docker compose down
+	bash -o pipefail -ec 'trap "docker compose down" EXIT; \
+		docker compose up -d --wait; \
+		$(GO) test -run=^$$ -tags=integration -bench=. -benchmem -count=10 -timeout=20m $(BENCH_PKGS) | tee bench-latest.txt'
 
 ## bench-compare: Compare current results against a saved baseline
 bench-compare: bench

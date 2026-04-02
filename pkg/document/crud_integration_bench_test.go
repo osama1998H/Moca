@@ -117,6 +117,7 @@ func BenchmarkDocManagerInsert_Parallel(b *testing.B) {
 	mt := env.RegisterMetaType(b, bench.SimpleDocType("BenchOrder"))
 	dm := env.DocManager()
 	var seq atomic.Uint64
+	var last atomic.Pointer[document.DynamicDoc]
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -129,7 +130,9 @@ func BenchmarkDocManagerInsert_Parallel(b *testing.B) {
 			if err != nil {
 				b.Fatalf("DocManager.Insert parallel: %v", err)
 			}
-			docManagerBenchmarkSink = inserted
+			last.Store(inserted)
 		}
 	})
+
+	docManagerBenchmarkSink = last.Load()
 }

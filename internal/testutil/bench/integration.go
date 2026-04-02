@@ -91,66 +91,12 @@ func NewIntegrationEnv(tb testing.TB, prefix string) *IntegrationEnv {
 	schema := tenancy.SchemaNameForSite(siteName)
 
 	adminPool := mustOpenAdminPool(tb, ctx)
-	logger := NewLogger()
-
-	mustExec(tb, adminPool, `CREATE SCHEMA IF NOT EXISTS moca_system`)
-	mustExec(tb, adminPool, `
-		CREATE TABLE IF NOT EXISTS moca_system.sites (
-			name        TEXT PRIMARY KEY,
-			db_schema   TEXT NOT NULL,
-			status      TEXT NOT NULL DEFAULT 'active',
-			admin_email TEXT NOT NULL DEFAULT '',
-			created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-		)
-	`)
-	mustExec(tb, adminPool, fmt.Sprintf(`CREATE SCHEMA IF NOT EXISTS %s`, quoteIdent(schema)))
-	if _, err := adminPool.Exec(ctx, `
-		INSERT INTO moca_system.sites (name, db_schema)
-		VALUES ($1, $2)
-		ON CONFLICT (name) DO UPDATE SET db_schema = EXCLUDED.db_schema
-	`, siteName, schema); err != nil {
-		tb.Fatalf("insert benchmark site %q: %v", siteName, err)
-	}
-
-	dbManager, err := orm.NewDBManager(ctx, config.DatabaseConfig{
-		Host:     defaultEnv("PG_HOST", defaultPGHost),
-		Port:     defaultPGPort,
-		User:     defaultPGUser,
-		Password: defaultPGPassword,
-		SystemDB: defaultPGDB,
-		PoolSize: 20,
-	}, logger)
-	if err != nil {
-		tb.Fatalf("new benchmark DB manager: %v", err)
-	}
-
-	sitePool, err := dbManager.ForSite(ctx, siteName)
-	if err != nil {
-		dbManager.Close()
-		tb.Fatalf("create tenant pool for %q: %v", siteName, err)
-	}
-
 	env := &IntegrationEnv{
 		Ctx:       ctx,
-		Logger:    logger,
 		AdminPool: adminPool,
-		DBManager: dbManager,
-		Redis:     maybeOpenRedis(tb, ctx),
 		SiteName:  siteName,
 		Schema:    schema,
-		Site: &tenancy.SiteContext{
-			Name:     siteName,
-			DBSchema: schema,
-			Status:   "active",
-			Pool:     sitePool,
-		},
-		User: &auth.User{
-			Email:    "bench@moca.dev",
-			FullName: "Benchmark Runner",
-			Roles:    []string{"System Manager"},
-		},
 	}
-
 	tb.Cleanup(func() {
 		if env.Redis != nil {
 			env.FlushRedis(tb,
@@ -164,13 +110,69 @@ func NewIntegrationEnv(tb testing.TB, prefix string) *IntegrationEnv {
 			env.DBManager.Close()
 		}
 		if env.AdminPool != nil {
-			_, _ = env.AdminPool.Exec(context.Background(),
-				fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE`, quoteIdent(env.Schema)))
-			_, _ = env.AdminPool.Exec(context.Background(),
-				`DELETE FROM moca_system.sites WHERE name = $1`, env.SiteName)
+			if env.Schema != "" {
+				_, _ = env.AdminPool.Exec(context.Background(),
+					fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE`, quoteIdent(env.Schema)))
+			}
+			if env.SiteName != "" {
+				_, _ = env.AdminPool.Exec(context.Background(),
+					`DELETE FROM moca_system.sites WHERE name = $1`, env.SiteName)
+			}
 			env.AdminPool.Close()
 		}
 	})
+
+	logger := NewLogger()
+	env.Logger = logger
+
+	mustExec(tb, adminPool, `CREATE SCHEMA IF NOT EXISTS moca_system`)
+	mustExec(tb, adminPool, `
+		CREATE TABLE IF NOT EXISTS moca_system.sites (
+			name        TEXT PRIMARY KEY,
+			db_schema   TEXT NOT NULL UNIQUE,
+			status      TEXT NOT NULL DEFAULT 'active',
+			plan        TEXT,
+			config      JSONB NOT NULL DEFAULT '{}',
+			admin_email TEXT NOT NULL,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			modified_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	mustExec(tb, adminPool, fmt.Sprintf(`CREATE SCHEMA IF NOT EXISTS %s`, quoteIdent(schema)))
+	if _, err := adminPool.Exec(ctx, `
+		INSERT INTO moca_system.sites (name, db_schema, admin_email)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (name) DO UPDATE SET
+			db_schema = EXCLUDED.db_schema,
+			admin_email = EXCLUDED.admin_email
+	`, siteName, schema, "bench@moca.dev"); err != nil {
+		tb.Fatalf("insert benchmark site %q: %v", siteName, err)
+	}
+
+	dbManager, err := orm.NewDBManager(ctx, benchmarkDatabaseConfig(tb), logger)
+	if err != nil {
+		tb.Fatalf("new benchmark DB manager: %v", err)
+	}
+	env.DBManager = dbManager
+
+	sitePool, err := dbManager.ForSite(ctx, siteName)
+	if err != nil {
+		dbManager.Close()
+		tb.Fatalf("create tenant pool for %q: %v", siteName, err)
+	}
+
+	env.Redis = maybeOpenRedis(tb, ctx)
+	env.Site = &tenancy.SiteContext{
+		Name:     siteName,
+		DBSchema: schema,
+		Status:   "active",
+		Pool:     sitePool,
+	}
+	env.User = &auth.User{
+		Email:    "bench@moca.dev",
+		FullName: "Benchmark Runner",
+		Roles:    []string{"System Manager"},
+	}
 
 	return env
 }
@@ -297,20 +299,52 @@ func defaultEnv(key, fallback string) string {
 	return fallback
 }
 
+func benchmarkConnString() string {
+	if connStr := os.Getenv("PG_CONN_STRING"); connStr != "" {
+		return connStr
+	}
+	return fmt.Sprintf(
+		"postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		defaultPGUser,
+		defaultPGPassword,
+		defaultEnv("PG_HOST", defaultPGHost),
+		defaultPGPort,
+		defaultPGDB,
+	)
+}
+
+func benchmarkDatabaseConfig(tb testing.TB) config.DatabaseConfig {
+	tb.Helper()
+
+	cfg := config.DatabaseConfig{
+		Host:     defaultEnv("PG_HOST", defaultPGHost),
+		Port:     defaultPGPort,
+		User:     defaultPGUser,
+		Password: defaultPGPassword,
+		SystemDB: defaultPGDB,
+		PoolSize: 20,
+	}
+	if os.Getenv("PG_CONN_STRING") == "" {
+		return cfg
+	}
+
+	poolCfg, err := pgxpool.ParseConfig(benchmarkConnString())
+	if err != nil {
+		tb.Fatalf("parse PG_CONN_STRING: %v", err)
+	}
+
+	cfg.Host = poolCfg.ConnConfig.Host
+	cfg.Port = int(poolCfg.ConnConfig.Port)
+	cfg.User = poolCfg.ConnConfig.User
+	cfg.Password = poolCfg.ConnConfig.Password
+	cfg.SystemDB = poolCfg.ConnConfig.Database
+	return cfg
+}
+
 func mustOpenAdminPool(tb testing.TB, ctx context.Context) *pgxpool.Pool {
 	tb.Helper()
 
-	connStr := os.Getenv("PG_CONN_STRING")
-	if connStr == "" {
-		connStr = fmt.Sprintf(
-			"postgres://%s:%s@%s:%d/%s?sslmode=disable",
-			defaultPGUser,
-			defaultPGPassword,
-			defaultEnv("PG_HOST", defaultPGHost),
-			defaultPGPort,
-			defaultPGDB,
-		)
-	}
+	connStr := benchmarkConnString()
 
 	adminPool, err := pgxpool.New(ctx, connStr)
 	if err != nil {
