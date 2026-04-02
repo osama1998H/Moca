@@ -148,7 +148,7 @@ func newTestInstallerAndSiteManager(t *testing.T) (*apps.AppInstaller, *tenancy.
 	registry := meta.NewRegistry(db, aiRedisClient, logger)
 	runner := orm.NewMigrationRunner(db, logger)
 
-	sm := tenancy.NewSiteManager(db, migrator, registry, aiRedisClient, logger, core.BootstrapCoreMeta)
+	sm := tenancy.NewSiteManager(db, migrator, registry, aiRedisClient, aiRedisClient, logger, core.BootstrapCoreMeta)
 	installer := apps.NewAppInstaller(db, migrator, registry, runner, aiRedisClient, logger)
 
 	return installer, sm, db
