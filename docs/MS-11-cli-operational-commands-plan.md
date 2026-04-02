@@ -155,7 +155,7 @@ No web research was needed. The design documents and existing codebase provide s
 
 - **Task ID:** MS-11-T3
 - **Title:** Cache Commands and DB Utility Commands
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Implement `moca cache clear` and `moca cache warm`, plus all 7 DB utility commands: `console`, `seed`, `reset`, `snapshot`, `export-fixtures`, `trim-tables`, `trim-database`.
 
