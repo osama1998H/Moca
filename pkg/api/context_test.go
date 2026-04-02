@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/auth"
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/pkg/auth"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 func TestUserContext_RoundTrip(t *testing.T) {

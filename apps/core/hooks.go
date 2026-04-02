@@ -1,8 +1,8 @@
 package core
 
 import (
-	"github.com/moca-framework/moca/pkg/document"
-	"github.com/moca-framework/moca/pkg/hooks"
+	"github.com/osama1998H/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/hooks"
 )
 
 // Initialize registers all core app controllers and hooks with the provided

@@ -1,4 +1,4 @@
-module github.com/moca-framework/moca/spikes/cobra-ext/framework
+module github.com/osama1998H/moca/spikes/cobra-ext/framework
 
 go 1.26.1
 

@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/moca-framework/moca/pkg/auth"
+	"github.com/osama1998H/moca/pkg/auth"
 )
 
 // AuthHandler provides login, logout, and token refresh HTTP endpoints.

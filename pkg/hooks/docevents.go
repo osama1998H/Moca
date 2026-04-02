@@ -3,7 +3,7 @@ package hooks
 import (
 	"fmt"
 
-	"github.com/moca-framework/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/document"
 )
 
 // DocEventDispatcher implements document.HookDispatcher by resolving handlers

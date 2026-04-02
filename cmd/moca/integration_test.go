@@ -17,10 +17,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/moca-framework/moca/internal/config"
-	clicontext "github.com/moca-framework/moca/internal/context"
-	"github.com/moca-framework/moca/pkg/cli"
-	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/osama1998H/moca/internal/config"
+	clicontext "github.com/osama1998H/moca/internal/context"
+	"github.com/osama1998H/moca/pkg/cli"
+	"github.com/osama1998H/moca/pkg/orm"
 )
 
 // ── connection defaults ─────────────────────────────────────────────────────
@@ -445,4 +445,3 @@ func TestCLI_DuplicateSiteCreate_Error(t *testing.T) {
 		t.Errorf("expected 'already exists' error, got: %v", err)
 	}
 }
-

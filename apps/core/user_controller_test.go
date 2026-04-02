@@ -6,15 +6,15 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/moca-framework/moca/pkg/document"
-	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/meta"
 )
 
 // userMetaType returns a minimal MetaType for User, sufficient for DynamicDoc.
 func userMetaType() *meta.MetaType {
 	return &meta.MetaType{
-		Name:   "User",
-		Module: "Core",
+		Name:       "User",
+		Module:     "Core",
 		NamingRule: meta.NamingStrategy{Rule: meta.NamingByField, FieldName: "email"},
 		Fields: []meta.FieldDef{
 			{Name: "email", FieldType: meta.FieldTypeData, Required: true, Unique: true},

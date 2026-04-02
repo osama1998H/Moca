@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/moca-framework/moca/internal/config"
+	"github.com/osama1998H/moca/internal/config"
 )
 
 // TestParse_ValidFull parses the complete fixture and checks that all fields

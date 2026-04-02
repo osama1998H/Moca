@@ -18,8 +18,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/moca-framework/moca/pkg/meta"
-	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/orm"
 )
 
 // BootstrapFunc returns the compiled MetaType definitions for bootstrap.

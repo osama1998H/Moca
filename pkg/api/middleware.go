@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/moca-framework/moca/pkg/observe"
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/pkg/observe"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 // Middleware is a function that wraps an http.Handler.

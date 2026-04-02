@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 // Create produces a schema-scoped PostgreSQL dump for the given site.

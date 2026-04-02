@@ -13,9 +13,9 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/moca-framework/moca/internal/config"
-	clicontext "github.com/moca-framework/moca/internal/context"
-	"github.com/moca-framework/moca/internal/output"
+	"github.com/osama1998H/moca/internal/config"
+	clicontext "github.com/osama1998H/moca/internal/context"
+	"github.com/osama1998H/moca/internal/output"
 )
 
 // NewConfigCommand returns the "moca config" command group with all subcommands.

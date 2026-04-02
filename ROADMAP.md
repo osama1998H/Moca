@@ -183,7 +183,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
   - IN: Go module init, `go.work` skeleton, CI pipeline (lint, test, build), 5 spike prototypes (throwaway code), ADR documentation for spike outcomes.
   - OUT: No production code, no CLI, no frontend.
 - **Deliverables:**
-  1. Root `go.mod` for `github.com/moca-framework/moca`
+  1. Root `go.mod` for `github.com/osama1998H/moca`
   2. `go.work` file composing framework + a stub `apps/core` module
   3. 5 spike directories under `spikes/` with self-contained validation code
   4. CI pipeline (GitHub Actions) with `go build ./...`, `go test ./...`, `golangci-lint`

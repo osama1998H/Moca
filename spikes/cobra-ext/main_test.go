@@ -22,11 +22,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/moca-framework/moca/spikes/cobra-ext/framework/cmd"
+	"github.com/osama1998H/moca/spikes/cobra-ext/framework/cmd"
 	"github.com/spf13/cobra"
 
-	stuba "github.com/moca-framework/moca/spikes/cobra-ext/apps/stub-a"
-	stubb "github.com/moca-framework/moca/spikes/cobra-ext/apps/stub-b"
+	stuba "github.com/osama1998H/moca/spikes/cobra-ext/apps/stub-a"
+	stubb "github.com/osama1998H/moca/spikes/cobra-ext/apps/stub-b"
 )
 
 // TestMain verifies the Go binary is available before running tests that exec it.

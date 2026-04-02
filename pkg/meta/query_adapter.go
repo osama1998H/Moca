@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/orm"
 )
 
 // QueryMetaAdapter adapts a Registry to satisfy orm.MetaProvider, bridging

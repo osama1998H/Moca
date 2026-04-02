@@ -3,7 +3,7 @@ package config_test
 import (
 	"testing"
 
-	"github.com/moca-framework/moca/internal/config"
+	"github.com/osama1998H/moca/internal/config"
 )
 
 // minimalValid returns a *ProjectConfig with every required field populated so

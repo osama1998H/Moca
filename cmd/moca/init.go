@@ -13,10 +13,10 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	"gopkg.in/yaml.v3"
 
-	"github.com/moca-framework/moca/internal/config"
-	"github.com/moca-framework/moca/internal/lockfile"
-	"github.com/moca-framework/moca/internal/output"
-	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/osama1998H/moca/internal/config"
+	"github.com/osama1998H/moca/internal/lockfile"
+	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/pkg/orm"
 	"github.com/spf13/cobra"
 )
 

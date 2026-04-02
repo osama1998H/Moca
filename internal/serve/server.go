@@ -9,15 +9,15 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/moca-framework/moca/internal/config"
-	"github.com/moca-framework/moca/internal/drivers"
-	"github.com/moca-framework/moca/pkg/api"
-	"github.com/moca-framework/moca/pkg/auth"
-	"github.com/moca-framework/moca/pkg/document"
-	"github.com/moca-framework/moca/pkg/hooks"
-	"github.com/moca-framework/moca/pkg/meta"
-	"github.com/moca-framework/moca/pkg/observe"
-	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/osama1998H/moca/internal/config"
+	"github.com/osama1998H/moca/internal/drivers"
+	"github.com/osama1998H/moca/pkg/api"
+	"github.com/osama1998H/moca/pkg/auth"
+	"github.com/osama1998H/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/hooks"
+	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/observe"
+	"github.com/osama1998H/moca/pkg/orm"
 )
 
 // shutdownTimeout is the maximum time to wait for in-flight requests to finish.

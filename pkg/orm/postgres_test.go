@@ -14,9 +14,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/moca-framework/moca/internal/config"
-	"github.com/moca-framework/moca/pkg/observe"
-	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/osama1998H/moca/internal/config"
+	"github.com/osama1998H/moca/pkg/observe"
+	"github.com/osama1998H/moca/pkg/orm"
 )
 
 // Default connection parameters matching docker-compose.yml at repo root.

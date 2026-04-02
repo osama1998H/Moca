@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/meta"
 )
 
 // Document is the core runtime abstraction for a single record managed by MOCA.
@@ -65,7 +65,7 @@ type DynamicDoc struct {
 	metaDef    *meta.MetaType
 	values     map[string]any
 	original   map[string]any           // deep-copied snapshot for dirty tracking
-	children   map[string][]*DynamicDoc  // keyed by Table field name
+	children   map[string][]*DynamicDoc // keyed by Table field name
 	childMetas map[string]*meta.MetaType
 	// validFields is built once at construction: all accepted field names for Set().
 	validFields map[string]struct{}

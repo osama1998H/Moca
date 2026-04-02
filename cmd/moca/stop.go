@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/moca-framework/moca/internal/output"
-	"github.com/moca-framework/moca/internal/process"
+	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/internal/process"
 )
 
 // NewStopCommand returns the "moca stop" command.

@@ -28,7 +28,7 @@ The primary finding of this audit is a set of **documentation hygiene issues** i
 **Plan tasks:** 5/5 tasks marked completed in `docs/MS-00-architecture-validation-spikes-plan.md`
 
 #### Fulfilled
-- Root `go.mod` for `github.com/moca-framework/moca` -- `go.mod`
+- Root `go.mod` for `github.com/osama1998H/moca` -- `go.mod`
 - `go.work` composing root + `apps/core` -- `go.work`
 - 5 spike directories under `spikes/` (pg-tenant, redis-streams, go-workspace, meilisearch, cobra-ext)
 - 5 ADR documents (ADR-001, ADR-002, ADR-003, ADR-005, ADR-006)

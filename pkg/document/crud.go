@@ -15,8 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/moca-framework/moca/pkg/meta"
-	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/orm"
 )
 
 // ─── DynamicDoc internal helpers (same-package access) ───────────────────────
@@ -141,7 +141,6 @@ func buildDocColumns(mt *meta.MetaType) []string {
 	}
 	return columns
 }
-
 
 // quoteIdents returns a slice of sanitized quoted identifiers for the given
 // column names. Uses pgx.Identifier to prevent SQL injection.

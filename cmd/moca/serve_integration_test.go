@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	clicontext "github.com/moca-framework/moca/internal/context"
-	"github.com/moca-framework/moca/internal/process"
-	"github.com/moca-framework/moca/pkg/cli"
+	clicontext "github.com/osama1998H/moca/internal/context"
+	"github.com/osama1998H/moca/internal/process"
+	"github.com/osama1998H/moca/pkg/cli"
 )
 
 // TestCLI_Serve_LifecycleAndPIDCleanup verifies that moca serve starts

@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 
-	"github.com/moca-framework/moca/pkg/auth"
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/pkg/auth"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 // contextKey is an unexported type for context keys in this package,

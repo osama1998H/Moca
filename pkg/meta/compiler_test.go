@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/meta"
 )
 
 // ── helpers ──────────────────────────────────────────────────────────────────

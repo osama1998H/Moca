@@ -10,11 +10,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/moca-framework/moca/internal/output"
-	"github.com/moca-framework/moca/internal/process"
-	"github.com/moca-framework/moca/internal/serve"
-	"github.com/moca-framework/moca/pkg/meta"
-	"github.com/moca-framework/moca/pkg/observe"
+	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/internal/process"
+	"github.com/osama1998H/moca/internal/serve"
+	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/observe"
 )
 
 // NewServeCommand returns the "moca serve" command (and its "start" alias).
@@ -153,4 +153,3 @@ func enabledStr(enabled bool) string {
 	}
 	return "disabled"
 }
-

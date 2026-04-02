@@ -9,7 +9,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 // stubSiteExtractor returns a SiteExtractor that always returns nil.

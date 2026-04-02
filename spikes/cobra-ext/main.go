@@ -14,11 +14,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/moca-framework/moca/spikes/cobra-ext/framework/cmd"
+	"github.com/osama1998H/moca/spikes/cobra-ext/framework/cmd"
 
 	// Blank imports trigger init()-based command registration from each app.
-	_ "github.com/moca-framework/moca/spikes/cobra-ext/apps/stub-a"
-	_ "github.com/moca-framework/moca/spikes/cobra-ext/apps/stub-b"
+	_ "github.com/osama1998H/moca/spikes/cobra-ext/apps/stub-a"
+	_ "github.com/osama1998H/moca/spikes/cobra-ext/apps/stub-b"
 )
 
 func main() {

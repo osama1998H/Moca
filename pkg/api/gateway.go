@@ -4,9 +4,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/moca-framework/moca/internal/drivers"
-	"github.com/moca-framework/moca/pkg/document"
-	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/osama1998H/moca/internal/drivers"
+	"github.com/osama1998H/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/meta"
 )
 
 // Gateway is the root HTTP handler for the Moca API layer.

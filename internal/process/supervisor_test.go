@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/moca-framework/moca/internal/process"
+	"github.com/osama1998H/moca/internal/process"
 )
 
 func testLogger(buf *bytes.Buffer) *slog.Logger {

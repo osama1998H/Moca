@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/moca-framework/moca/internal/output"
+	"github.com/osama1998H/moca/internal/output"
 	"github.com/spf13/cobra"
 )
 

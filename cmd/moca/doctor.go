@@ -1,8 +1,8 @@
 package main
 
 import (
-	clicontext "github.com/moca-framework/moca/internal/context"
-	"github.com/moca-framework/moca/internal/output"
+	clicontext "github.com/osama1998H/moca/internal/context"
+	"github.com/osama1998H/moca/internal/output"
 	"github.com/spf13/cobra"
 )
 

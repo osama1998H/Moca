@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/moca-framework/moca/internal/output"
-	"github.com/moca-framework/moca/pkg/apps"
+	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/pkg/apps"
 	"github.com/spf13/cobra"
 )
 

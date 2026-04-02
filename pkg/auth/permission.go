@@ -1,6 +1,6 @@
 package auth
 
-import "github.com/moca-framework/moca/pkg/meta"
+import "github.com/osama1998H/moca/pkg/meta"
 
 // Perm is a bitmask type for doctype-level permissions.
 // Values are stable and must not be reordered once released.
@@ -83,8 +83,8 @@ func ResolvePermissions(rules []meta.PermRule, userRoles []string) *EffectivePer
 	ep := &EffectivePerms{}
 
 	var (
-		readSet  map[string]struct{}
-		writeSet map[string]struct{}
+		readSet   map[string]struct{}
+		writeSet  map[string]struct{}
 		rulesSeen map[string]struct{}
 	)
 

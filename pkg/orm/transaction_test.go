@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/orm"
 )
 
 // systemPool returns a raw pool pointed at the system schema for transaction tests.

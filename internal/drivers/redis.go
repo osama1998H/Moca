@@ -8,7 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/moca-framework/moca/internal/config"
+	"github.com/osama1998H/moca/internal/config"
 )
 
 // Key pattern format strings for Redis keys used across the Moca framework.

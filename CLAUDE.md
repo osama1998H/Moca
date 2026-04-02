@@ -56,7 +56,7 @@ Integration tests use the `integration` build tag and require Docker (`docker-co
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Go 1.26+ (module: `github.com/moca-framework/moca`) |
+| Backend | Go 1.26+ (module: `github.com/osama1998H/moca`) |
 | Frontend | React 19+ with TypeScript (planned) |
 | Database | PostgreSQL 16+ (schema-per-tenant, JSONB, RLS) — pgx v5 / pgxpool |
 | Cache / Queue | Redis 7+ (go-redis v9; cache + Redis Streams for jobs) |

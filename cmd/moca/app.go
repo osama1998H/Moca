@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	clicontext "github.com/moca-framework/moca/internal/context"
-	"github.com/moca-framework/moca/internal/lockfile"
-	"github.com/moca-framework/moca/internal/output"
-	"github.com/moca-framework/moca/internal/scaffold"
-	"github.com/moca-framework/moca/pkg/apps"
+	clicontext "github.com/osama1998H/moca/internal/context"
+	"github.com/osama1998H/moca/internal/lockfile"
+	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/internal/scaffold"
+	"github.com/osama1998H/moca/pkg/apps"
 	"github.com/spf13/cobra"
 )
 
@@ -1005,10 +1005,10 @@ func runAppDiff(cmd *cobra.Command, args []string) error {
 
 	if w.Mode() == output.ModeJSON {
 		return w.PrintJSON(map[string]any{
-			"app":            appName,
-			"locked_version": locked.Version,
+			"app":             appName,
+			"locked_version":  locked.Version,
 			"current_version": ai.Manifest.Version,
-			"changes":        changes,
+			"changes":         changes,
 		})
 	}
 

@@ -17,15 +17,15 @@ import (
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/moca-framework/moca/internal/config"
-	"github.com/moca-framework/moca/pkg/apps"
-	"github.com/moca-framework/moca/pkg/auth"
-	"github.com/moca-framework/moca/pkg/document"
-	"github.com/moca-framework/moca/pkg/hooks"
-	"github.com/moca-framework/moca/pkg/meta"
-	"github.com/moca-framework/moca/pkg/observe"
-	"github.com/moca-framework/moca/pkg/orm"
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/internal/config"
+	"github.com/osama1998H/moca/pkg/apps"
+	"github.com/osama1998H/moca/pkg/auth"
+	"github.com/osama1998H/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/hooks"
+	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/observe"
+	"github.com/osama1998H/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 // ── connection defaults ──────────────────────────────────────────────────────

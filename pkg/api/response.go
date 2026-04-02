@@ -5,9 +5,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/moca-framework/moca/pkg/auth"
-	"github.com/moca-framework/moca/pkg/document"
-	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/auth"
+	"github.com/osama1998H/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/meta"
 )
 
 // successEnvelope wraps a single value in the standard {"data": ...} envelope.
@@ -35,8 +35,8 @@ type errorEnvelope struct {
 
 // errorBody is the inner error object.
 type errorBody struct {
-	Code    string            `json:"code"`
-	Message string            `json:"message"`
+	Code    string             `json:"code"`
+	Message string             `json:"message"`
 	Details []fieldErrorDetail `json:"details,omitempty"`
 }
 

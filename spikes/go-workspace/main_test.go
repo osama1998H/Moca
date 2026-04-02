@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	stuba "github.com/moca-framework/moca/spikes/go-workspace/apps/stub-a"
-	stubb "github.com/moca-framework/moca/spikes/go-workspace/apps/stub-b"
+	stuba "github.com/osama1998H/moca/spikes/go-workspace/apps/stub-a"
+	stubb "github.com/osama1998H/moca/spikes/go-workspace/apps/stub-b"
 	"golang.org/x/mod/modfile"
 )
 

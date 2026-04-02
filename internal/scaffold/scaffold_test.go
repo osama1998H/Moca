@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/apps"
+	"github.com/osama1998H/moca/pkg/apps"
 )
 
 // helper to create a minimal apps dir inside a temp dir.
@@ -123,7 +123,7 @@ func TestScaffoldApp_Standard(t *testing.T) {
 	if !strings.Contains(string(gomodContent), "module github.com/test/project/apps/my_app") {
 		t.Errorf("go.mod should contain correct module path, got:\n%s", gomodContent)
 	}
-	if !strings.Contains(string(gomodContent), "replace github.com/moca-framework/moca => ../..") {
+	if !strings.Contains(string(gomodContent), "replace github.com/osama1998H/moca => ../..") {
 		t.Error("go.mod should contain replace directive")
 	}
 }
@@ -265,12 +265,12 @@ func TestScaffoldApp_InvalidName(t *testing.T) {
 		{"my_app", false},
 		{"crm", false},
 		{"app123", false},
-		{"MyApp", true},   // uppercase
-		{"123app", true},  // starts with digit
-		{"", true},        // empty
-		{"my-app", true},  // hyphen
-		{"my app", true},  // space
-		{"my.app", true},  // dot
+		{"MyApp", true},  // uppercase
+		{"123app", true}, // starts with digit
+		{"", true},       // empty
+		{"my-app", true}, // hyphen
+		{"my app", true}, // space
+		{"my.app", true}, // dot
 	}
 
 	for _, tc := range cases {
@@ -457,7 +457,7 @@ func TestReadGoModulePath(t *testing.T) {
 	// Without a go.mod file.
 	emptyDir := t.TempDir()
 	got = readGoModulePath(emptyDir)
-	if got != "github.com/moca-framework/moca" {
-		t.Errorf("readGoModulePath (fallback) = %q, want github.com/moca-framework/moca", got)
+	if got != "github.com/osama1998H/moca" {
+		t.Errorf("readGoModulePath (fallback) = %q, want github.com/osama1998H/moca", got)
 	}
 }

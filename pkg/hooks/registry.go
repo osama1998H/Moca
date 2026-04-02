@@ -3,7 +3,7 @@ package hooks
 import (
 	"sync"
 
-	"github.com/moca-framework/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/document"
 )
 
 // DefaultPriority is used when a PrioritizedHandler is registered with Priority == 0.

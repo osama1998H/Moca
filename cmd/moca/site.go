@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/moca-framework/moca/internal/output"
-	"github.com/moca-framework/moca/pkg/backup"
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/pkg/backup"
+	"github.com/osama1998H/moca/pkg/tenancy"
 	"github.com/spf13/cobra"
 )
 
@@ -860,8 +860,8 @@ func runSiteReinstall(cmd *cobra.Command, args []string) error {
 
 	if w.Mode() == output.ModeJSON {
 		result := map[string]any{
-			"site":           siteName,
-			"status":         "reinstalled",
+			"site":             siteName,
+			"status":           "reinstalled",
 			"apps_reinstalled": installedApps,
 		}
 		if backupPath != "" {

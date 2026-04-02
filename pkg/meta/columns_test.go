@@ -3,7 +3,7 @@ package meta_test
 import (
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/meta"
 )
 
 // TestColumnType_AllStorableTypes verifies that every storage FieldType maps to
@@ -88,8 +88,8 @@ func TestColumnType_InvalidTypes(t *testing.T) {
 	cases := []meta.FieldType{
 		"",
 		"FakeType",
-		"data",     // wrong case
-		"INTEGER",  // SQL type, not a FieldType name
+		"data",    // wrong case
+		"INTEGER", // SQL type, not a FieldType name
 		"NotAType",
 	}
 

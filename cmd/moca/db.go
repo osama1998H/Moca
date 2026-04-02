@@ -17,12 +17,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 
-	"github.com/moca-framework/moca/internal/output"
-	"github.com/moca-framework/moca/pkg/apps"
-	"github.com/moca-framework/moca/pkg/backup"
-	"github.com/moca-framework/moca/pkg/meta"
-	"github.com/moca-framework/moca/pkg/orm"
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/pkg/apps"
+	"github.com/osama1998H/moca/pkg/backup"
+	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 // NewDBCommand returns the "moca db" command group with all subcommands.
@@ -1304,8 +1304,8 @@ Defaults to dry-run mode — use --execute to actually drop tables.`,
 
 // systemTables are internal tables that should never be flagged as orphaned.
 var systemTables = map[string]struct{}{
-	"tab_doctype":      {},
-	"moca_migrations":  {},
+	"tab_doctype":     {},
+	"moca_migrations": {},
 }
 
 func runDBTrimDatabase(cmd *cobra.Command, _ []string) error {

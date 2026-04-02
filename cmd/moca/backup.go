@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/moca-framework/moca/internal/config"
-	"github.com/moca-framework/moca/internal/output"
-	"github.com/moca-framework/moca/pkg/backup"
+	"github.com/osama1998H/moca/internal/config"
+	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/pkg/backup"
 )
 
 // NewBackupCommand returns the "moca backup" command group with all subcommands.
@@ -181,9 +181,9 @@ func runBackupRestore(cmd *cobra.Command, args []string) error {
 
 	if w.Mode() == output.ModeJSON {
 		return w.PrintJSON(map[string]any{
-			"site":    siteName,
-			"backup":  backupPath,
-			"status":  "restored",
+			"site":   siteName,
+			"backup": backupPath,
+			"status": "restored",
 		})
 	}
 

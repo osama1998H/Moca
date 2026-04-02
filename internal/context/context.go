@@ -3,7 +3,7 @@ package clicontext
 import (
 	"context"
 
-	"github.com/moca-framework/moca/internal/config"
+	"github.com/osama1998H/moca/internal/config"
 	"github.com/spf13/cobra"
 )
 

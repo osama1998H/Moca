@@ -1,4 +1,4 @@
-module github.com/moca-framework/moca/spikes/pg-tenant
+module github.com/osama1998H/moca/spikes/pg-tenant
 
 go 1.26.1
 
