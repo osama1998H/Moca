@@ -206,7 +206,7 @@ No web research was needed. The design documents and existing codebase provide s
 
 - **Task ID:** MS-11-T4
 - **Title:** Site Operational Commands
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Implement `moca site clone`, `reinstall`, `enable`, `disable`, `rename`, and `browse` by extending `pkg/tenancy/manager.go` with new methods and replacing the placeholder commands in `cmd/moca/site.go`.
 
