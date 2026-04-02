@@ -196,6 +196,32 @@ func (m *Migrator) EnsureMetaTables(ctx context.Context, site string) error {
 	return nil
 }
 
+// EnsureRLSPolicies drops any existing Moca-managed RLS policies on the
+// MetaType's table and recreates them from the current PermRule definitions.
+// This is idempotent and safe to call on every MetaType registration or
+// permission change.
+//
+// For MetaTypes that have no row-level match rules, the function still enables
+// RLS and creates the admin bypass policy (defense-in-depth). For virtual,
+// single, or child MetaTypes, the function is a no-op.
+func (m *Migrator) EnsureRLSPolicies(ctx context.Context, site string, mt *MetaType) error {
+	dropStmts := GenerateDropRLSPolicies(mt)
+	createStmts := GenerateRLSPolicies(mt)
+
+	if len(dropStmts) == 0 && len(createStmts) == 0 {
+		return nil
+	}
+
+	stmts := make([]DDLStatement, 0, len(dropStmts)+len(createStmts))
+	stmts = append(stmts, dropStmts...)
+	stmts = append(stmts, createStmts...)
+
+	if err := m.Apply(ctx, site, stmts); err != nil {
+		return fmt.Errorf("ensure RLS policies for %q on site %q: %w", mt.Name, site, err)
+	}
+	return nil
+}
+
 // storableFieldMap builds a map of field name → FieldDef for all storable
 // user-defined fields (ColumnType != "") in mt. Standard columns are not included.
 func storableFieldMap(mt *MetaType) map[string]FieldDef {

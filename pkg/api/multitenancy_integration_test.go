@@ -128,7 +128,9 @@ func TestMultitenancy(t *testing.T) {
 	if err != nil {
 		t.Skipf("cannot create admin pool: %v", err)
 	}
-	defer adminPool.Close()
+	// NOTE: adminPool.Close() is called in t.Cleanup below, NOT via defer.
+	// Using defer here would close the pool BEFORE t.Cleanup runs, causing
+	// schema teardown to silently fail and leaving stale data for the next run.
 
 	if err := adminPool.Ping(ctx); err != nil {
 		t.Skipf("cannot connect to PostgreSQL: %v", err)
@@ -143,7 +145,7 @@ func TestMultitenancy(t *testing.T) {
 	if err := rc.Ping(ctx).Err(); err != nil {
 		t.Skipf("Redis unavailable at %s: %v", redisAddr, err)
 	}
-	defer rc.Close()
+	// NOTE: rc.Close() is called in t.Cleanup below, NOT via defer.
 
 	// ── System schema ───────────────────────────────────────────────────
 	// EnsureSystemSchema uses CREATE TABLE IF NOT EXISTS, but the existing
@@ -175,7 +177,12 @@ func TestMultitenancy(t *testing.T) {
 
 	for _, s := range sites {
 		quoted := pgx.Identifier{s.schema}.Sanitize()
-		if _, err := adminPool.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS "+quoted); err != nil {
+		// Drop+recreate to ensure a clean slate even if a previous run's
+		// cleanup failed (e.g., due to the pool being closed before t.Cleanup).
+		if _, err := adminPool.Exec(ctx, "DROP SCHEMA IF EXISTS "+quoted+" CASCADE"); err != nil {
+			t.Fatalf("drop stale schema %s: %v", s.schema, err)
+		}
+		if _, err := adminPool.Exec(ctx, "CREATE SCHEMA "+quoted); err != nil {
 			t.Fatalf("create schema %s: %v", s.schema, err)
 		}
 		if _, err := adminPool.Exec(ctx, `
@@ -188,6 +195,12 @@ func TestMultitenancy(t *testing.T) {
 	}
 
 	// ── Cleanup ─────────────────────────────────────────────────────────
+	// IMPORTANT: t.Cleanup runs AFTER deferred calls. We close adminPool
+	// and rc here (not via defer) so they are still open when the schema
+	// teardown executes. t.Cleanup functions fire in LIFO order, so
+	// register connection closes FIRST (they run LAST).
+	t.Cleanup(func() { adminPool.Close() })
+	t.Cleanup(func() { rc.Close() })
 	t.Cleanup(func() {
 		ctx := context.Background()
 		for _, s := range sites {

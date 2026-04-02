@@ -178,7 +178,7 @@ No web research was needed. The design documents and existing codebase provide s
 
 - **Task ID:** MS-14-T5
 - **Title:** PostgreSQL RLS Policy Generation and End-to-End Integration Tests
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:** Generate `CREATE POLICY` statements from PermRule definitions to mirror application-layer restrictions in PostgreSQL. For each DocType with row-level match rules, produce `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` and `CREATE POLICY ... USING (...)` SQL. Use `current_setting('moca.current_user_company')` (or equivalent session variables) set via the per-tenant pool's `AfterConnect` callback. Integrate into migration flow. Write comprehensive integration tests covering the full stack: login → CRUD → permission denial → field filtering → row filtering → RLS enforcement.
 - **Why this task exists:** RLS is Layer 5 (database defense) — even direct SQL bypassing the application layer respects restrictions. Integration tests validate the entire MS-14 stack end-to-end.
 - **Dependencies:** MS-14-T1, MS-14-T2, MS-14-T3, MS-14-T4 (capstone task)

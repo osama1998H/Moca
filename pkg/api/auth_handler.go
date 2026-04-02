@@ -37,9 +37,9 @@ func NewAuthHandler(
 	}
 }
 
-// newAuthHandlerWithLoader creates an AuthHandler with a custom user load function.
-// Used in tests to inject mock user loading.
-func newAuthHandlerWithLoader(
+// NewAuthHandlerWithLoader creates an AuthHandler with a custom user load function.
+// Useful for testing or when user loading does not go through the standard UserLoader.
+func NewAuthHandlerWithLoader(
 	jwtCfg auth.JWTConfig,
 	sessions *auth.SessionManager,
 	loader auth.UserLoadFunc,

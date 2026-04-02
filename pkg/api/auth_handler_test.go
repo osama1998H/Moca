@@ -74,7 +74,7 @@ func newAuthHandlerTestEnv(t *testing.T) *authHandlerTestEnv {
 		},
 	}
 
-	handler := newAuthHandlerWithLoader(jwtCfg, sessions, loader.LoadByEmail, nil)
+	handler := NewAuthHandlerWithLoader(jwtCfg, sessions, loader.LoadByEmail, nil)
 
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux, "v1")
