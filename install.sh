@@ -3,7 +3,7 @@
 # Usage: curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | sh
 #
 # Environment variables:
-#   MOCA_VERSION      - Version to install (default: latest release)
+#   MOCA_VERSION      - Version to install (default: latest release, use "nightly" for latest nightly)
 #   MOCA_INSTALL_DIR  - Installation directory (default: /usr/local/bin or ~/.local/bin)
 
 set -e
@@ -121,6 +121,10 @@ resolve_install_dir() {
 
 resolve_version() {
     if [ -n "$MOCA_VERSION" ]; then
+        if [ "$MOCA_VERSION" = "nightly" ]; then
+            echo "nightly"
+            return
+        fi
         # Strip leading 'v' if present so we normalise later
         echo "$MOCA_VERSION" | sed 's/^v//'
         return
@@ -155,14 +159,38 @@ main() {
     info "Detected platform: ${os}/${arch}"
 
     version=$(resolve_version)
-    info "Installing Moca v${version}"
 
     install_dir=$(resolve_install_dir)
     mkdir -p "$install_dir"
 
-    archive="moca_${version}_${os}_${arch}.tar.gz"
-    archive_url="${GITHUB_BASE}/releases/download/v${version}/${archive}"
-    checksums_url="${GITHUB_BASE}/releases/download/v${version}/checksums.txt"
+    if [ "$version" = "nightly" ]; then
+        info "Installing Moca nightly build"
+        tag="nightly"
+
+        # Resolve the actual archive name from nightly release assets
+        info "Fetching nightly release assets..."
+        GITHUB_API="https://api.github.com/repos/${GITHUB_ORG}/${GITHUB_REPO}"
+        if has_cmd curl; then
+            archive=$(curl -fsSL "${GITHUB_API}/releases/tags/nightly" 2>/dev/null \
+                      | grep -o "\"moca_nightly-[0-9]*_${os}_${arch}\\.tar\\.gz\"" \
+                      | head -1 | tr -d '"')
+        elif has_cmd wget; then
+            archive=$(wget -qO- "${GITHUB_API}/releases/tags/nightly" 2>/dev/null \
+                      | grep -o "\"moca_nightly-[0-9]*_${os}_${arch}\\.tar\\.gz\"" \
+                      | head -1 | tr -d '"')
+        fi
+
+        if [ -z "$archive" ]; then
+            die "Could not find a nightly build for ${os}/${arch}. Check https://github.com/${GITHUB_ORG}/${GITHUB_REPO}/releases/tag/nightly"
+        fi
+    else
+        info "Installing Moca v${version}"
+        tag="v${version}"
+        archive="moca_${version}_${os}_${arch}.tar.gz"
+    fi
+
+    archive_url="${GITHUB_BASE}/releases/download/${tag}/${archive}"
+    checksums_url="${GITHUB_BASE}/releases/download/${tag}/checksums.txt"
 
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"' EXIT
@@ -197,7 +225,11 @@ main() {
         fi
     done
 
-    ok "Moca v${version} installed successfully."
+    if [ "$version" = "nightly" ]; then
+        ok "Moca nightly installed successfully."
+    else
+        ok "Moca v${version} installed successfully."
+    fi
     printf "\n" >&2
     info "Install directory: ${install_dir}"
     info "Binaries: ${binaries}"
