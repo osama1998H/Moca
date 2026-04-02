@@ -35,8 +35,8 @@ func run() error {
 	const configFile = "moca.yaml"
 
 	if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
-		fmt.Fprintln(os.Stderr, "no moca.yaml found in current directory")
-		os.Exit(1)
+		fmt.Println("no moca.yaml found in current directory")
+		return nil
 	}
 
 	cfg, err := config.LoadAndResolve(configFile)
