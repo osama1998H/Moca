@@ -1,6 +1,6 @@
 #!/bin/sh
 # Moca Framework Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/moca-framework/moca/main/install.sh | sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | sh
 #
 # Environment variables:
 #   MOCA_VERSION      - Version to install (default: latest release)
@@ -8,7 +8,7 @@
 
 set -e
 
-GITHUB_ORG="moca-framework"
+GITHUB_ORG="osama1998H"
 GITHUB_REPO="moca"
 GITHUB_BASE="https://github.com/${GITHUB_ORG}/${GITHUB_REPO}"
 

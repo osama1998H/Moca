@@ -32,13 +32,13 @@ Moca is a spiritual successor to the [Frappe](https://frappeframework.com/) fram
 Install the Moca CLI and all binaries with a single command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/moca-framework/moca/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | sh
 ```
 
 Or install a specific version:
 
 ```bash
-MOCA_VERSION=0.1.0-mvp curl -fsSL https://raw.githubusercontent.com/moca-framework/moca/main/install.sh | sh
+MOCA_VERSION=0.1.0-mvp curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | sh
 ```
 
 Or download directly from [GitHub Releases](https://github.com/osama1998H/moca/releases).
