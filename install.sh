@@ -16,22 +16,22 @@ GITHUB_BASE="https://github.com/${GITHUB_ORG}/${GITHUB_REPO}"
 # Helpers
 # ---------------------------------------------------------------------------
 
-info()  { printf "  \033[1;34m>\033[0m %s\n" "$1"; }
-ok()    { printf "  \033[1;32m>\033[0m %s\n" "$1"; }
-warn()  { printf "  \033[1;33m>\033[0m %s\n" "$1"; }
+info()  { printf "  \033[1;34m>\033[0m %s\n" "$1" >&2; }
+ok()    { printf "  \033[1;32m>\033[0m %s\n" "$1" >&2; }
+warn()  { printf "  \033[1;33m>\033[0m %s\n" "$1" >&2; }
 err()   { printf "  \033[1;31merror:\033[0m %s\n" "$1" >&2; }
 die()   { err "$1"; exit 1; }
 
 banner() {
-    printf "\n"
-    printf "  \033[1;36m__  __                  \033[0m\n"
-    printf "  \033[1;36m|  \/  | ___   ___ __ _ \033[0m\n"
-    printf "  \033[1;36m| |\/| |/ _ \ / __/ _\` |\033[0m\n"
-    printf "  \033[1;36m| |  | | (_) | (_| (_| |\033[0m\n"
-    printf "  \033[1;36m|_|  |_|\___/ \___\__,_|\033[0m\n"
-    printf "\n"
-    printf "  \033[1mMoca Framework Installer\033[0m\n"
-    printf "\n"
+    printf "\n" >&2
+    printf "  \033[1;36m__  __                  \033[0m\n" >&2
+    printf "  \033[1;36m|  \/  | ___   ___ __ _ \033[0m\n" >&2
+    printf "  \033[1;36m| |\/| |/ _ \ / __/ _\` |\033[0m\n" >&2
+    printf "  \033[1;36m| |  | | (_) | (_| (_| |\033[0m\n" >&2
+    printf "  \033[1;36m|_|  |_|\___/ \___\__,_|\033[0m\n" >&2
+    printf "\n" >&2
+    printf "  \033[1mMoca Framework Installer\033[0m\n" >&2
+    printf "\n" >&2
 }
 
 # ---------------------------------------------------------------------------
@@ -198,7 +198,7 @@ main() {
     done
 
     ok "Moca v${version} installed successfully."
-    printf "\n"
+    printf "\n" >&2
     info "Install directory: ${install_dir}"
     info "Binaries: ${binaries}"
 
@@ -206,18 +206,18 @@ main() {
     case ":${PATH}:" in
         *":${install_dir}:"*) ;;
         *)
-            printf "\n"
+            printf "\n" >&2
             warn "${install_dir} is not in your PATH."
             warn "Add it by appending this line to your shell profile:"
-            printf "\n"
-            printf "    export PATH=\"%s:\$PATH\"\n" "$install_dir"
-            printf "\n"
+            printf "\n" >&2
+            printf "    export PATH=\"%s:\$PATH\"\n" "$install_dir" >&2
+            printf "\n" >&2
             ;;
     esac
 
-    printf "\n"
+    printf "\n" >&2
     ok "Run 'moca --help' to get started."
-    printf "\n"
+    printf "\n" >&2
 }
 
 main
