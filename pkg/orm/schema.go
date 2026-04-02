@@ -68,7 +68,7 @@ func EnsureSystemSchema(ctx context.Context, pool *pgxpool.Pool, systemSchema st
 		// with any schema name, not just the default "moca_system".
 		if _, err := tx.Exec(ctx, fmt.Sprintf(`
 			CREATE TABLE IF NOT EXISTS %[1]s.site_apps (
-				site_name    TEXT REFERENCES %[1]s.sites(name),
+				site_name    TEXT REFERENCES %[1]s.sites(name) ON UPDATE CASCADE,
 				app_name     TEXT REFERENCES %[1]s.apps(name),
 				installed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 				app_version  TEXT NOT NULL,

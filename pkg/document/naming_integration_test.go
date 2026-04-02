@@ -124,7 +124,7 @@ func TestMain(m *testing.M) {
 			name        TEXT PRIMARY KEY,
 			db_schema   TEXT NOT NULL,
 			status      TEXT NOT NULL DEFAULT 'active',
-			admin_email TEXT NOT NULL DEFAULT '',
+			admin_email TEXT NOT NULL,
 			created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 		);
 	`); err != nil {
@@ -134,8 +134,8 @@ func TestMain(m *testing.M) {
 
 	// 2. Insert a site row pointing to the existing tenant schema.
 	if _, err := adminPool.Exec(ctx, `
-		INSERT INTO moca_system.sites (name, db_schema)
-		VALUES ($1, $2)
+		INSERT INTO moca_system.sites (name, db_schema, admin_email)
+		VALUES ($1, $2, 'test@test.dev')
 		ON CONFLICT (name) DO UPDATE SET db_schema = EXCLUDED.db_schema
 	`, integSiteName, namingTestSchema); err != nil {
 		fmt.Fprintf(os.Stderr, "FATAL: insert site row: %v\n", err)

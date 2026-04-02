@@ -276,7 +276,9 @@ func (m *SiteManager) ListSites(ctx context.Context) ([]SiteInfo, error) {
 		}
 
 		if len(configJSON) > 0 {
-			_ = json.Unmarshal(configJSON, &si.Config)
+			if err := json.Unmarshal(configJSON, &si.Config); err != nil {
+				return nil, fmt.Errorf("list sites: unmarshal config: %w", err)
+			}
 		}
 		si.Apps = apps
 		sites = append(sites, si)
@@ -311,7 +313,9 @@ func (m *SiteManager) GetSiteInfo(ctx context.Context, name string) (*SiteInfo, 
 	}
 
 	if len(configJSON) > 0 {
-		_ = json.Unmarshal(configJSON, &si.Config)
+		if err := json.Unmarshal(configJSON, &si.Config); err != nil {
+			return nil, fmt.Errorf("get site info %q: unmarshal config: %w", name, err)
+		}
 	}
 	si.Apps = apps
 
@@ -590,9 +594,10 @@ func (m *SiteManager) CloneSite(ctx context.Context, source, target string, opts
 			return fmt.Errorf("clone site: create table %q: %w", tableName, execErr)
 		}
 
-		// Copy data.
+		// Copy data. OVERRIDING SYSTEM VALUE allows copying GENERATED ALWAYS
+		// AS IDENTITY columns (e.g. tab_audit_log.id) with their original values.
 		if _, execErr := pool.Exec(ctx,
-			fmt.Sprintf("INSERT INTO %s SELECT * FROM %s", quotedTarget, quotedSource),
+			fmt.Sprintf("INSERT INTO %s OVERRIDING SYSTEM VALUE SELECT * FROM %s", quotedTarget, quotedSource),
 		); execErr != nil {
 			return fmt.Errorf("clone site: copy data %q: %w", tableName, execErr)
 		}
@@ -808,7 +813,11 @@ func (m *SiteManager) setupRedisConfig(ctx context.Context, siteName string, use
 }
 
 func (m *SiteManager) registerSiteInSystem(ctx context.Context, cfg SiteCreateConfig, schemaName string) error {
-	configJSON, err := json.Marshal(cfg.Config)
+	cfgMap := cfg.Config
+	if cfgMap == nil {
+		cfgMap = map[string]any{}
+	}
+	configJSON, err := json.Marshal(cfgMap)
 	if err != nil {
 		configJSON = []byte("{}")
 	}

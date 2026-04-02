@@ -112,7 +112,7 @@ func migratorSetupFixtures(ctx context.Context) error {
 			name        TEXT PRIMARY KEY,
 			db_schema   TEXT NOT NULL,
 			status      TEXT NOT NULL DEFAULT 'active',
-			admin_email TEXT NOT NULL DEFAULT '',
+			admin_email TEXT NOT NULL,
 			created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 		);
 	`); err != nil {
