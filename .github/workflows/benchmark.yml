@@ -1,0 +1,157 @@
+name: Benchmark Regression Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'pkg/**'
+      - 'internal/**'
+      - 'cmd/**'
+      - 'Makefile'
+      - '.github/workflows/benchmark.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: moca_test
+          POSTGRES_USER: moca
+          POSTGRES_PASSWORD: moca_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U moca -d moca_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      BENCH_PKGS: ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks
+      PG_HOST: localhost
+      REDIS_ADDR: localhost:6380
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.1'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@latest
+
+      - name: Benchmark base branch
+        run: |
+          set -o pipefail
+          git checkout ${{ github.event.pull_request.base.sha }}
+          go test -run=^$ -tags=integration -bench=. -benchmem -count=10 -timeout=20m \
+            ${BENCH_PKGS} | tee /tmp/bench-base.txt
+
+      - name: Benchmark PR branch
+        run: |
+          set -o pipefail
+          git checkout ${{ github.event.pull_request.head.sha }}
+          go test -run=^$ -tags=integration -bench=. -benchmem -count=10 -timeout=20m \
+            ${BENCH_PKGS} | tee /tmp/bench-pr.txt
+
+      - name: Compare benchmarks
+        id: compare
+        run: |
+          if ! grep -q '^Benchmark' /tmp/bench-pr.txt; then
+            RESULT="No benchmark output was produced on the PR branch."
+            REGRESSION=false
+            STATUS="missing-pr-data"
+            SUMMARY="> No benchmark output was produced on the PR branch."
+          elif ! grep -q '^Benchmark' /tmp/bench-base.txt; then
+            RESULT="Base branch does not yet contain benchmark baselines for these packages; regression check skipped."
+            REGRESSION=false
+            STATUS="missing-base-data"
+            SUMMARY="> Baseline unavailable on the base branch, so regression gating was skipped for this PR."
+          else
+            RESULT="$(benchstat /tmp/bench-base.txt /tmp/bench-pr.txt)"
+            STATUS="compared"
+            if printf '%s\n' "$RESULT" | awk '
+              /^name[[:space:]]/ { next }
+              /^[[:space:]]*$/ { next }
+              /p=/ {
+                if ($0 ~ /~/) {
+                  next
+                }
+                if (match($0, /\+[0-9]+(\.[0-9]+)?%/)) {
+                  delta = substr($0, RSTART + 1, RLENGTH - 2) + 0
+                  if (delta >= 10) {
+                    found = 1
+                  }
+                }
+              }
+              END { exit(found ? 0 : 1) }
+            '; then
+              REGRESSION=true
+              SUMMARY="> Benchmark regression detected: one or more statistically significant deltas were at or above 10%."
+            else
+              REGRESSION=false
+              SUMMARY="> Benchmarks are within the current regression threshold."
+            fi
+          fi
+
+          {
+            echo "result<<EOF"
+            echo "$RESULT"
+            echo "EOF"
+            echo "regression=$REGRESSION"
+            echo "status=$STATUS"
+            echo "summary<<EOF"
+            echo "$SUMMARY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          printf '%s\n' "$RESULT"
+
+      - name: Comment on PR
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: benchmark
+          message: |
+            ## Benchmark Results
+
+            <details>
+            <summary>Click to expand</summary>
+
+            ```
+            ${{ steps.compare.outputs.result }}
+            ```
+
+            </details>
+
+            ${{ steps.compare.outputs.summary }}
+
+      - name: Fail on regression
+        if: steps.compare.outputs.regression == 'true'
+        run: |
+          echo "::error::Benchmark regression detected. See the benchmark PR comment for details."
+          exit 1

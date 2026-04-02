@@ -8,9 +8,11 @@ BUILD_DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS    := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(BUILD_DATE)
 
 GO := go
+BENCH_PKGS := ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks
 
 .PHONY: build build-server build-worker build-scheduler build-moca build-outbox \
         test test-integration test-api-integration lint clean \
+        bench bench-integration bench-compare bench-save-baseline bench-profile \
         spike-pg spike-redis spike-gowork spike-meili spike-cobra \
         help
 
@@ -27,6 +29,11 @@ help:
 	@echo "  test             Run all tests with race detector"
 	@echo "  test-integration Run integration tests (requires Docker)"
 	@echo "  test-api-integration Run API integration tests (requires Docker)"
+	@echo "  bench            Run Tier 1 benchmarks"
+	@echo "  bench-integration Run Docker-backed Tier 1 integration benchmarks"
+	@echo "  bench-compare    Compare current benchmark run against bench-baseline.txt"
+	@echo "  bench-save-baseline Save the latest benchmark run as bench-baseline.txt"
+	@echo "  bench-profile    Capture CPU and memory profiles for a benchmark"
 	@echo "  lint             Run golangci-lint"
 	@echo "  clean            Remove build artifacts"
 	@echo ""
@@ -76,6 +83,39 @@ test-api-integration:
 	docker compose up -d --wait && \
 	$(GO) test -race -count=1 -tags=integration ./pkg/api/... ; \
 	docker compose down
+
+## bench: Run Tier 1 benchmarks without Docker
+bench:
+	bash -o pipefail -ec '$(GO) test -run=^$$ -bench=. -benchmem -count=5 -timeout=10m $(BENCH_PKGS) | tee bench-latest.txt'
+
+## bench-integration: Run Docker-backed Tier 1 integration benchmarks
+bench-integration:
+	bash -o pipefail -ec 'trap "docker compose down" EXIT; \
+		docker compose up -d --wait; \
+		$(GO) test -run=^$$ -tags=integration -bench=. -benchmem -count=10 -timeout=20m $(BENCH_PKGS) | tee bench-latest.txt'
+
+## bench-compare: Compare current results against a saved baseline
+bench-compare: bench
+	@if [ ! -f bench-baseline.txt ]; then \
+		echo "No baseline found. Run 'make bench-save-baseline' first."; \
+		exit 1; \
+	fi
+	benchstat bench-baseline.txt bench-latest.txt
+
+## bench-save-baseline: Save the latest benchmark run as the comparison baseline
+bench-save-baseline: bench
+	cp bench-latest.txt bench-baseline.txt
+	@echo "Baseline saved to bench-baseline.txt"
+
+## bench-profile: Capture CPU and memory profiles for a benchmark
+bench-profile:
+	@printf "Benchmark pattern (e.g. BenchmarkDocManagerInsert): "; \
+	read PATTERN; \
+	printf "Package (e.g. ./pkg/document): "; \
+	read PKG; \
+	$(GO) test -run=^$$ -bench=$$PATTERN -cpuprofile=cpu.prof -memprofile=mem.prof -benchmem $$PKG; \
+	echo "Profiles saved: cpu.prof, mem.prof"; \
+	echo "View with: go tool pprof -http=:8080 cpu.prof"
 
 ## lint: Run golangci-lint (requires golangci-lint to be installed)
 lint:
