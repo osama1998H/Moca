@@ -3,7 +3,7 @@ package meta_test
 import (
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/meta"
 )
 
 // storageFieldTypes lists all 29 FieldType values that map to database columns.

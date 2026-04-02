@@ -3,7 +3,7 @@ package config_test
 import (
 	"testing"
 
-	"github.com/moca-framework/moca/internal/config"
+	"github.com/osama1998H/moca/internal/config"
 )
 
 // TestResolveInheritance_InheritsFromProduction confirms that nil staging

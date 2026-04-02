@@ -8,7 +8,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cobra"
 
-	"github.com/moca-framework/moca/internal/output"
+	"github.com/osama1998H/moca/internal/output"
 )
 
 // NewCacheCommand returns the "moca cache" command group with all subcommands.

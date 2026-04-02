@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	clicontext "github.com/moca-framework/moca/internal/context"
-	"github.com/moca-framework/moca/internal/output"
-	"github.com/moca-framework/moca/pkg/cli"
+	clicontext "github.com/osama1998H/moca/internal/context"
+	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/pkg/cli"
 	"github.com/spf13/cobra"
 )
 

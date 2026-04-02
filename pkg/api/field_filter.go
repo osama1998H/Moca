@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 
-	"github.com/moca-framework/moca/pkg/auth"
-	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/auth"
+	"github.com/osama1998H/moca/pkg/meta"
 )
 
 // systemFields are always included in responses and never rejected on writes,

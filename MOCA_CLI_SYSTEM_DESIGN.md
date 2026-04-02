@@ -3371,7 +3371,7 @@ Apps can register custom CLI commands, extending the `moca` command tree.
 package crm
 
 import (
-    "github.com/moca-framework/moca/pkg/cli"
+    "github.com/osama1998H/moca/pkg/cli"
     "github.com/spf13/cobra"
 )
 

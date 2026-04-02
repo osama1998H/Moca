@@ -6,8 +6,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/auth"
-	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/auth"
+	"github.com/osama1998H/moca/pkg/meta"
 )
 
 // ── ResolvePermissions ───────────────────────────────────────────────────────
@@ -132,8 +132,8 @@ func TestResolvePermissions_MatchConditions(t *testing.T) {
 
 func TestResolvePermissions_MatchConditionIgnoredWhenPartial(t *testing.T) {
 	rules := []meta.PermRule{
-		{Role: "A", DocTypePerm: int(auth.PermRead), MatchField: "company"},     // no MatchValue
-		{Role: "B", DocTypePerm: int(auth.PermRead), MatchValue: "territory"},    // no MatchField
+		{Role: "A", DocTypePerm: int(auth.PermRead), MatchField: "company"},   // no MatchValue
+		{Role: "B", DocTypePerm: int(auth.PermRead), MatchValue: "territory"}, // no MatchField
 	}
 	ep := auth.ResolvePermissions(rules, []string{"A", "B"})
 	if len(ep.MatchConditions) != 0 {

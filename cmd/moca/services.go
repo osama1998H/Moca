@@ -10,17 +10,17 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/moca-framework/moca/apps/core"
-	"github.com/moca-framework/moca/internal/config"
-	clicontext "github.com/moca-framework/moca/internal/context"
-	"github.com/moca-framework/moca/internal/drivers"
-	"github.com/moca-framework/moca/internal/output"
-	"github.com/moca-framework/moca/pkg/apps"
-	"github.com/moca-framework/moca/pkg/document"
-	"github.com/moca-framework/moca/pkg/hooks"
-	"github.com/moca-framework/moca/pkg/meta"
-	"github.com/moca-framework/moca/pkg/orm"
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/apps/core"
+	"github.com/osama1998H/moca/internal/config"
+	clicontext "github.com/osama1998H/moca/internal/context"
+	"github.com/osama1998H/moca/internal/drivers"
+	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/pkg/apps"
+	"github.com/osama1998H/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/hooks"
+	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/tenancy"
 	"github.com/spf13/cobra"
 )
 

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/meta"
 )
 
 // validDocJSON is a minimal valid MetaType JSON for testing.

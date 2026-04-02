@@ -3,7 +3,7 @@ package apps
 import (
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/meta"
 )
 
 func TestToSnakeCase(t *testing.T) {

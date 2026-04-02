@@ -6,7 +6,7 @@ package stuba
 import (
 	"fmt"
 
-	"github.com/moca-framework/moca/spikes/go-workspace/framework"
+	"github.com/osama1998H/moca/spikes/go-workspace/framework"
 	"github.com/stretchr/testify/assert"
 )
 

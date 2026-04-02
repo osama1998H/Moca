@@ -1,9 +1,9 @@
-module github.com/moca-framework/moca/spikes/go-workspace/apps/stub-a
+module github.com/osama1998H/moca/spikes/go-workspace/apps/stub-a
 
 go 1.26.1
 
 require (
-	github.com/moca-framework/moca/spikes/go-workspace/framework v0.0.0
+	github.com/osama1998H/moca/spikes/go-workspace/framework v0.0.0
 	github.com/stretchr/testify v1.8.0
 )
 
@@ -16,4 +16,4 @@ require (
 // replace directive enables standalone go mod tidy without workspace.
 // When the workspace (go.work) is active, the 'use ./framework' directive
 // takes precedence and this replace is effectively overridden.
-replace github.com/moca-framework/moca/spikes/go-workspace/framework => ../../framework
+replace github.com/osama1998H/moca/spikes/go-workspace/framework => ../../framework

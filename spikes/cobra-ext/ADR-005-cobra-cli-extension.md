@@ -37,7 +37,7 @@ Use explicit constructors as a secondary pattern for framework-internal commands
 package myapp
 
 import (
-    "github.com/moca-framework/moca/pkg/cli"
+    "github.com/osama1998H/moca/pkg/cli"
     "github.com/spf13/cobra"
 )
 
@@ -55,10 +55,10 @@ The main binary blank-imports all installed apps:
 ```go
 // cmd/moca-server/main.go
 import (
-    "github.com/moca-framework/moca/pkg/cli"
+    "github.com/osama1998H/moca/pkg/cli"
 
-    _ "github.com/moca-framework/moca/apps/my-app"
-    _ "github.com/moca-framework/moca/apps/crm"
+    _ "github.com/osama1998H/moca/apps/my-app"
+    _ "github.com/osama1998H/moca/apps/crm"
     // ... one blank import per installed app
 )
 
@@ -187,7 +187,7 @@ The production `pkg/cli` package will mirror this spike's `framework/cmd` struct
 
 ### For App `hooks.go` Convention
 
-Every MOCA app that extends the CLI will have a `hooks.go` file (package-level, no exported symbols) containing `init()` that calls `MustRegisterCommand`. The app's `go.mod` will depend on `github.com/moca-framework/moca/pkg/cli`.
+Every MOCA app that extends the CLI will have a `hooks.go` file (package-level, no exported symbols) containing `init()` that calls `MustRegisterCommand`. The app's `go.mod` will depend on `github.com/osama1998H/moca/pkg/cli`.
 
 ### For `moca build server` (future milestone)
 

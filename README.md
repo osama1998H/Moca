@@ -41,12 +41,12 @@ Or install a specific version:
 MOCA_VERSION=0.1.0-mvp curl -fsSL https://raw.githubusercontent.com/moca-framework/moca/main/install.sh | sh
 ```
 
-Or download directly from [GitHub Releases](https://github.com/moca-framework/moca/releases).
+Or download directly from [GitHub Releases](https://github.com/osama1998H/moca/releases).
 
 ### From Source
 
 ```bash
-git clone https://github.com/moca-framework/moca.git
+git clone https://github.com/osama1998H/moca.git
 cd moca
 make build    # Builds all 5 binaries to bin/
 ```

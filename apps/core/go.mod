@@ -1,9 +1,9 @@
-module github.com/moca-framework/moca/apps/core
+module github.com/osama1998H/moca/apps/core
 
 go 1.26.1
 
 require (
-	github.com/moca-framework/moca v0.0.0
+	github.com/osama1998H/moca v0.0.0
 	golang.org/x/crypto v0.49.0
 )
 
@@ -28,4 +28,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/moca-framework/moca => ../..
+replace github.com/osama1998H/moca => ../..

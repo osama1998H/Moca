@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/orm"
 )
 
 // ── Query integration test schema ───────────────────────────────────────────

@@ -11,10 +11,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/moca-framework/moca/internal/config"
-	"github.com/moca-framework/moca/pkg/meta"
-	"github.com/moca-framework/moca/pkg/observe"
-	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/osama1998H/moca/internal/config"
+	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/observe"
+	"github.com/osama1998H/moca/pkg/orm"
 )
 
 // ── shared test helpers ───────────────────────────────────────────────────────
@@ -465,8 +465,8 @@ func TestRegister_All29StorableFieldTypes(t *testing.T) {
 
 	// Verify each column-producing field exists with the correct type.
 	type colExpect struct {
-		name    string
-		pgType  string // pg data_type or udt_name
+		name   string
+		pgType string // pg data_type or udt_name
 	}
 	expects := []colExpect{
 		// TEXT group

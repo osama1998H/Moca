@@ -107,4 +107,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PID file management with stale PID detection
 - Static file serving at `/desk/`
 
-[0.1.0-mvp]: https://github.com/moca-framework/moca/releases/tag/v0.1.0-mvp
+[0.1.0-mvp]: https://github.com/osama1998H/moca/releases/tag/v0.1.0-mvp

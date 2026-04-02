@@ -14,9 +14,9 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/moca-framework/moca/internal/config"
-	"github.com/moca-framework/moca/internal/drivers"
-	"github.com/moca-framework/moca/pkg/observe"
+	"github.com/osama1998H/moca/internal/config"
+	"github.com/osama1998H/moca/internal/drivers"
+	"github.com/osama1998H/moca/pkg/observe"
 )
 
 // integrationRedisConfig returns a RedisConfig pointing at the test Redis

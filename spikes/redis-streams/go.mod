@@ -1,4 +1,4 @@
-module github.com/moca-framework/moca/spikes/redis-streams
+module github.com/osama1998H/moca/spikes/redis-streams
 
 go 1.26.1
 

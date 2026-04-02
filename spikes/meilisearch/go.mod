@@ -1,4 +1,4 @@
-module github.com/moca-framework/moca/spikes/meilisearch
+module github.com/osama1998H/moca/spikes/meilisearch
 
 go 1.26.1
 

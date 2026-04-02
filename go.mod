@@ -1,4 +1,4 @@
-module github.com/moca-framework/moca
+module github.com/osama1998H/moca
 
 go 1.26.1
 

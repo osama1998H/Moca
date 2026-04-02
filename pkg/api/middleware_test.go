@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/auth"
-	"github.com/moca-framework/moca/pkg/observe"
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/pkg/auth"
+	"github.com/osama1998H/moca/pkg/observe"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 // --- requestIDMiddleware ---
@@ -271,9 +271,9 @@ func TestSubdomainFromHost(t *testing.T) {
 
 func TestSiteFromPath(t *testing.T) {
 	tests := []struct {
-		path        string
-		wantSite    string
-		wantStrip   string
+		path      string
+		wantSite  string
+		wantStrip string
 	}{
 		{"/sites/acme/api/v1/resource/SalesOrder", "acme", "/api/v1/resource/SalesOrder"},
 		{"/sites/globex/api/v1/resource/X", "globex", "/api/v1/resource/X"},

@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/moca-framework/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/document"
 )
 
 // UserController provides custom lifecycle logic for User documents.

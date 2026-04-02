@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 func TestRateLimitKey(t *testing.T) {

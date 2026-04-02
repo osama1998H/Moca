@@ -6,7 +6,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/moca-framework/moca/internal/config"
+	"github.com/osama1998H/moca/internal/config"
 )
 
 // Build-time variables injected via -ldflags.

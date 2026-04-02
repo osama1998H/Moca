@@ -3,7 +3,7 @@ package meta_test
 import (
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/meta"
 )
 
 // baseMetaType returns a simple MetaType suitable as a base for diff tests.

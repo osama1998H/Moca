@@ -3,9 +3,9 @@ package main
 import (
 	"testing"
 
-	clicontext "github.com/moca-framework/moca/internal/context"
+	clicontext "github.com/osama1998H/moca/internal/context"
 
-	"github.com/moca-framework/moca/internal/config"
+	"github.com/osama1998H/moca/internal/config"
 	"github.com/spf13/cobra"
 )
 

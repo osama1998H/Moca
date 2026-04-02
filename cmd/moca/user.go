@@ -9,10 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/moca-framework/moca/internal/output"
-	"github.com/moca-framework/moca/pkg/auth"
-	"github.com/moca-framework/moca/pkg/document"
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/pkg/auth"
+	"github.com/osama1998H/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 // NewUserCommand returns the "moca user" command group with all subcommands.
@@ -875,10 +875,10 @@ func runUserImpersonate(cmd *cobra.Command, args []string) error {
 
 	if w.Mode() == output.ModeJSON {
 		return w.PrintJSON(map[string]any{
-			"email":     email,
-			"token":     token,
-			"url":       loginURL,
-			"ttl":       ttlStr,
+			"email":      email,
+			"token":      token,
+			"url":        loginURL,
+			"ttl":        ttlStr,
 			"expires_at": time.Now().Add(ttl).Format(time.RFC3339),
 		})
 	}

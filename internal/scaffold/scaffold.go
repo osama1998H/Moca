@@ -351,7 +351,7 @@ func runGoModTidy(appDir string) error {
 // readGoModulePath reads the module path from the go.mod file in the given directory.
 // Returns a fallback if the file cannot be read or parsed.
 func readGoModulePath(dir string) string {
-	const fallback = "github.com/moca-framework/moca"
+	const fallback = "github.com/osama1998H/moca"
 
 	f, err := os.Open(filepath.Join(dir, "go.mod"))
 	if err != nil {

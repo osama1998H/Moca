@@ -11,7 +11,7 @@ type templateData struct {
 	Title        string // "My App"
 	Publisher    string
 	License      string
-	GoModulePath string // full module path: "github.com/moca-framework/moca/apps/my_app"
+	GoModulePath string // full module path: "github.com/osama1998H/moca/apps/my_app"
 	DocType      string // optional: "Task"
 	DocTypeSnake string // optional: "task"
 }
@@ -33,8 +33,8 @@ modules:
 const hooksTmpl = `package {{.PackageName}}
 
 import (
-	"github.com/moca-framework/moca/pkg/document"
-	"github.com/moca-framework/moca/pkg/hooks"
+	"github.com/osama1998H/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/hooks"
 )
 
 // Initialize registers controllers and hooks for the {{.Title}} app.
@@ -52,10 +52,10 @@ const goModTmpl = `module {{.GoModulePath}}
 go 1.26.1
 
 require (
-	github.com/moca-framework/moca v0.0.0
+	github.com/osama1998H/moca v0.0.0
 )
 
-replace github.com/moca-framework/moca => ../..
+replace github.com/osama1998H/moca => ../..
 `
 
 const readmeTmpl = `# {{.Title}}

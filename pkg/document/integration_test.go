@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/document"
-	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/orm"
 )
 
 // ── helpers ──────────────────────────────────────────────────────────────────

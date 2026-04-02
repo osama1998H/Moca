@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/cli"
+	"github.com/osama1998H/moca/pkg/cli"
 )
 
 // TestAllCommandGroupsRegistered verifies that "moca help" output contains

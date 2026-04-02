@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 // SiteExtractor is a function that retrieves the SiteContext from a context.

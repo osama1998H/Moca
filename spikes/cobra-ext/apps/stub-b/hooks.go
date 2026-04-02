@@ -5,7 +5,7 @@ package stubb
 import (
 	"fmt"
 
-	"github.com/moca-framework/moca/spikes/cobra-ext/framework/cmd"
+	"github.com/osama1998H/moca/spikes/cobra-ext/framework/cmd"
 	"github.com/spf13/cobra"
 )
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/moca-framework/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/orm"
 )
 
 // setupReportFixtures creates a simple test table and seeds data for report tests.

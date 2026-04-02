@@ -12,8 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/moca-framework/moca/pkg/orm"
-	"github.com/moca-framework/moca/pkg/tenancy"
+	"github.com/osama1998H/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 // siteMetaCacheTTL is the TTL for cached site metadata in Redis.

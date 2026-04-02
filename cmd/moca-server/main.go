@@ -9,9 +9,9 @@ import (
 	"os/signal"
 	"runtime"
 
-	"github.com/moca-framework/moca/internal/config"
-	"github.com/moca-framework/moca/internal/serve"
-	"github.com/moca-framework/moca/pkg/observe"
+	"github.com/osama1998H/moca/internal/config"
+	"github.com/osama1998H/moca/internal/serve"
+	"github.com/osama1998H/moca/pkg/observe"
 )
 
 // Build-time variables injected via -ldflags.
