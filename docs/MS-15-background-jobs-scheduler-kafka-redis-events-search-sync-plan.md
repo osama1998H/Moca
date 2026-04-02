@@ -115,7 +115,7 @@ No external web research was needed. All implementation patterns are fully valid
 
 - **Task ID:** MS-15-T2
 - **Title:** Cron Scheduler with Leader Election
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Implement the cron scheduler in `pkg/queue/` and the standalone `moca-scheduler` binary. The scheduler runs on a single leader (elected via Redis distributed lock) and enqueues jobs to the queue system from T1 on cron schedules.
 
