@@ -16,6 +16,8 @@ import (
 	"github.com/moca-framework/moca/internal/drivers"
 	"github.com/moca-framework/moca/internal/output"
 	"github.com/moca-framework/moca/pkg/apps"
+	"github.com/moca-framework/moca/pkg/document"
+	"github.com/moca-framework/moca/pkg/hooks"
 	"github.com/moca-framework/moca/pkg/meta"
 	"github.com/moca-framework/moca/pkg/orm"
 	"github.com/moca-framework/moca/pkg/tenancy"
@@ -26,14 +28,16 @@ import (
 // Commands call newServices to build the full dependency graph from config,
 // then defer Services.Close().
 type Services struct {
-	DB       *orm.DBManager
-	Redis    *drivers.RedisClients
-	Migrator *meta.Migrator
-	Registry *meta.Registry
-	Runner   *orm.MigrationRunner
-	Sites    *tenancy.SiteManager
-	Apps     *apps.AppInstaller
-	Logger   *slog.Logger
+	DB          *orm.DBManager
+	Redis       *drivers.RedisClients
+	Migrator    *meta.Migrator
+	Registry    *meta.Registry
+	Runner      *orm.MigrationRunner
+	Sites       *tenancy.SiteManager
+	Apps        *apps.AppInstaller
+	DocManager  *document.DocManager
+	Controllers *document.ControllerRegistry
+	Logger      *slog.Logger
 }
 
 // Close releases all connections. Redis is closed before DB.
@@ -74,6 +78,13 @@ func newServices(ctx context.Context, cfg *config.ProjectConfig, verbose bool) (
 	migrator := meta.NewMigrator(db, logger)
 	registry := meta.NewRegistry(db, redisCache, logger)
 	runner := orm.NewMigrationRunner(db, logger)
+
+	naming := document.NewNamingEngine()
+	validator := document.NewValidator()
+	controllers := document.NewControllerRegistry()
+	core.Initialize(controllers, hooks.NewHookRegistry())
+	docManager := document.NewDocManager(registry, db, naming, validator, controllers, logger)
+
 	redisPubSub := redis.PubSub
 	if redisCache == nil {
 		redisPubSub = nil
@@ -82,14 +93,16 @@ func newServices(ctx context.Context, cfg *config.ProjectConfig, verbose bool) (
 	installer := apps.NewAppInstaller(db, migrator, registry, runner, redisCache, logger)
 
 	return &Services{
-		DB:       db,
-		Redis:    redis,
-		Migrator: migrator,
-		Registry: registry,
-		Runner:   runner,
-		Sites:    sites,
-		Apps:     installer,
-		Logger:   logger,
+		DB:          db,
+		Redis:       redis,
+		Migrator:    migrator,
+		Registry:    registry,
+		Runner:      runner,
+		Sites:       sites,
+		Apps:        installer,
+		DocManager:  docManager,
+		Controllers: controllers,
+		Logger:      logger,
 	}, nil
 }
 

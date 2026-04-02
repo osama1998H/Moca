@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/moca-framework/moca/internal/config"
+	"github.com/moca-framework/moca/internal/lockfile"
 	"github.com/moca-framework/moca/internal/output"
 	"github.com/moca-framework/moca/pkg/orm"
 	"github.com/spf13/cobra"
@@ -331,21 +332,18 @@ func registerCoreApp(ctx context.Context, cfg *config.ProjectConfig) error {
 	return err
 }
 
-// writeMocaLock writes the initial lockfile.
+// writeMocaLock writes the initial lockfile in YAML format.
 func writeMocaLock(targetDir string) error {
-	lock := map[string]any{
-		"apps": map[string]any{
-			"core": map[string]any{
-				"version": "0.1.0",
-				"source":  "builtin",
+	lf := &lockfile.Lockfile{
+		MocaVersion: "0.1.0",
+		Apps: map[string]lockfile.AppLock{
+			"core": {
+				Version: "0.1.0",
+				Source:  "builtin",
 			},
 		},
 	}
-	data, err := json.MarshalIndent(lock, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(targetDir, "moca.lock"), data, 0o644)
+	return lockfile.Write(filepath.Join(targetDir, "moca.lock"), lf)
 }
 
 // initGit runs git init in the target directory.
