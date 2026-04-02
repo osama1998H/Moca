@@ -23,6 +23,7 @@ type Gateway struct {
 	defaultRate   *meta.RateLimitConfig
 	auth          Authenticator
 	perm          PermissionChecker
+	fieldPerm     Transformer
 	siteResolver  SiteResolver
 	cors          CORSConfig
 }
@@ -90,6 +91,12 @@ func (g *Gateway) PermChecker() PermissionChecker {
 	return g.perm
 }
 
+// FieldLevelTransformer returns the gateway's field-level permission transformer.
+// May return nil if no field-level filtering is configured.
+func (g *Gateway) FieldLevelTransformer() Transformer {
+	return g.fieldPerm
+}
+
 // Logger returns the gateway's logger.
 func (g *Gateway) Logger() *slog.Logger {
 	return g.logger
@@ -120,6 +127,11 @@ func WithAuthenticator(a Authenticator) GatewayOption {
 // WithPermissionChecker sets the permission checker.
 func WithPermissionChecker(pc PermissionChecker) GatewayOption {
 	return func(g *Gateway) { g.perm = pc }
+}
+
+// WithFieldLevelTransformer sets the field-level permission transformer.
+func WithFieldLevelTransformer(t Transformer) GatewayOption {
+	return func(g *Gateway) { g.fieldPerm = t }
 }
 
 // WithSiteResolver sets the site resolver for tenant middleware.

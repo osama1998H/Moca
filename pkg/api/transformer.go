@@ -285,7 +285,7 @@ func (f *FieldFilter) applyDefaultFields(body map[string]any) map[string]any {
 // buildTransformerChain constructs the appropriate transformer chain for a
 // request by resolving the API version from context against the MetaType's
 // configured versions.
-func buildTransformerChain(ctx context.Context, mt *meta.MetaType) TransformerChain {
+func buildTransformerChain(ctx context.Context, mt *meta.MetaType, extra ...Transformer) TransformerChain {
 	versionStr := APIVersionFromContext(ctx)
 
 	var version *meta.APIVersion
@@ -298,7 +298,24 @@ func buildTransformerChain(ctx context.Context, mt *meta.MetaType) TransformerCh
 		}
 	}
 
-	return NewTransformerChain(mt, version)
+	chain := NewTransformerChain(mt, version)
+
+	// Insert non-nil extras after ReadOnlyEnforcer (index 0), before FieldFilter.
+	var nonNil []Transformer
+	for _, e := range extra {
+		if e != nil {
+			nonNil = append(nonNil, e)
+		}
+	}
+	if len(nonNil) == 0 {
+		return chain
+	}
+
+	result := make(TransformerChain, 0, len(chain)+len(nonNil))
+	result = append(result, chain[0]) // ReadOnlyEnforcer
+	result = append(result, nonNil...)
+	result = append(result, chain[1:]...) // FieldFilter, AliasRemapper
+	return result
 }
 
 // filterMetaFields filters a buildMetaResponse result to only include fields

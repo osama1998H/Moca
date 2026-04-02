@@ -12,6 +12,7 @@ import (
 	"github.com/moca-framework/moca/internal/config"
 	"github.com/moca-framework/moca/internal/drivers"
 	"github.com/moca-framework/moca/pkg/api"
+	"github.com/moca-framework/moca/pkg/auth"
 	"github.com/moca-framework/moca/pkg/document"
 	"github.com/moca-framework/moca/pkg/hooks"
 	"github.com/moca-framework/moca/pkg/meta"
@@ -78,6 +79,17 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	hookRegistry := hooks.NewHookRegistry()
 	docManager.SetHookDispatcher(hooks.NewDocEventDispatcher(hookRegistry))
 
+	// ── Authentication ──────────────────────────────────────────────────
+	jwtCfg := auth.DefaultJWTConfig()
+	sessionMgr := auth.NewSessionManager(redisClients.Session, 24*time.Hour)
+	userLoader := auth.NewUserLoader(logger)
+	authenticator := auth.NewMocaAuthenticator(jwtCfg, sessionMgr, userLoader, api.SiteFromContext, logger)
+
+	// ── Permissions ─────────────────────────────────────────────────────
+	permResolver := auth.NewCachedPermissionResolver(registry, redisClients.Cache, nil, logger)
+	permChecker := auth.NewRoleBasedPermChecker(permResolver, api.SiteFromContext, logger)
+	fieldLevelTransformer := api.NewFieldLevelTransformer(permResolver)
+
 	// ── API gateway ─────────────────────────────────────────────────────
 	rateLimiter := api.NewRateLimiter(redisClients.Cache, logger)
 	siteResolver := api.NewDBSiteResolver(dbManager, redisClients.Cache, logger)
@@ -89,10 +101,16 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		api.WithLogger(logger),
 		api.WithSiteResolver(siteResolver),
 		api.WithRateLimiter(rateLimiter, nil),
+		api.WithAuthenticator(authenticator),
+		api.WithPermissionChecker(permChecker),
+		api.WithFieldLevelTransformer(fieldLevelTransformer),
 	)
 
 	handler := api.NewResourceHandler(gw)
 	handler.RegisterRoutes(gw.Mux(), "v1")
+
+	authHandler := api.NewAuthHandler(jwtCfg, sessionMgr, userLoader, logger)
+	authHandler.RegisterRoutes(gw.Mux(), "v1")
 
 	vr := api.NewVersionRouter(handler, logger)
 	gw.SetVersionRouter(vr)

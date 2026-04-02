@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/moca-framework/moca/pkg/auth"
 	"github.com/moca-framework/moca/pkg/document"
 	"github.com/moca-framework/moca/pkg/meta"
 )
@@ -113,6 +114,12 @@ func mapErrorResponse(w http.ResponseWriter, err error) bool {
 	var permDenied *PermissionDeniedError
 	if errors.As(err, &permDenied) {
 		writeError(w, http.StatusForbidden, "PERMISSION_DENIED", permDenied.Error())
+		return true
+	}
+
+	var authPermDenied *auth.PermDeniedError
+	if errors.As(err, &authPermDenied) {
+		writeError(w, http.StatusForbidden, "PERMISSION_DENIED", authPermDenied.Error())
 		return true
 	}
 

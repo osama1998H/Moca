@@ -35,19 +35,21 @@ type MetaResolver interface {
 
 // ResourceHandler bridges HTTP requests to DocManager CRUD operations.
 type ResourceHandler struct {
-	crud   CRUDService
-	meta   MetaResolver
-	perm   PermissionChecker
-	logger *slog.Logger
+	crud      CRUDService
+	meta      MetaResolver
+	perm      PermissionChecker
+	fieldPerm Transformer
+	logger    *slog.Logger
 }
 
 // NewResourceHandler creates a ResourceHandler wired to the given Gateway.
 func NewResourceHandler(gw *Gateway) *ResourceHandler {
 	return &ResourceHandler{
-		crud:   gw.DocManager(),
-		meta:   gw.Registry(),
-		perm:   gw.PermChecker(),
-		logger: gw.Logger(),
+		crud:      gw.DocManager(),
+		meta:      gw.Registry(),
+		perm:      gw.PermChecker(),
+		fieldPerm: gw.FieldLevelTransformer(),
+		logger:    gw.Logger(),
 	}
 }
 
@@ -84,7 +86,7 @@ func (h *ResourceHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chain := buildTransformerChain(r.Context(), mt)
+	chain := buildTransformerChain(r.Context(), mt, h.fieldPerm)
 	ctx := WithOperationType(r.Context(), OpList)
 	data := make([]map[string]any, len(docs))
 	for i, d := range docs {
@@ -124,7 +126,7 @@ func (h *ResourceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chain := buildTransformerChain(r.Context(), mt)
+	chain := buildTransformerChain(r.Context(), mt, h.fieldPerm)
 	ctx := WithOperationType(r.Context(), OpGet)
 	data := doc.AsMap()
 	data, err = chain.TransformResponse(ctx, mt, data)
@@ -150,11 +152,13 @@ func (h *ResourceHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return // error already written
 	}
 
-	chain := buildTransformerChain(r.Context(), mt)
+	chain := buildTransformerChain(r.Context(), mt, h.fieldPerm)
 	ctx := WithOperationType(r.Context(), OpCreate)
 	values, err = chain.TransformRequest(ctx, mt, values)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "TRANSFORM_ERROR", err.Error())
+		if !mapErrorResponse(w, err) {
+			writeError(w, http.StatusBadRequest, "TRANSFORM_ERROR", err.Error())
+		}
 		return
 	}
 
@@ -191,11 +195,13 @@ func (h *ResourceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chain := buildTransformerChain(r.Context(), mt)
+	chain := buildTransformerChain(r.Context(), mt, h.fieldPerm)
 	ctx := WithOperationType(r.Context(), OpUpdate)
 	values, err = chain.TransformRequest(ctx, mt, values)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "TRANSFORM_ERROR", err.Error())
+		if !mapErrorResponse(w, err) {
+			writeError(w, http.StatusBadRequest, "TRANSFORM_ERROR", err.Error())
+		}
 		return
 	}
 
