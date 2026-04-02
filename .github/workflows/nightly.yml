@@ -187,7 +187,7 @@ jobs:
           ### Install
 
           \`\`\`bash
-          MOCA_VERSION=nightly curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | sh
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | MOCA_VERSION=nightly sh
           \`\`\`
           EOF
           )" \

@@ -38,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | s
 Or install a specific version:
 
 ```bash
-MOCA_VERSION=0.1.0-mvp curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | MOCA_VERSION=0.1.0-mvp sh
 ```
 
 Or download directly from [GitHub Releases](https://github.com/osama1998H/moca/releases).
@@ -48,7 +48,7 @@ Or download directly from [GitHub Releases](https://github.com/osama1998H/moca/r
 Nightly builds are published automatically from the `main` branch every day at midnight UTC. They include the latest features and fixes but may be unstable.
 
 ```bash
-MOCA_VERSION=nightly curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | MOCA_VERSION=nightly sh
 ```
 
 Or download directly from the [nightly release](https://github.com/osama1998H/moca/releases/tag/nightly).

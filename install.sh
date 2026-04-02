@@ -1,6 +1,8 @@
 #!/bin/sh
 # Moca Framework Installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | sh
+#   Nightly: curl -fsSL ... | MOCA_VERSION=nightly sh
+#   Pinned:  curl -fsSL ... | MOCA_VERSION=0.1.0-mvp sh
 #
 # Environment variables:
 #   MOCA_VERSION      - Version to install (default: latest release, use "nightly" for latest nightly)
