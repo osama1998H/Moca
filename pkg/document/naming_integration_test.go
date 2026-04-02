@@ -134,10 +134,12 @@ func TestMain(m *testing.M) {
 
 	// 2. Insert a site row pointing to the existing tenant schema.
 	if _, err := adminPool.Exec(ctx, `
-		INSERT INTO moca_system.sites (name, db_schema)
-		VALUES ($1, $2)
-		ON CONFLICT (name) DO UPDATE SET db_schema = EXCLUDED.db_schema
-	`, integSiteName, namingTestSchema); err != nil {
+		INSERT INTO moca_system.sites (name, db_schema, admin_email)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (name) DO UPDATE
+		SET db_schema = EXCLUDED.db_schema,
+		    admin_email = EXCLUDED.admin_email
+	`, integSiteName, namingTestSchema, "test@moca.dev"); err != nil {
 		fmt.Fprintf(os.Stderr, "FATAL: insert site row: %v\n", err)
 		os.Exit(1)
 	}

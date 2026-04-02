@@ -4,6 +4,7 @@ package document_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/osama1998H/moca/pkg/document"
@@ -92,15 +93,34 @@ func BenchmarkNamingEngineGenerateName_PatternParallel(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
+	var mu sync.Mutex
+	var workerErr error
+	lastName := ""
+
 	b.RunParallel(func(pb *testing.PB) {
 		last := ""
 		for pb.Next() {
 			name, err := engine.GenerateName(context.Background(), doc, namingTestPool)
 			if err != nil {
-				b.Fatalf("GenerateName pattern parallel: %v", err)
+				mu.Lock()
+				if workerErr == nil {
+					workerErr = err
+				}
+				mu.Unlock()
+				return
 			}
 			last = name
 		}
-		namingIntegrationBenchmarkSink = last
+		if last == "" {
+			return
+		}
+		mu.Lock()
+		lastName = last
+		mu.Unlock()
 	})
+
+	if workerErr != nil {
+		b.Fatalf("GenerateName pattern parallel: %v", workerErr)
+	}
+	namingIntegrationBenchmarkSink = lastName
 }
