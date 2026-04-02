@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/moca-framework/moca/pkg/auth"
@@ -111,10 +112,16 @@ func TestCORSMiddleware_Preflight(t *testing.T) {
 // --- tenantMiddleware ---
 
 type mockSiteResolver struct {
-	sites map[string]*tenancy.SiteContext
+	sites  map[string]*tenancy.SiteContext
+	errors map[string]error // optional per-site errors
 }
 
 func (m *mockSiteResolver) ResolveSite(_ context.Context, siteID string) (*tenancy.SiteContext, error) {
+	if m.errors != nil {
+		if err, ok := m.errors[siteID]; ok {
+			return nil, err
+		}
+	}
 	s, ok := m.sites[siteID]
 	if !ok {
 		return nil, errors.New("not found")
@@ -248,6 +255,9 @@ func TestSubdomainFromHost(t *testing.T) {
 		{"localhost", ""},
 		{"localhost:8000", ""},
 		{"a.b.c.example.com", "a"},
+		// *.localhost special case for local development.
+		{"acme.localhost", "acme"},
+		{"acme.localhost:8000", "acme"},
 	}
 	for _, tt := range tests {
 		got := subdomainFromHost(tt.host)
@@ -255,4 +265,124 @@ func TestSubdomainFromHost(t *testing.T) {
 			t.Errorf("subdomainFromHost(%q) = %q, want %q", tt.host, got, tt.want)
 		}
 	}
+}
+
+// --- siteFromPath ---
+
+func TestSiteFromPath(t *testing.T) {
+	tests := []struct {
+		path        string
+		wantSite    string
+		wantStrip   string
+	}{
+		{"/sites/acme/api/v1/resource/SalesOrder", "acme", "/api/v1/resource/SalesOrder"},
+		{"/sites/globex/api/v1/resource/X", "globex", "/api/v1/resource/X"},
+		{"/sites/acme", "acme", "/"},
+		{"/sites/", "", ""},
+		{"/api/v1/resource/X", "", ""},
+		{"/other/path", "", ""},
+		{"", "", ""},
+	}
+	for _, tt := range tests {
+		site, stripped := siteFromPath(tt.path)
+		if site != tt.wantSite || stripped != tt.wantStrip {
+			t.Errorf("siteFromPath(%q) = (%q, %q), want (%q, %q)",
+				tt.path, site, stripped, tt.wantSite, tt.wantStrip)
+		}
+	}
+}
+
+// --- tenantMiddleware: path-based ---
+
+func TestTenantMiddleware_PathBased(t *testing.T) {
+	resolver := &mockSiteResolver{
+		sites: map[string]*tenancy.SiteContext{
+			"acme": {Name: "acme"},
+		},
+	}
+	handler := tenantMiddleware(resolver)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s := SiteFromContext(r.Context())
+		if s == nil || s.Name != "acme" {
+			t.Errorf("site = %v, want acme", s)
+		}
+		// Verify path was rewritten.
+		if r.URL.Path != "/api/v1/resource/SalesOrder" {
+			t.Errorf("path = %q, want %q", r.URL.Path, "/api/v1/resource/SalesOrder")
+		}
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/sites/acme/api/v1/resource/SalesOrder", nil)
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+// --- tenantMiddleware: disabled site ---
+
+func TestTenantMiddleware_DisabledSite503(t *testing.T) {
+	resolver := &mockSiteResolver{
+		sites: map[string]*tenancy.SiteContext{},
+		errors: map[string]error{
+			"maintenance": tenancy.ErrSiteDisabled,
+		},
+	}
+	handler := tenantMiddleware(resolver)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called for disabled site")
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Moca-Site", "maintenance")
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusServiceUnavailable)
+	}
+	if body := rr.Body.String(); !strings.Contains(body, "SITE_DISABLED") {
+		t.Errorf("body = %q, want SITE_DISABLED error code", body)
+	}
+}
+
+// --- tenantMiddleware: resolution priority ---
+
+func TestTenantMiddleware_ResolutionPriority(t *testing.T) {
+	resolver := &mockSiteResolver{
+		sites: map[string]*tenancy.SiteContext{
+			"header-site":    {Name: "header-site"},
+			"path-site":      {Name: "path-site"},
+			"subdomain-site": {Name: "subdomain-site"},
+		},
+	}
+
+	// Header beats path and subdomain.
+	t.Run("header beats path and subdomain", func(t *testing.T) {
+		handler := tenantMiddleware(resolver)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			s := SiteFromContext(r.Context())
+			if s.Name != "header-site" {
+				t.Errorf("site = %q, want %q", s.Name, "header-site")
+			}
+		}))
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/sites/path-site/api/v1/resource/X", nil)
+		req.Host = "subdomain-site.example.com"
+		req.Header.Set("X-Moca-Site", "header-site")
+		handler.ServeHTTP(rr, req)
+	})
+
+	// Path beats subdomain.
+	t.Run("path beats subdomain", func(t *testing.T) {
+		handler := tenantMiddleware(resolver)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			s := SiteFromContext(r.Context())
+			if s.Name != "path-site" {
+				t.Errorf("site = %q, want %q", s.Name, "path-site")
+			}
+		}))
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/sites/path-site/api/v1/resource/X", nil)
+		req.Host = "subdomain-site.example.com"
+		handler.ServeHTTP(rr, req)
+	})
 }

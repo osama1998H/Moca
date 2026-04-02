@@ -80,7 +80,7 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 
 	// ── API gateway ─────────────────────────────────────────────────────
 	rateLimiter := api.NewRateLimiter(redisClients.Cache, logger)
-	siteResolver := api.NewDBSiteResolver(dbManager)
+	siteResolver := api.NewDBSiteResolver(dbManager, redisClients.Cache, logger)
 
 	gw := api.NewGateway(
 		api.WithDocManager(docManager),
@@ -150,6 +150,23 @@ func (s *Server) Run(ctx context.Context) error {
 		s.logger.Info("server started", slog.String("addr", s.httpServer.Addr))
 		if err := s.httpServer.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			listenErr <- err
+		}
+	}()
+
+	// Start background pool eviction to reclaim connections from idle tenants.
+	evictTicker := time.NewTicker(5 * time.Minute)
+	defer evictTicker.Stop()
+	go func() {
+		for {
+			select {
+			case <-evictTicker.C:
+				n := s.dbManager.EvictIdlePools(30 * time.Minute)
+				if n > 0 {
+					s.logger.Info("evicted idle tenant pools", slog.Int("count", n))
+				}
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 

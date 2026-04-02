@@ -50,7 +50,7 @@ No web research needed. Key findings from codebase exploration:
 
 - **Task ID:** MS-12-T1
 - **Title:** Expand SiteContext and Add ErrSiteDisabled Sentinel
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Expand the current 2-field `SiteContext` to carry all per-tenant metadata required by downstream code. Add helper methods for key/index prefixing and the `ErrSiteDisabled` sentinel error.
 
@@ -107,7 +107,7 @@ No web research needed. Key findings from codebase exploration:
 
 - **Task ID:** MS-12-T2
 - **Title:** Enhance SiteResolver and Tenant Middleware
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   This is the core task of MS-12. It has 5 sub-parts that together deliver full tenant resolution with three strategies, Redis-cached site lookup, and disabled-site handling.
 
@@ -223,7 +223,7 @@ No web research needed. Key findings from codebase exploration:
 
 - **Task ID:** MS-12-T3
 - **Title:** Background Pool Eviction Goroutine
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Start a periodic background goroutine in the server that calls the already-implemented `DBManager.EvictIdlePools()` to close idle tenant database pools, preventing connection exhaustion at scale.
 
@@ -274,7 +274,7 @@ No web research needed. Key findings from codebase exploration:
 
 - **Task ID:** MS-12-T4
 - **Title:** Multi-Site Integration Tests
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   End-to-end acceptance criteria validation with two fully isolated tenants. These tests verify every ROADMAP acceptance criterion and ensure multi-site data isolation works through the full HTTP stack.
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -108,13 +109,25 @@ func originAllowed(origin string, allowed []string) bool {
 	return false
 }
 
-// tenantMiddleware resolves the tenant from the X-Moca-Site header (primary)
-// or the first subdomain of the Host header (fallback). The resolved
-// SiteContext is stored in the request context.
+// tenantMiddleware resolves the tenant using three strategies in priority order:
+//  1. X-Moca-Site header (explicit, highest priority)
+//  2. Path prefix /sites/{site}/... (rewrite path for downstream handlers)
+//  3. Subdomain from Host header (lowest priority)
+//
+// The resolved SiteContext is stored in the request context.
 func tenantMiddleware(resolver SiteResolver) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			siteID := r.Header.Get("X-Moca-Site")
+
+			// Try path-based resolution and rewrite the URL path.
+			if siteID == "" {
+				if id, stripped := siteFromPath(r.URL.Path); id != "" {
+					siteID = id
+					r.URL.Path = stripped
+				}
+			}
+
 			if siteID == "" {
 				siteID = subdomainFromHost(r.Host)
 			}
@@ -130,6 +143,10 @@ func tenantMiddleware(resolver SiteResolver) Middleware {
 					slog.String("site_id", siteID),
 					slog.String("error", err.Error()),
 				)
+				if errors.Is(err, tenancy.ErrSiteDisabled) {
+					http.Error(w, `{"error":{"code":"SITE_DISABLED","message":"site is under maintenance"}}`, http.StatusServiceUnavailable)
+					return
+				}
 				http.Error(w, `{"error":{"code":"TENANT_NOT_FOUND","message":"site not found"}}`, http.StatusNotFound)
 				return
 			}
@@ -148,16 +165,42 @@ func tenantMiddleware(resolver SiteResolver) Middleware {
 
 // subdomainFromHost extracts the first subdomain from the Host header.
 // Returns empty string if the host has no subdomain (e.g. "localhost", "example.com").
+// Special case: "acme.localhost" is treated as subdomain "acme" for local development.
 func subdomainFromHost(host string) string {
 	// Strip port if present.
 	if idx := strings.LastIndex(host, ":"); idx != -1 {
 		host = host[:idx]
 	}
 	parts := strings.Split(host, ".")
+	// Special case: *.localhost for local development.
+	if len(parts) == 2 && parts[1] == "localhost" {
+		return parts[0]
+	}
 	if len(parts) < 3 {
 		return ""
 	}
 	return parts[0]
+}
+
+// siteFromPath extracts a site identifier from a /sites/{site}/... path prefix.
+// Returns the site ID and the remaining path with the prefix stripped.
+// If the path does not match, both return values are empty strings.
+func siteFromPath(path string) (siteID, strippedPath string) {
+	const prefix = "/sites/"
+	if !strings.HasPrefix(path, prefix) {
+		return "", ""
+	}
+	rest := path[len(prefix):]
+	if rest == "" {
+		return "", ""
+	}
+	// Split on the next slash to get the site name.
+	idx := strings.Index(rest, "/")
+	if idx == -1 {
+		// Path is /sites/{site} with no trailing content.
+		return rest, "/"
+	}
+	return rest[:idx], rest[idx:]
 }
 
 // authMiddleware authenticates the request and stores the user in context.
