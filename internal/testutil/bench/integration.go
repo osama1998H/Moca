@@ -50,11 +50,11 @@ type IntegrationEnv struct {
 	Redis     *redis.Client
 	Site      *tenancy.SiteContext
 	User      *auth.User
-	SiteName  string
-	Schema    string
 
 	registry   *meta.Registry
 	docManager *document.DocManager
+	SiteName   string
+	Schema     string
 }
 
 // GatewayBundle groups the benchmark gateway and its fully wrapped handler.
