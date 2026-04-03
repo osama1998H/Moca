@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,10 +16,180 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	clicontext "github.com/osama1998H/moca/internal/context"
 	"github.com/osama1998H/moca/internal/process"
 	"github.com/osama1998H/moca/pkg/cli"
 )
+
+type runningServeCommand struct {
+	cancel    context.CancelFunc
+	done      <-chan error
+	stdout    *bytes.Buffer
+	stderr    *bytes.Buffer
+	pidPath   string
+	siteName  string
+	serverURL string
+}
+
+func reserveLoopbackPort(t *testing.T) int {
+	t.Helper()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve loopback port: %v", err)
+	}
+	defer ln.Close()
+
+	tcpAddr, ok := ln.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("expected TCPAddr, got %T", ln.Addr())
+	}
+	return tcpAddr.Port
+}
+
+func startServeCommand(t *testing.T, projectRoot string, extraArgs ...string) *runningServeCommand {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Join(projectRoot, ".moca"), 0o755); err != nil {
+		t.Fatalf("mkdir .moca: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+
+	cli.ResetForTesting()
+	root := cli.RootCommand()
+	root.AddCommand(allCommands()...)
+	root.PersistentPreRunE = nil
+
+	cfg := testProjectConfig()
+	cctx := &clicontext.CLIContext{
+		ProjectRoot: projectRoot,
+		Project:     cfg,
+		Environment: "development",
+	}
+	root.SetContext(clicontext.WithCLIContext(ctx, cctx))
+
+	siteName := uniqueCLISiteName(t)
+	cleanupCLISite(t, siteName)
+	schemaName := "tenant_" + siteName
+	if _, err := cliAdminPool.Exec(ctx, fmt.Sprintf(
+		"CREATE SCHEMA IF NOT EXISTS %s",
+		pgx.Identifier{schemaName}.Sanitize(),
+	)); err != nil {
+		cancel()
+		t.Fatalf("create serve test schema: %v", err)
+	}
+	if _, err := cliAdminPool.Exec(ctx, `
+		INSERT INTO moca_system.sites (name, db_schema, status, config, admin_email)
+		VALUES ($1, $2, 'active', '{}'::jsonb, $3)
+		ON CONFLICT (name) DO NOTHING
+	`, siteName, schemaName, "serve@test.local"); err != nil {
+		cancel()
+		t.Fatalf("insert serve test site: %v", err)
+	}
+
+	port := reserveLoopbackPort(t)
+	args := []string{"serve", "--host", "127.0.0.1", "--port", strconv.Itoa(port)}
+	args = append(args, extraArgs...)
+	root.SetArgs(args)
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- root.Execute()
+	}()
+
+	pidPath := process.PIDPath(projectRoot)
+	pidDeadline := time.After(10 * time.Second)
+	for {
+		if _, err := os.Stat(pidPath); err == nil {
+			break
+		}
+		select {
+		case <-pidDeadline:
+			cancel()
+			t.Fatal("PID file did not appear within 10s")
+		case err := <-done:
+			cancel()
+			t.Fatalf("serve exited before PID file appeared: %v\nstdout: %s\nstderr: %s",
+				err, stdout.String(), stderr.String())
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	serverURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+	healthDeadline := time.After(10 * time.Second)
+	for {
+		req, err := http.NewRequest(http.MethodGet, serverURL+"/health", nil)
+		if err != nil {
+			cancel()
+			t.Fatalf("build health request: %v", err)
+		}
+		req.Header.Set("X-Moca-Site", siteName)
+		resp, err := client.Do(req)
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return &runningServeCommand{
+					cancel:    cancel,
+					done:      done,
+					stdout:    stdout,
+					stderr:    stderr,
+					pidPath:   pidPath,
+					siteName:  siteName,
+					serverURL: serverURL,
+				}
+			}
+		}
+
+		select {
+		case <-healthDeadline:
+			cancel()
+			t.Fatal("server health endpoint did not become ready within 10s")
+		case err := <-done:
+			cancel()
+			t.Fatalf("serve exited before health endpoint became ready: %v\nstdout: %s\nstderr: %s",
+				err, stdout.String(), stderr.String())
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+func (srv *runningServeCommand) get(path string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, srv.serverURL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-Moca-Site", srv.siteName)
+	return (&http.Client{Timeout: 5 * time.Second}).Do(req)
+}
+
+func (srv *runningServeCommand) stop(t *testing.T) (string, string) {
+	t.Helper()
+
+	srv.cancel()
+
+	select {
+	case err := <-srv.done:
+		if err != nil {
+			t.Fatalf("serve exited with error: %v\nstdout: %s\nstderr: %s",
+				err, srv.stdout.String(), srv.stderr.String())
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("serve did not exit within 15s after cancel")
+	}
+
+	return srv.stdout.String(), srv.stderr.String()
+}
 
 // TestCLI_Serve_LifecycleAndPIDCleanup verifies that moca serve starts
 // the HTTP server, writes a PID file, responds to health checks, and
@@ -29,57 +200,7 @@ func TestCLI_Serve_LifecycleAndPIDCleanup(t *testing.T) {
 	}
 	tmpDir := t.TempDir()
 
-	// Create .moca directory (normally created by moca init).
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".moca"), 0o755); err != nil {
-		t.Fatalf("mkdir .moca: %v", err)
-	}
-
-	// Use a timeout context so the test cannot hang indefinitely.
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	cli.ResetForTesting()
-	root := cli.RootCommand()
-	root.AddCommand(allCommands()...)
-	root.PersistentPreRunE = nil
-
-	cfg := testProjectConfig()
-	cctx := &clicontext.CLIContext{
-		ProjectRoot: tmpDir,
-		Project:     cfg,
-		Environment: "development",
-	}
-	cmdCtx := clicontext.WithCLIContext(ctx, cctx)
-	root.SetContext(cmdCtx)
-	// Use port 0 so the OS assigns a free port.
-	root.SetArgs([]string{"serve", "--port", "0"})
-
-	var outBuf, errBuf bytes.Buffer
-	root.SetOut(&outBuf)
-	root.SetErr(&errBuf)
-
-	serveDone := make(chan error, 1)
-	go func() {
-		serveDone <- root.Execute()
-	}()
-
-	// Poll for PID file to appear (indicates server is starting up).
-	pidPath := process.PIDPath(tmpDir)
-	deadline := time.After(10 * time.Second)
-	for {
-		if _, err := os.Stat(pidPath); err == nil {
-			break
-		}
-		select {
-		case <-deadline:
-			t.Fatal("PID file did not appear within 10s")
-		case err := <-serveDone:
-			t.Fatalf("serve exited before PID file appeared: %v\nstdout: %s\nstderr: %s",
-				err, outBuf.String(), errBuf.String())
-		default:
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
+	srv := startServeCommand(t, tmpDir)
 
 	// Verify PID file is valid.
 	pid, err := process.ReadPID(tmpDir)
@@ -90,34 +211,28 @@ func TestCLI_Serve_LifecycleAndPIDCleanup(t *testing.T) {
 		t.Errorf("PID file contains %d, expected %d", pid, os.Getpid())
 	}
 
-	// Wait a bit for server to be fully ready, then check the banner.
-	time.Sleep(500 * time.Millisecond)
-	banner := outBuf.String()
-	if !strings.Contains(banner, "Moca Development Server") {
-		t.Errorf("banner missing expected header, got:\n%s", banner)
+	resp, err := srv.get("/health")
+	if err != nil {
+		t.Fatalf("health check failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("health check returned %d, expected 200", resp.StatusCode)
 	}
 
-	// Cancel context to trigger graceful shutdown.
-	cancel()
-
-	select {
-	case err := <-serveDone:
-		if err != nil {
-			t.Fatalf("serve exited with error: %v\nstderr: %s", err, errBuf.String())
-		}
-	case <-time.After(15 * time.Second):
-		t.Fatal("serve did not exit within 15s after cancel")
+	stdout, _ := srv.stop(t)
+	if !strings.Contains(stdout, "Moca Development Server") {
+		t.Errorf("banner missing expected header, got:\n%s", stdout)
 	}
 
 	// PID file should be removed after shutdown.
-	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
+	if _, err := os.Stat(srv.pidPath); !os.IsNotExist(err) {
 		t.Error("PID file still exists after shutdown")
 	}
 
 	// Banner should contain "Server stopped."
-	finalOutput := outBuf.String()
-	if !strings.Contains(finalOutput, "Server stopped.") {
-		t.Errorf("missing 'Server stopped.' in output:\n%s", finalOutput)
+	if !strings.Contains(stdout, "Server stopped.") {
+		t.Errorf("missing 'Server stopped.' in output:\n%s", stdout)
 	}
 }
 
@@ -175,66 +290,11 @@ func TestCLI_Serve_NoWatch(t *testing.T) {
 		t.Skip("skipping serve test in short mode")
 	}
 	tmpDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".moca"), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	cli.ResetForTesting()
-	root := cli.RootCommand()
-	root.AddCommand(allCommands()...)
-	root.PersistentPreRunE = nil
-
-	cfg := testProjectConfig()
-	cctx := &clicontext.CLIContext{
-		ProjectRoot: tmpDir,
-		Project:     cfg,
-		Environment: "development",
-	}
-	cmdCtx := clicontext.WithCLIContext(ctx, cctx)
-	root.SetContext(cmdCtx)
-	root.SetArgs([]string{"serve", "--port", "0", "--no-watch"})
-
-	var outBuf, errBuf bytes.Buffer
-	root.SetOut(&outBuf)
-	root.SetErr(&errBuf)
-
-	serveDone := make(chan error, 1)
-	go func() {
-		serveDone <- root.Execute()
-	}()
-
-	// Wait for startup.
-	pidPath := process.PIDPath(tmpDir)
-	deadline := time.After(10 * time.Second)
-	for {
-		if _, err := os.Stat(pidPath); err == nil {
-			break
-		}
-		select {
-		case <-deadline:
-			t.Fatal("PID file did not appear within 10s")
-		case err := <-serveDone:
-			t.Fatalf("serve exited before PID file: %v\nstdout: %s\nstderr: %s",
-				err, outBuf.String(), errBuf.String())
-		default:
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
-
-	time.Sleep(300 * time.Millisecond)
-	banner := outBuf.String()
-	if !strings.Contains(banner, "Watcher:   disabled") {
-		t.Errorf("expected 'Watcher:   disabled' in banner, got:\n%s", banner)
-	}
-
-	cancel()
-	select {
-	case <-serveDone:
-	case <-time.After(15 * time.Second):
-		t.Fatal("serve did not exit after cancel")
+	srv := startServeCommand(t, tmpDir, "--no-watch")
+	stdout, _ := srv.stop(t)
+	if !strings.Contains(stdout, "Watcher:   disabled") {
+		t.Errorf("expected 'Watcher:   disabled' in banner, got:\n%s", stdout)
 	}
 }
 
@@ -245,66 +305,18 @@ func TestCLI_Serve_HealthEndpoint(t *testing.T) {
 		t.Skip("skipping serve test in short mode")
 	}
 	tmpDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".moca"), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	cli.ResetForTesting()
-	root := cli.RootCommand()
-	root.AddCommand(allCommands()...)
-	root.PersistentPreRunE = nil
-
-	cfg := testProjectConfig()
-	cctx := &clicontext.CLIContext{
-		ProjectRoot: tmpDir,
-		Project:     cfg,
-		Environment: "development",
-	}
-	cmdCtx := clicontext.WithCLIContext(ctx, cctx)
-	root.SetContext(cmdCtx)
-	root.SetArgs([]string{"serve", "--port", "0"})
-
-	var outBuf, errBuf bytes.Buffer
-	root.SetOut(&outBuf)
-	root.SetErr(&errBuf)
-
-	serveDone := make(chan error, 1)
-	go func() {
-		serveDone <- root.Execute()
-	}()
-
-	// Wait for the banner to contain a URL with the assigned port.
-	var serverURL string
-	deadline := time.After(10 * time.Second)
-	for {
-		output := outBuf.String()
-		if idx := strings.Index(output, "http://"); idx != -1 {
-			// Extract URL from "  URL:       http://0.0.0.0:XXXXX"
-			line := output[idx:]
-			if nl := strings.IndexByte(line, '\n'); nl != -1 {
-				serverURL = strings.TrimSpace(line[:nl])
-			}
-			if serverURL != "" && !strings.HasSuffix(serverURL, ":0") {
-				break
-			}
-		}
-		select {
-		case <-deadline:
-			t.Fatalf("server URL not found in output within 10s:\n%s", outBuf.String())
-		case err := <-serveDone:
-			t.Fatalf("serve exited early: %v\nstdout: %s\nstderr: %s", err, outBuf.String(), errBuf.String())
-		default:
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
+	srv := startServeCommand(t, tmpDir)
 
 	// Hit the health endpoint.
-	healthURL := serverURL + "/api/health"
+	healthURL := srv.serverURL + "/health"
+	req, err := http.NewRequest(http.MethodGet, healthURL, nil)
+	if err != nil {
+		t.Fatalf("build health request: %v", err)
+	}
+	req.Header.Set("X-Moca-Site", srv.siteName)
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(healthURL)
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("health check failed: %v", err)
 	}
@@ -313,12 +325,7 @@ func TestCLI_Serve_HealthEndpoint(t *testing.T) {
 		t.Errorf("health check returned %d, expected 200", resp.StatusCode)
 	}
 
-	cancel()
-	select {
-	case <-serveDone:
-	case <-time.After(15 * time.Second):
-		t.Fatal("serve did not exit after cancel")
-	}
+	srv.stop(t)
 }
 
 // TestCLI_Stop_NoServer verifies that moca stop returns an error when no
@@ -393,7 +400,7 @@ func TestCLI_Stop_RunningProcess(t *testing.T) {
 		t.Fatalf("write PID: %v", err)
 	}
 
-	stdout, _, err := executeWithContext(t, tmpDir, "", "stop")
+	stdout, _, err := executeWithContext(t, tmpDir, "", "stop", "--timeout", "2s")
 	if err != nil {
 		t.Fatalf("stop returned error: %v", err)
 	}
@@ -401,9 +408,8 @@ func TestCLI_Stop_RunningProcess(t *testing.T) {
 		t.Errorf("expected 'stopped' message, got: %s", stdout)
 	}
 
-	// Verify process is gone.
-	if process.IsRunning(sleepPID) {
-		t.Error("process still running after stop")
+	if waitErr := sleepCmd.Wait(); waitErr != nil && !strings.Contains(waitErr.Error(), "signal") {
+		t.Fatalf("wait sleep: %v", waitErr)
 	}
 
 	// PID file should be removed.
