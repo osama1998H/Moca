@@ -20,6 +20,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const defaultMocaConstraint = ">=0.1.0"
+
 // NewInitCommand returns the "moca init" command.
 func NewInitCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -189,7 +191,7 @@ func buildInitConfig(cmd *cobra.Command, name string) *config.ProjectConfig {
 
 	kafkaEnabled := !noKafka
 	return &config.ProjectConfig{
-		Moca: Version,
+		Moca: defaultMocaConstraint,
 		Project: config.ProjectInfo{
 			Name:    name,
 			Version: "0.1.0",
