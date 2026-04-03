@@ -1,13 +1,12 @@
-// Package events implements the MOCA Kafka event system with transactional outbox.
+// Package events implements MOCA's event producer layer.
 //
-// To guarantee consistency between database writes and event publishing,
-// MOCA writes events to an outbox table in the same transaction as the
-// document save. The moca-outbox binary polls this table and publishes
-// to Kafka, providing at-least-once delivery guarantees.
+// Events are published to Kafka when enabled, or to Redis pub/sub when Kafka
+// is disabled for smaller deployments. The transactional outbox poller added
+// later in MS-15 uses this package to publish durable document events after
+// database commits.
 //
 // Key components:
-//   - Producer: Kafka message producer with topic routing
-//   - Consumer: Kafka consumer with consumer group management
-//   - Outbox: transactional outbox poller (used by cmd/moca-outbox)
-//   - Schema: event schema definitions and serialization
+//   - DocumentEvent: canonical event envelope for document lifecycle messages
+//   - Producer: publish abstraction with Kafka and Redis implementations
+//   - Emitter: backward-compatible shim used by current document runtime code
 package events
