@@ -314,11 +314,23 @@ func TestCLI_InitCreatesProject(t *testing.T) {
 		}
 	}
 
-	// Verify core app registered in moca_system.apps.
+	// Verify core app registered in the system database configured by moca init.
+	projectCfg, err := config.ParseFile(filepath.Join(targetDir, "moca.yaml"))
+	if err != nil {
+		t.Fatalf("parse generated moca.yaml: %v", err)
+	}
+	systemPool, err := pgxpool.New(context.Background(), buildInitDSN(projectCfg.Infrastructure.Database))
+	if err != nil {
+		t.Fatalf("open system DB pool: %v", err)
+	}
+	defer systemPool.Close()
+
 	var coreExists bool
-	_ = cliAdminPool.QueryRow(context.Background(),
+	if err := systemPool.QueryRow(context.Background(),
 		"SELECT EXISTS(SELECT 1 FROM moca_system.apps WHERE name = 'core')",
-	).Scan(&coreExists)
+	).Scan(&coreExists); err != nil {
+		t.Fatalf("query core app registration: %v", err)
+	}
 	if !coreExists {
 		t.Error("core app not registered in moca_system.apps after init")
 	}

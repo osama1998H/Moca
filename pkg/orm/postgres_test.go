@@ -111,7 +111,10 @@ func setupFixtures(ctx context.Context) error {
 	return nil
 }
 
-// teardownFixtures drops all test schemas.
+// teardownFixtures drops only the tenant schemas owned by this package and
+// clears its transaction fixture table. The shared moca_system schema is left
+// in place because other integration-test packages use the same database in
+// parallel during `go test ./...`.
 func teardownFixtures(ctx context.Context) error {
 	var errs []error
 	for i := 1; i <= numTenants; i++ {
@@ -122,8 +125,8 @@ func teardownFixtures(ctx context.Context) error {
 			errs = append(errs, fmt.Errorf("drop %s: %w", schema, err))
 		}
 	}
-	if _, err := adminPool.Exec(ctx, "DROP SCHEMA IF EXISTS moca_system CASCADE"); err != nil {
-		errs = append(errs, fmt.Errorf("drop moca_system: %w", err))
+	if _, err := adminPool.Exec(ctx, "TRUNCATE TABLE IF EXISTS moca_system.tx_test RESTART IDENTITY"); err != nil {
+		errs = append(errs, fmt.Errorf("truncate moca_system.tx_test: %w", err))
 	}
 	return errors.Join(errs...)
 }
