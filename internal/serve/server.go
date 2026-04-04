@@ -45,6 +45,7 @@ type Server struct {
 	docManager   *document.DocManager
 	hookRegistry *hooks.HookRegistry
 	searchClient *search.Client
+	config       *config.ProjectConfig
 	logger       *slog.Logger
 }
 
@@ -170,6 +171,7 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		docManager:   docManager,
 		hookRegistry: hookRegistry,
 		searchClient: searchClient,
+		config:       cfg.Config,
 		logger:       logger,
 	}, nil
 }
@@ -237,6 +239,21 @@ func (s *Server) Registry() *meta.Registry {
 // DBManager returns the database manager for use by the file watcher.
 func (s *Server) DBManager() *orm.DBManager {
 	return s.dbManager
+}
+
+// RedisClients returns the Redis client set for use by subsystems.
+func (s *Server) RedisClients() *drivers.RedisClients {
+	return s.redisClients
+}
+
+// Config returns the project configuration.
+func (s *Server) Config() *config.ProjectConfig {
+	return s.config
+}
+
+// SearchClient returns the Meilisearch client, or nil if unavailable.
+func (s *Server) SearchClient() *search.Client {
+	return s.searchClient
 }
 
 // Close releases database and Redis connections.

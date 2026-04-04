@@ -1,7 +1,6 @@
 package serve
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -10,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 func TestRegisterStaticFiles_ServesFiles(t *testing.T) {
@@ -74,43 +72,3 @@ func TestRegisterWebSocketStub(t *testing.T) {
 	}
 }
 
-func TestWorkerStub_BlocksUntilCancel(t *testing.T) {
-	testStubBlocksUntilCancel(t, "worker", WorkerStub)
-}
-
-func TestSchedulerStub_BlocksUntilCancel(t *testing.T) {
-	testStubBlocksUntilCancel(t, "scheduler", SchedulerStub)
-}
-
-func TestOutboxStub_BlocksUntilCancel(t *testing.T) {
-	testStubBlocksUntilCancel(t, "outbox", OutboxStub)
-}
-
-func testStubBlocksUntilCancel(t *testing.T, name string, factory func(*slog.Logger) func(context.Context) error) {
-	t.Helper()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	stub := factory(logger)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- stub(ctx) }()
-
-	// Verify it doesn't return immediately.
-	select {
-	case <-done:
-		t.Fatalf("%s stub returned before context cancellation", name)
-	case <-time.After(50 * time.Millisecond):
-		// expected
-	}
-
-	cancel()
-
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("%s stub returned error: %v", name, err)
-		}
-	case <-time.After(time.Second):
-		t.Fatalf("%s stub did not return after context cancellation", name)
-	}
-}
