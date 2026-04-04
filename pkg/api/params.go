@@ -72,7 +72,14 @@ func parseFilters(raw string) ([]orm.Filter, error) {
 		if err := json.Unmarshal(triple[1], &opStr); err != nil {
 			return nil, fmt.Errorf("filters[%d]: operator must be a string: %w", i, err)
 		}
-		op := orm.Operator(strings.ToLower(opStr))
+		opStr = strings.ToLower(strings.TrimSpace(opStr))
+		switch opStr {
+		case "is null":
+			opStr = string(orm.OpIsNull)
+		case "is not null":
+			opStr = string(orm.OpIsNotNull)
+		}
+		op := orm.Operator(opStr)
 		if _, ok := validOperators[op]; !ok {
 			return nil, fmt.Errorf("filters[%d]: unsupported operator %q", i, opStr)
 		}

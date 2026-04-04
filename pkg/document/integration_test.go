@@ -4,6 +4,7 @@ package document_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/osama1998H/moca/pkg/document"
+	"github.com/osama1998H/moca/pkg/events"
 	"github.com/osama1998H/moca/pkg/orm"
 )
 
@@ -62,6 +64,24 @@ func queryOutboxCount(t *testing.T, topic, partitionKey string) int {
 		t.Fatalf("queryOutboxCount(%q, %q): %v", topic, partitionKey, err)
 	}
 	return count
+}
+
+func queryOutboxEvent(t *testing.T, topic, partitionKey string) events.DocumentEvent {
+	t.Helper()
+	var payload []byte
+	err := namingTestPool.QueryRow(
+		context.Background(),
+		`SELECT "payload" FROM tab_outbox WHERE "topic" = $1 AND "partition_key" = $2 ORDER BY "id" DESC LIMIT 1`,
+		topic, partitionKey,
+	).Scan(&payload)
+	if err != nil {
+		t.Fatalf("queryOutboxEvent(%q, %q): %v", topic, partitionKey, err)
+	}
+	var event events.DocumentEvent
+	if err := json.Unmarshal(payload, &event); err != nil {
+		t.Fatalf("unmarshal outbox payload: %v", err)
+	}
+	return event
 }
 
 // queryAuditLog checks whether an audit log entry exists for the given criteria.
@@ -252,14 +272,14 @@ func TestInteg_InsertLifecycle(t *testing.T) {
 	})
 
 	// Assert lifecycle events.
-	events := recorder.getEvents()
+	lifecycleEvents := recorder.getEvents()
 	expected := []string{"before_insert", "before_validate", "validate", "before_save", "after_insert", "after_save", "on_change"}
-	if len(events) != len(expected) {
-		t.Fatalf("events = %v, want %v", events, expected)
+	if len(lifecycleEvents) != len(expected) {
+		t.Fatalf("events = %v, want %v", lifecycleEvents, expected)
 	}
 	for i, want := range expected {
-		if events[i] != want {
-			t.Errorf("event[%d] = %q, want %q", i, events[i], want)
+		if lifecycleEvents[i] != want {
+			t.Errorf("event[%d] = %q, want %q", i, lifecycleEvents[i], want)
 		}
 	}
 
@@ -282,9 +302,16 @@ func TestInteg_InsertLifecycle(t *testing.T) {
 	}
 
 	// Verify outbox entry.
-	outboxCount := queryOutboxCount(t, "IntegTestOrder", name)
+	outboxCount := queryOutboxCount(t, events.TopicDocumentEvents, events.PartitionKey(integSite.Name, "IntegTestOrder"))
 	if outboxCount < 1 {
 		t.Errorf("outbox count for insert = %d, want >= 1", outboxCount)
+	}
+	outboxEvent := queryOutboxEvent(t, events.TopicDocumentEvents, events.PartitionKey(integSite.Name, "IntegTestOrder"))
+	if outboxEvent.EventType != events.EventTypeDocCreated {
+		t.Fatalf("event type = %q, want %q", outboxEvent.EventType, events.EventTypeDocCreated)
+	}
+	if outboxEvent.DocType != "IntegTestOrder" || outboxEvent.DocName != name {
+		t.Fatalf("unexpected outbox event ref: %#v", outboxEvent)
 	}
 
 	// Verify audit log.

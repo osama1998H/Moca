@@ -277,11 +277,10 @@ func TestGenerateTableDDL_ColumnsSanitized(t *testing.T) {
 func TestGenerateSystemTablesDDL_AllTablesPresent(t *testing.T) {
 	stmts := meta.GenerateSystemTablesDDL()
 
-	// Expect exactly 9 statements: tab_doctype, tab_singles, tab_version,
-	// idx_version_ref, tab_audit_log, tab_audit_log_default, tab_outbox,
-	// tab_migration_log, idx_migration_log_batch.
-	if len(stmts) != 9 {
-		t.Errorf("GenerateSystemTablesDDL() returned %d statements; want 9", len(stmts))
+	// The base system tables plus outbox compatibility alters / indexes must
+	// all be present.
+	if len(stmts) != 15 {
+		t.Errorf("GenerateSystemTablesDDL() returned %d statements; want 15", len(stmts))
 		for i, s := range stmts {
 			t.Logf("  [%d] %s", i, s.Comment)
 		}
@@ -296,6 +295,12 @@ func TestGenerateSystemTablesDDL_AllTablesPresent(t *testing.T) {
 		"tab_audit_log",
 		"tab_audit_log_default",
 		"tab_outbox",
+		"status column to tab_outbox",
+		"retry_count column to tab_outbox",
+		"published_at column to tab_outbox",
+		"processed column to tab_outbox",
+		"backfill outbox status",
+		"idx_outbox_pending",
 		"tab_migration_log",
 		"idx_migration_log_batch",
 	}
@@ -363,7 +368,7 @@ func TestGenerateSystemTablesDDL_OutboxPresent(t *testing.T) {
 	}
 
 	lc := strings.ToLower(s.SQL)
-	for _, col := range []string{"event_type", "topic", "partition_key", "payload", "created_at", "processed"} {
+	for _, col := range []string{"event_type", "topic", "partition_key", "payload", "created_at", "status", "retry_count", "published_at", "processed"} {
 		if !strings.Contains(lc, col) {
 			t.Errorf("tab_outbox DDL missing expected column %q;\nSQL:\n%s", col, s.SQL)
 		}
@@ -378,7 +383,7 @@ func TestGenerateSystemTablesDDL_IdempotentStatements(t *testing.T) {
 	for _, s := range stmts {
 		lc := strings.ToLower(s.SQL)
 		// Each statement must be safe to run multiple times.
-		isIdempotent := strings.Contains(lc, "if not exists") || strings.Contains(lc, "partition of")
+		isIdempotent := strings.Contains(lc, "if not exists") || strings.Contains(lc, "partition of") || strings.HasPrefix(lc, "update tab_outbox")
 		if !isIdempotent {
 			t.Errorf("non-idempotent DDL statement %q:\n%s", s.Comment, s.SQL)
 		}

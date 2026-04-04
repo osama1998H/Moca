@@ -18,6 +18,7 @@ import (
 	"github.com/osama1998H/moca/pkg/meta"
 	"github.com/osama1998H/moca/pkg/observe"
 	"github.com/osama1998H/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/search"
 )
 
 // shutdownTimeout is the maximum time to wait for in-flight requests to finish.
@@ -43,6 +44,7 @@ type Server struct {
 	redisClients *drivers.RedisClients
 	docManager   *document.DocManager
 	hookRegistry *hooks.HookRegistry
+	searchClient *search.Client
 	logger       *slog.Logger
 }
 
@@ -90,6 +92,18 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	permChecker := auth.NewRoleBasedPermChecker(permResolver, api.SiteFromContext, logger)
 	fieldLevelTransformer := api.NewFieldLevelTransformer(permResolver)
 
+	// ── Search ──────────────────────────────────────────────────────────
+	var searchClient *search.Client
+	var searchService *search.QueryService
+	if client, err := search.NewClient(cfg.Config.Infrastructure.Search); err == nil {
+		searchClient = client
+		searchService = search.NewQueryService(client)
+	} else if !errors.Is(err, search.ErrUnavailable) {
+		logger.Warn("search unavailable at startup",
+			slog.String("error", err.Error()),
+		)
+	}
+
 	// ── API gateway ─────────────────────────────────────────────────────
 	rateLimiter := api.NewRateLimiter(redisClients.Cache, logger)
 	siteResolver := api.NewDBSiteResolver(dbManager, redisClients.Cache, logger)
@@ -101,6 +115,7 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		api.WithLogger(logger),
 		api.WithSiteResolver(siteResolver),
 		api.WithRateLimiter(rateLimiter, nil),
+		api.WithSearchService(searchService),
 		api.WithAuthenticator(authenticator),
 		api.WithPermissionChecker(permChecker),
 		api.WithFieldLevelTransformer(fieldLevelTransformer),
@@ -108,6 +123,9 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 
 	handler := api.NewResourceHandler(gw)
 	handler.RegisterRoutes(gw.Mux(), "v1")
+
+	searchHandler := api.NewSearchHandler(gw)
+	searchHandler.RegisterRoutes(gw.Mux(), "v1")
 
 	authHandler := api.NewAuthHandler(jwtCfg, sessionMgr, userLoader, logger)
 	authHandler.RegisterRoutes(gw.Mux(), "v1")
@@ -151,6 +169,7 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		redisClients: redisClients,
 		docManager:   docManager,
 		hookRegistry: hookRegistry,
+		searchClient: searchClient,
 		logger:       logger,
 	}, nil
 }
@@ -224,6 +243,9 @@ func (s *Server) DBManager() *orm.DBManager {
 func (s *Server) Close() {
 	if s.redisClients != nil {
 		_ = s.redisClients.Close()
+	}
+	if s.searchClient != nil {
+		s.searchClient.Close()
 	}
 	if s.dbManager != nil {
 		s.dbManager.Close()

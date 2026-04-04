@@ -331,7 +331,7 @@ func TestApply_Idempotent(t *testing.T) {
 	t.Logf("Apply is idempotent")
 }
 
-// TestEnsureMetaTables_AllSystemTables verifies all 5 system tables are created.
+// TestEnsureMetaTables_AllSystemTables verifies all per-tenant system tables are created.
 func TestEnsureMetaTables_AllSystemTables(t *testing.T) {
 	ctx := context.Background()
 	m := newMigratorForTest(t)
@@ -340,14 +340,13 @@ func TestEnsureMetaTables_AllSystemTables(t *testing.T) {
 		t.Fatalf("EnsureMetaTables: %v", err)
 	}
 
-	// Verify all 5 system tables exist.
-	for _, tbl := range []string{"tab_doctype", "tab_singles", "tab_version", "tab_audit_log", "tab_migration_log"} {
+	for _, tbl := range []string{"tab_doctype", "tab_singles", "tab_version", "tab_audit_log", "tab_outbox", "tab_migration_log"} {
 		if !tableExists(ctx, t, tbl) {
 			t.Errorf("system table %q was not created", tbl)
 		}
 	}
 
-	t.Logf("All 5 system tables created by EnsureMetaTables")
+	t.Logf("All system tables created by EnsureMetaTables")
 }
 
 // TestEnsureMetaTables_AuditLogIsPartitioned verifies tab_audit_log is a partitioned table.
@@ -388,6 +387,24 @@ func TestEnsureMetaTables_VersionRefIndex(t *testing.T) {
 		t.Error("idx_version_ref index was not created on tab_version")
 	}
 	t.Logf("idx_version_ref index created successfully")
+}
+
+func TestEnsureMetaTables_OutboxColumnsAndPendingIndex(t *testing.T) {
+	ctx := context.Background()
+	m := newMigratorForTest(t)
+
+	if err := m.EnsureMetaTables(ctx, migratorTestSite); err != nil {
+		t.Fatalf("EnsureMetaTables: %v", err)
+	}
+
+	for _, col := range []string{"status", "retry_count", "published_at", "processed"} {
+		if !columnExists(ctx, t, "tab_outbox", col) {
+			t.Errorf("outbox column %q was not created", col)
+		}
+	}
+	if !indexExists(ctx, t, "idx_outbox_pending") {
+		t.Error("idx_outbox_pending was not created")
+	}
 }
 
 // TestEnsureMetaTables_Idempotent verifies calling EnsureMetaTables twice does not error.

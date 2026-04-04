@@ -54,6 +54,71 @@ func CDCTopic(site, doctype string) string {
 	return fmt.Sprintf("moca.cdc.%s.%s", site, doctype)
 }
 
+// NewDocumentEvent builds the canonical document lifecycle envelope used by
+// the transactional outbox and downstream consumers.
+func NewDocumentEvent(
+	eventType, site, doctype, docname, user, requestID string,
+	data, prevData any,
+) (DocumentEvent, error) {
+	eventID, err := newEventID()
+	if err != nil {
+		return DocumentEvent{}, fmt.Errorf("generate event id: %w", err)
+	}
+
+	return DocumentEvent{
+		EventID:   eventID,
+		EventType: eventType,
+		Timestamp: time.Now().UTC(),
+		Source:    EventSourceMocaCore,
+		Site:      site,
+		DocType:   doctype,
+		DocName:   docname,
+		Action:    actionForEventType(eventType),
+		User:      user,
+		Data:      data,
+		PrevData:  prevData,
+		RequestID: requestID,
+	}, nil
+}
+
+// EnsureDocumentEventDefaults fills framework-managed fields when callers
+// construct a DocumentEvent manually or when a legacy payload is normalized.
+func EnsureDocumentEventDefaults(event *DocumentEvent) error {
+	if event == nil {
+		return nil
+	}
+	if event.EventID == "" {
+		eventID, err := newEventID()
+		if err != nil {
+			return fmt.Errorf("generate event id: %w", err)
+		}
+		event.EventID = eventID
+	}
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now().UTC()
+	}
+	if event.Source == "" {
+		event.Source = EventSourceMocaCore
+	}
+	if event.Action == "" {
+		event.Action = actionForEventType(event.EventType)
+	}
+	return nil
+}
+
+func actionForEventType(eventType string) string {
+	switch eventType {
+	case EventTypeDocCreated:
+		return "insert"
+	case EventTypeDocUpdated:
+		return "update"
+	case EventTypeDocDeleted:
+		return "delete"
+	default:
+		return eventType
+	}
+}
+
 func newEventID() (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {

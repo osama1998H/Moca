@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/osama1998H/moca/pkg/auth"
+	"github.com/osama1998H/moca/pkg/events"
 	"github.com/osama1998H/moca/pkg/meta"
 	"github.com/osama1998H/moca/pkg/orm"
 )
@@ -517,15 +518,43 @@ func isTruthyFlag(ctx *DocContext, key string) bool {
 
 // ─── Transactional helpers ────────────────────────────────────────────────────
 
-// insertOutbox writes a single outbox event inside an active transaction.
-// eventType is one of "insert", "update", "delete".
-func insertOutbox(ctx context.Context, tx pgx.Tx, eventType, topic, partitionKey string, payload []byte) error {
-	_, err := tx.Exec(ctx,
+func buildDocumentEvent(
+	ctx *DocContext,
+	eventType, doctype, docname string,
+	data, prevData any,
+) (events.DocumentEvent, error) {
+	site := ""
+	if ctx.Site != nil {
+		site = ctx.Site.Name
+	}
+	return events.NewDocumentEvent(
+		eventType,
+		site,
+		doctype,
+		docname,
+		userID(ctx),
+		ctx.RequestID,
+		data,
+		prevData,
+	)
+}
+
+// insertOutbox writes a canonical document event inside an active transaction.
+func insertOutbox(ctx context.Context, tx pgx.Tx, event events.DocumentEvent) error {
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("crud: marshal outbox event: %w", err)
+	}
+
+	_, err = tx.Exec(ctx,
 		`INSERT INTO tab_outbox ("event_type","topic","partition_key","payload") VALUES ($1,$2,$3,$4)`,
-		eventType, topic, partitionKey, payload,
+		event.EventType,
+		events.TopicDocumentEvents,
+		events.PartitionKey(event.Site, event.DocType),
+		payload,
 	)
 	if err != nil {
-		return fmt.Errorf("crud: insert outbox (event_type=%q topic=%q): %w", eventType, topic, err)
+		return fmt.Errorf("crud: insert outbox (event_type=%q topic=%q): %w", event.EventType, events.TopicDocumentEvents, err)
 	}
 	return nil
 }
@@ -724,10 +753,9 @@ func (m *DocManager) Insert(ctx *DocContext, doctype string, values map[string]a
 		return nil, fmt.Errorf("crud: Insert %q: BeforeSave hook: %w", doctype, err)
 	}
 
-	// 7. Build the outbox payload before the transaction.
-	payload, err := doc.ToJSON()
+	outboxEvent, err := buildDocumentEvent(ctx, events.EventTypeDocCreated, doctype, name, doc.AsMap(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("crud: Insert %q: marshal outbox payload: %w", doctype, err)
+		return nil, fmt.Errorf("crud: Insert %q: build outbox event: %w", doctype, err)
 	}
 
 	// 8. Database transaction: INSERT parent + children + outbox + audit.
@@ -744,7 +772,7 @@ func (m *DocManager) Insert(ctx *DocContext, doctype string, values map[string]a
 		if txErr != nil {
 			return txErr
 		}
-		txErr = insertOutbox(txCtx, tx, "insert", doctype, name, payload)
+		txErr = insertOutbox(txCtx, tx, outboxEvent)
 		if txErr != nil {
 			return txErr
 		}
@@ -785,7 +813,6 @@ func (m *DocManager) Insert(ctx *DocContext, doctype string, values map[string]a
 			"doctype", doctype, "name", name, "error", err)
 	}
 
-	ctx.EventBus.Emit(doctype+":insert", doc.AsMap())
 	return doc, nil
 }
 
@@ -808,6 +835,7 @@ func (m *DocManager) Update(ctx *DocContext, doctype, name string, values map[st
 	if err != nil {
 		return nil, fmt.Errorf("crud: Update %q %q: load: %w", doctype, name, err)
 	}
+	prevData := doc.AsMap()
 
 	// 2. Apply incoming values (scalar + child table rows).
 	err = applyValues(doc, values)
@@ -875,10 +903,9 @@ func (m *DocManager) Update(ctx *DocContext, doctype, name string, values map[st
 	// 9. Build the final modified field list after all pre-save hooks ran.
 	finalModifiedFields := doc.ModifiedFields()
 
-	// 10. Build the outbox payload.
-	payload, err := doc.ToJSON()
+	outboxEvent, err := buildDocumentEvent(ctx, events.EventTypeDocUpdated, doctype, name, doc.AsMap(), prevData)
 	if err != nil {
-		return nil, fmt.Errorf("crud: Update %q %q: marshal outbox payload: %w", doctype, name, err)
+		return nil, fmt.Errorf("crud: Update %q %q: build outbox event: %w", doctype, name, err)
 	}
 
 	// 11. Transaction: UPDATE parent + sync children + outbox + audit.
@@ -909,7 +936,7 @@ func (m *DocManager) Update(ctx *DocContext, doctype, name string, values map[st
 		if err := m.syncChildRows(txCtx, tx, doc, uid); err != nil {
 			return err
 		}
-		if err := insertOutbox(txCtx, tx, "update", doctype, name, payload); err != nil {
+		if err := insertOutbox(txCtx, tx, outboxEvent); err != nil {
 			return err
 		}
 		return insertAuditLog(txCtx, tx, doctype, name, "Update", uid, changesJSON)
@@ -939,7 +966,6 @@ func (m *DocManager) Update(ctx *DocContext, doctype, name string, values map[st
 			"doctype", doctype, "name", name, "error", err)
 	}
 
-	ctx.EventBus.Emit(doctype+":update", doc.AsMap())
 	return doc, nil
 }
 
@@ -960,13 +986,16 @@ func (m *DocManager) Delete(ctx *DocContext, doctype, name string) error {
 	if err != nil {
 		return fmt.Errorf("crud: Delete %q %q: load: %w", doctype, name, err)
 	}
+	prevData := doc.AsMap()
 
 	// 2. Dispatch OnTrash (fatal: if controller rejects, abort).
 	ctrl := m.controllers.Resolve(doctype)
-	if err := dispatchEvent(ctrl, EventOnTrash, ctx, doc); err != nil {
+	err = dispatchEvent(ctrl, EventOnTrash, ctx, doc)
+	if err != nil {
 		return fmt.Errorf("crud: Delete %q %q: OnTrash: %w", doctype, name, err)
 	}
-	if err := m.dispatchHooks(ctx, doc, doctype, EventOnTrash); err != nil {
+	err = m.dispatchHooks(ctx, doc, doctype, EventOnTrash)
+	if err != nil {
 		return fmt.Errorf("crud: Delete %q %q: OnTrash hook: %w", doctype, name, err)
 	}
 
@@ -976,6 +1005,11 @@ func (m *DocManager) Delete(ctx *DocContext, doctype, name string) error {
 		pgx.Identifier{"name"}.Sanitize(),
 	)
 
+	outboxEvent, err := buildDocumentEvent(ctx, events.EventTypeDocDeleted, doctype, name, map[string]any{"name": name}, prevData)
+	if err != nil {
+		return fmt.Errorf("crud: Delete %q %q: build outbox event: %w", doctype, name, err)
+	}
+
 	txErr := orm.WithTransaction(ctx, pool, func(txCtx context.Context, tx pgx.Tx) error {
 		if err := m.deleteChildRows(txCtx, tx, doc); err != nil {
 			return err
@@ -983,7 +1017,7 @@ func (m *DocManager) Delete(ctx *DocContext, doctype, name string) error {
 		if _, err := tx.Exec(txCtx, tableSQL, name); err != nil {
 			return fmt.Errorf("DELETE %s %q: %w", meta.TableName(doctype), name, err)
 		}
-		if err := insertOutbox(txCtx, tx, "delete", doctype, name, []byte(`{"name":"`+name+`"}`)); err != nil {
+		if err := insertOutbox(txCtx, tx, outboxEvent); err != nil {
 			return err
 		}
 		return insertAuditLog(txCtx, tx, doctype, name, "Delete", uid, nil)
@@ -1002,7 +1036,6 @@ func (m *DocManager) Delete(ctx *DocContext, doctype, name string) error {
 			"doctype", doctype, "name", name, "error", err)
 	}
 
-	ctx.EventBus.Emit(doctype+":delete", map[string]any{"name": name})
 	return nil
 }
 
@@ -1315,22 +1348,32 @@ func (m *DocManager) SetSingle(ctx *DocContext, doc *DynamicDoc) error {
 	}
 	doctype := doc.metaDef.Name
 	uid := userID(ctx)
+	prevData := deepCopyMap(doc.original)
 
 	ctrl := m.controllers.Resolve(doctype)
 
-	if err := dispatchEvent(ctrl, EventBeforeValidate, ctx, doc); err != nil {
+	err = dispatchEvent(ctrl, EventBeforeValidate, ctx, doc)
+	if err != nil {
 		return fmt.Errorf("crud: SetSingle %q: BeforeValidate: %w", doctype, err)
 	}
-	if err := dispatchEvent(ctrl, EventValidate, ctx, doc); err != nil {
+	err = dispatchEvent(ctrl, EventValidate, ctx, doc)
+	if err != nil {
 		return fmt.Errorf("crud: SetSingle %q: Validate: %w", doctype, err)
 	}
 	if !isTruthyFlag(ctx, "skip_validation") {
-		if err := m.validator.ValidateDoc(ctx, doc, pool); err != nil {
+		err = m.validator.ValidateDoc(ctx, doc, pool)
+		if err != nil {
 			return fmt.Errorf("crud: SetSingle %q: validation: %w", doctype, err)
 		}
 	}
-	if err := dispatchEvent(ctrl, EventBeforeSave, ctx, doc); err != nil {
+	err = dispatchEvent(ctrl, EventBeforeSave, ctx, doc)
+	if err != nil {
 		return fmt.Errorf("crud: SetSingle %q: BeforeSave: %w", doctype, err)
+	}
+
+	outboxEvent, err := buildDocumentEvent(ctx, events.EventTypeDocUpdated, doctype, doctype, doc.AsMap(), prevData)
+	if err != nil {
+		return fmt.Errorf("crud: SetSingle %q: build outbox event: %w", doctype, err)
 	}
 
 	txErr := orm.WithTransaction(ctx, pool, func(txCtx context.Context, tx pgx.Tx) error {
@@ -1353,8 +1396,7 @@ func (m *DocManager) SetSingle(ctx *DocContext, doc *DynamicDoc) error {
 				return fmt.Errorf("upsert tab_singles %q field %q: %w", doctype, f.Name, err)
 			}
 		}
-		payload, _ := doc.ToJSON()
-		if err := insertOutbox(txCtx, tx, "update", doctype, doctype, payload); err != nil {
+		if err := insertOutbox(txCtx, tx, outboxEvent); err != nil {
 			return err
 		}
 		return insertAuditLog(txCtx, tx, doctype, doctype, "Update", uid, nil)
@@ -1373,7 +1415,6 @@ func (m *DocManager) SetSingle(ctx *DocContext, doc *DynamicDoc) error {
 			"doctype", doctype, "error", err)
 	}
 
-	ctx.EventBus.Emit(doctype+":update", doc.AsMap())
 	return nil
 }
 
