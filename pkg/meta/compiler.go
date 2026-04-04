@@ -91,6 +91,16 @@ func Compile(jsonBytes []byte) (*MetaType, error) {
 		add("module", "required")
 	}
 
+	// Default InAPI to true for storage (non-layout) fields. JSON cannot
+	// distinguish "not set" from "set to false" for booleans, so we apply
+	// the default unconditionally. Layout-only fields are never part of the
+	// API response, so they stay false.
+	for i := range mt.Fields {
+		if mt.Fields[i].FieldType.IsStorable() {
+			mt.Fields[i].InAPI = true
+		}
+	}
+
 	// Build a set of valid field names during field walk for use in rules 7–9, 11.
 	fieldNames := make(map[string]bool, len(mt.Fields))
 

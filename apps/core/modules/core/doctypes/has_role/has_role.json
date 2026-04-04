@@ -13,5 +13,16 @@
       "required": true,
       "in_list_view": true
     }
-  ]
+  ],
+  "api_config": {
+    "enabled": true,
+    "allow_get": true,
+    "allow_list": true,
+    "allow_create": false,
+    "allow_update": false,
+    "allow_delete": false,
+    "allow_count": true,
+    "default_page_size": 20,
+    "max_page_size": 100
+  }
 }

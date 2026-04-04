@@ -118,6 +118,12 @@ func originAllowed(origin string, allowed []string) bool {
 func tenantMiddleware(resolver SiteResolver) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip tenant resolution for non-API paths (static assets, health).
+			if strings.HasPrefix(r.URL.Path, "/desk/") || r.URL.Path == "/health" || r.URL.Path == "/ws" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			siteID := r.Header.Get("X-Moca-Site")
 
 			// Try path-based resolution and rewrite the URL path.
@@ -208,6 +214,12 @@ func siteFromPath(path string) (siteID, strippedPath string) {
 func authMiddleware(authn Authenticator) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip auth for non-API paths (static assets, health).
+			if strings.HasPrefix(r.URL.Path, "/desk/") || r.URL.Path == "/health" || r.URL.Path == "/ws" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			user, err := authn.Authenticate(r)
 			if err != nil {
 				http.Error(w, `{"error":{"code":"AUTH_FAILED","message":"authentication failed"}}`, http.StatusUnauthorized)

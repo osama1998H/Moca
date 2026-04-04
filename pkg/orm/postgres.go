@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +16,22 @@ import (
 	"github.com/osama1998H/moca/internal/config"
 	"github.com/osama1998H/moca/pkg/observe"
 )
+
+// schemaNameForSite returns the PostgreSQL schema name for a site. It mirrors
+// tenancy.SchemaNameForSite to avoid a circular import between orm ↔ tenancy.
+// Both must produce identical results — see pkg/tenancy/manager.go:722.
+func schemaNameForSite(siteName string) string {
+	s := strings.ToLower(siteName)
+	s = strings.NewReplacer(".", "_", "-", "_", " ", "_").Replace(s)
+	s = regexp.MustCompile(`[^a-z0-9_]`).ReplaceAllString(s, "")
+	if len(s) > 0 && s[0] >= '0' && s[0] <= '9' {
+		s = "s" + s
+	}
+	if s == "" {
+		s = "site"
+	}
+	return "tenant_" + s
+}
 
 // perTenantDivisor is the default divisor used to calculate per-tenant pool
 // size from the global pool size. A future config field can override this in
@@ -91,7 +109,7 @@ func (m *DBManager) SystemPool() *pgxpool.Pool {
 // Subsequent calls use the fast RLock path. Double-checked locking ensures safe
 // concurrent pool creation.
 func (m *DBManager) ForSite(ctx context.Context, siteName string) (*pgxpool.Pool, error) {
-	schema := "tenant_" + siteName
+	schema := schemaNameForSite(siteName)
 
 	// Fast path: pool already exists.
 	m.mu.RLock()

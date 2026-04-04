@@ -196,7 +196,7 @@ No external web research was needed. The design documents are comprehensive and 
 
 - **Task ID:** MS-17-T4
 - **Title:** FormView, ListView, App Shell (Sidebar, Breadcrumbs, Command-K Search)
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Build the two primary views and complete the app shell, integrating all components from Tasks 2 and 3.
 
