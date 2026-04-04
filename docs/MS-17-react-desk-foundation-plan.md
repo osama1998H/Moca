@@ -93,7 +93,7 @@ No external web research was needed. The design documents are comprehensive and 
 
 - **Task ID:** MS-17-T2
 - **Title:** Vite Project Scaffold, API Client, Auth/Meta/Doc Providers, and Login Page
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Bootstrap the `desk/` directory with a complete React 19 + TypeScript + Vite + TailwindCSS project. Implement the foundational data layer:
 

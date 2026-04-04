@@ -42,7 +42,7 @@ func (ul *UserLoader) LoadByEmail(ctx context.Context, site *tenancy.SiteContext
 	var enabled bool
 	var extraJSON []byte
 	err := pool.QueryRow(ctx,
-		`SELECT "full_name", "password", "enabled", COALESCE("_extra", '{}') FROM "tabUser" WHERE "name" = $1`,
+		`SELECT "full_name", "password", "enabled", COALESCE("_extra", '{}') FROM "tab_user" WHERE "name" = $1`,
 		email,
 	).Scan(&fullName, &passwordHash, &enabled, &extraJSON)
 	if err != nil {
@@ -69,7 +69,7 @@ func (ul *UserLoader) LoadByEmail(ctx context.Context, site *tenancy.SiteContext
 
 	// Load roles from HasRole child table.
 	rows, err := pool.Query(ctx,
-		`SELECT "role" FROM "tabHasRole" WHERE "parent" = $1 AND "parenttype" = 'User'`,
+		`SELECT "role" FROM "tab_has_role" WHERE "parent" = $1 AND "parenttype" = 'User'`,
 		email,
 	)
 	if err != nil {
