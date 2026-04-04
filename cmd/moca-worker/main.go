@@ -13,8 +13,11 @@ import (
 	"github.com/osama1998H/moca/internal/config"
 	"github.com/osama1998H/moca/internal/drivers"
 	"github.com/osama1998H/moca/internal/process"
+	"github.com/osama1998H/moca/pkg/meta"
 	"github.com/osama1998H/moca/pkg/observe"
+	"github.com/osama1998H/moca/pkg/orm"
 	"github.com/osama1998H/moca/pkg/queue"
+	"github.com/osama1998H/moca/pkg/search"
 )
 
 // Build-time variables injected via -ldflags.
@@ -56,10 +59,19 @@ func run() error {
 	// Connect Redis.
 	redisClients := drivers.NewRedisClients(cfg.Infrastructure.Redis, logger)
 	ctx := context.Background()
-	if err := redisClients.Ping(ctx); err != nil {
+	err = redisClients.Ping(ctx)
+	if err != nil {
 		return fmt.Errorf("redis: %w", err)
 	}
 	defer func() { _ = redisClients.Close() }()
+
+	dbManager, err := orm.NewDBManager(ctx, cfg.Infrastructure.Database, logger)
+	if err != nil {
+		return fmt.Errorf("database: %w", err)
+	}
+	defer dbManager.Close()
+
+	registry := meta.NewRegistry(dbManager, redisClients.Cache, logger)
 
 	// Determine sites to consume from.
 	sites := sitesFromEnv()
@@ -73,6 +85,19 @@ func run() error {
 	wpCfg.Logger = logger
 
 	wp := queue.NewWorkerPool(redisClients.Queue, wpCfg)
+
+	if cfg.Infrastructure.Kafka.Enabled == nil || !*cfg.Infrastructure.Kafka.Enabled {
+		searchClient, err := search.NewClient(cfg.Infrastructure.Search)
+		if err == nil {
+			defer searchClient.Close()
+			syncer := search.NewSyncer(searchClient, registry, cfg.Infrastructure.Kafka, logger)
+			wp.Handle(search.JobTypeSearchSync, syncer.JobHandler)
+		} else if !errors.Is(err, search.ErrUnavailable) {
+			logger.Warn("search sync disabled in worker",
+				slog.String("error", err.Error()),
+			)
+		}
+	}
 
 	// Register a default logging handler for unhandled job types.
 	// Real handlers will be registered by T5 when integrating with the app system.

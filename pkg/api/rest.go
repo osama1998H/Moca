@@ -42,6 +42,12 @@ type ResourceHandler struct {
 	logger    *slog.Logger
 }
 
+func newDocContext(ctx context.Context, site *tenancy.SiteContext, user *auth.User) *document.DocContext {
+	docCtx := document.NewDocContext(ctx, site, user)
+	docCtx.RequestID = RequestIDFromContext(ctx)
+	return docCtx
+}
+
 // NewResourceHandler creates a ResourceHandler wired to the given Gateway.
 func NewResourceHandler(gw *Gateway) *ResourceHandler {
 	return &ResourceHandler{
@@ -79,7 +85,7 @@ func (h *ResourceHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	docCtx := document.NewDocContext(r.Context(), site, user)
+	docCtx := newDocContext(r.Context(), site, user)
 	docs, total, err := h.crud.GetList(docCtx, mt.Name, opts)
 	if err != nil {
 		h.handleCRUDError(w, r, err)
@@ -107,7 +113,7 @@ func (h *ResourceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	docCtx := document.NewDocContext(r.Context(), site, user)
+	docCtx := newDocContext(r.Context(), site, user)
 
 	var doc *document.DynamicDoc
 	var err error
@@ -162,7 +168,7 @@ func (h *ResourceHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	docCtx := document.NewDocContext(r.Context(), site, user)
+	docCtx := newDocContext(r.Context(), site, user)
 	doc, err := h.crud.Insert(docCtx, mt.Name, values)
 	if err != nil {
 		h.handleCRUDError(w, r, err)
@@ -205,7 +211,7 @@ func (h *ResourceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	docCtx := document.NewDocContext(r.Context(), site, user)
+	docCtx := newDocContext(r.Context(), site, user)
 	doc, err := h.crud.Update(docCtx, mt.Name, name, values)
 	if err != nil {
 		h.handleCRUDError(w, r, err)
@@ -237,7 +243,7 @@ func (h *ResourceHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	docCtx := document.NewDocContext(r.Context(), site, user)
+	docCtx := newDocContext(r.Context(), site, user)
 	if err := h.crud.Delete(docCtx, mt.Name, name); err != nil {
 		h.handleCRUDError(w, r, err)
 		return

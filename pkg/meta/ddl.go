@@ -231,7 +231,7 @@ func GenerateSystemTablesDDL() []DDLStatement {
 			// INSERTs a row here inside the same transaction, guaranteeing that the
 			// event is published if and only if the document write commits.
 			// The background moca-outbox process polls this table and publishes to
-			// Kafka (MS-15), then sets processed = true.
+			// Kafka / Redis, then marks rows published or failed.
 			SQL: `CREATE TABLE IF NOT EXISTS tab_outbox (
 	"id"            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	"event_type"    TEXT NOT NULL,
@@ -239,9 +239,46 @@ func GenerateSystemTablesDDL() []DDLStatement {
 	"partition_key" TEXT,
 	"payload"       JSONB NOT NULL,
 	"created_at"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	"status"        TEXT NOT NULL DEFAULT 'pending',
+	"retry_count"   INTEGER NOT NULL DEFAULT 0,
+	"published_at"  TIMESTAMPTZ,
 	"processed"     BOOLEAN NOT NULL DEFAULT false
 )`,
 			Comment: "create system table tab_outbox",
+		},
+		{
+			SQL:     `ALTER TABLE tab_outbox ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'pending'`,
+			Comment: "add status column to tab_outbox",
+		},
+		{
+			SQL:     `ALTER TABLE tab_outbox ADD COLUMN IF NOT EXISTS "retry_count" INTEGER NOT NULL DEFAULT 0`,
+			Comment: "add retry_count column to tab_outbox",
+		},
+		{
+			SQL:     `ALTER TABLE tab_outbox ADD COLUMN IF NOT EXISTS "published_at" TIMESTAMPTZ`,
+			Comment: "add published_at column to tab_outbox",
+		},
+		{
+			SQL:     `ALTER TABLE tab_outbox ADD COLUMN IF NOT EXISTS "processed" BOOLEAN NOT NULL DEFAULT false`,
+			Comment: "add processed column to tab_outbox",
+		},
+		{
+			SQL: `UPDATE tab_outbox
+SET
+	"status" = CASE
+		WHEN COALESCE("processed", false) THEN 'published'
+		ELSE COALESCE("status", 'pending')
+	END,
+	"published_at" = CASE
+		WHEN COALESCE("processed", false) AND "published_at" IS NULL THEN "created_at"
+		ELSE "published_at"
+	END
+WHERE "status" IS NULL OR ("status" = 'pending' AND COALESCE("processed", false))`,
+			Comment: "backfill outbox status from processed flag",
+		},
+		{
+			SQL:     `CREATE INDEX IF NOT EXISTS idx_outbox_pending ON tab_outbox ("created_at", "id") WHERE "status" = 'pending'`,
+			Comment: "create pending index idx_outbox_pending on tab_outbox",
 		},
 		{
 			// tab_migration_log tracks applied SQL migrations per app. Each row

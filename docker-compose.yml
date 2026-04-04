@@ -29,3 +29,18 @@ services:
       retries: 10
     tmpfs:
       - /data
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    container_name: moca-test-meili
+    ports:
+      - "7700:7700"
+    environment:
+      MEILI_ENV: development
+      MEILI_MASTER_KEY: moca_test
+      MEILI_NO_ANALYTICS: "true"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--spider", "http://127.0.0.1:7700/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 20

@@ -1,12 +1,15 @@
 package api
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
 	"github.com/osama1998H/moca/internal/drivers"
 	"github.com/osama1998H/moca/pkg/document"
 	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/orm"
+	pkgsearch "github.com/osama1998H/moca/pkg/search"
 )
 
 // Gateway is the root HTTP handler for the Moca API layer.
@@ -16,6 +19,7 @@ type Gateway struct {
 	mux           *http.ServeMux
 	docManager    *document.DocManager
 	registry      *meta.Registry
+	search        SearchService
 	redis         *drivers.RedisClients
 	rateLimiter   *RateLimiter
 	versionRouter *VersionRouter
@@ -102,6 +106,16 @@ func (g *Gateway) Logger() *slog.Logger {
 	return g.logger
 }
 
+// SearchService abstracts the full-text query layer used by the search API.
+type SearchService interface {
+	Search(ctx context.Context, site string, mt *meta.MetaType, query string, filters []orm.Filter, page, limit int) ([]pkgsearch.SearchResult, int, error)
+}
+
+// SearchService returns the configured search query service.
+func (g *Gateway) SearchService() SearchService {
+	return g.search
+}
+
 // --- Functional Options ---
 
 // WithDocManager sets the document manager.
@@ -117,6 +131,11 @@ func WithRegistry(r *meta.Registry) GatewayOption {
 // WithRedis sets the Redis clients.
 func WithRedis(rc *drivers.RedisClients) GatewayOption {
 	return func(g *Gateway) { g.redis = rc }
+}
+
+// WithSearchService sets the search query service.
+func WithSearchService(s SearchService) GatewayOption {
+	return func(g *Gateway) { g.search = s }
 }
 
 // WithAuthenticator sets the authenticator.

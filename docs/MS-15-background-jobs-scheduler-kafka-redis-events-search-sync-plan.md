@@ -233,7 +233,7 @@ No external web research was needed. All implementation patterns are fully valid
 
 - **Task ID:** MS-15-T4
 - **Title:** Transactional Outbox Poller + Meilisearch Search Sync + Search API
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Implement the outbox poller that reads `tab_outbox` and publishes events, the Meilisearch indexer and search sync pipeline, and the Search API endpoint.
 
