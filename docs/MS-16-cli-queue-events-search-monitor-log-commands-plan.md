@@ -217,7 +217,7 @@ All 8 command groups already exist as placeholder files in `cmd/moca/`:
 
 - **Task ID:** MS-16-T4
 - **Title:** Events Commands
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Replace all 5 placeholders in `cmd/moca/events.go`.
 

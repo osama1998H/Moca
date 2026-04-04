@@ -30,6 +30,7 @@ require (
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/twmb/franz-go v1.20.7 // indirect
+	github.com/twmb/franz-go/pkg/kadm v1.17.2 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.12.0 // indirect
 	github.com/yuin/gopher-lua v1.1.2 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
