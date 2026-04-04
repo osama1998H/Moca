@@ -93,12 +93,30 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	sup.Add(process.Subsystem{Name: "http", Run: srv.Run, Critical: true})
 
 	if !noWorkers {
-		sup.Add(process.Subsystem{Name: "worker", Run: serve.WorkerStub(logger)})
+		sup.Add(process.Subsystem{Name: "worker", Run: serve.WorkerSubsystem(
+			srv.DBManager(),
+			srv.RedisClients(),
+			srv.Registry(),
+			cfg.Infrastructure.Kafka,
+			cfg.Infrastructure.Search,
+			logger,
+		)})
 	}
 	if !noScheduler {
-		sup.Add(process.Subsystem{Name: "scheduler", Run: serve.SchedulerStub(logger)})
+		sup.Add(process.Subsystem{Name: "scheduler", Run: serve.SchedulerSubsystem(
+			srv.RedisClients(),
+			cfg.Scheduler,
+			logger,
+		)})
 	}
-	sup.Add(process.Subsystem{Name: "outbox", Run: serve.OutboxStub(logger)})
+	sup.Add(process.Subsystem{Name: "outbox", Run: serve.OutboxSubsystem(
+		srv.DBManager(),
+		srv.RedisClients(),
+		cfg.Infrastructure.Kafka,
+		cfg.Infrastructure.Search,
+		srv.Registry(),
+		logger,
+	)})
 
 	if !noWatch {
 		watcher := meta.NewWatcher(
@@ -129,9 +147,9 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	_, _ = fmt.Fprintf(w, "  URL:       http://%s\n", srv.Addr())
 	_, _ = fmt.Fprintf(w, "  PID:       %d\n", os.Getpid())
 	_, _ = fmt.Fprintf(w, "  Workers:   %s\n", enabledStr(!noWorkers))
-	_, _ = fmt.Fprintf(w, "  Scheduler: %s\n", enabledStr(!noScheduler))
+	_, _ = fmt.Fprintf(w, "  Scheduler: %s\n", enabledStr(!noScheduler && cfg.Scheduler.Enabled))
 	_, _ = fmt.Fprintf(w, "  Watcher:   %s\n", enabledStr(!noWatch))
-	_, _ = fmt.Fprintf(w, "  Outbox:    enabled (stub)\n")
+	_, _ = fmt.Fprintf(w, "  Outbox:    enabled\n")
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintln(w, "Press Ctrl+C to stop.")
 	_, _ = fmt.Fprintln(w)
