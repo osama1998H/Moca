@@ -5,13 +5,13 @@ package config
 type ProjectConfig struct {
 	Apps           map[string]AppConfig `yaml:"apps"`
 	Staging        StagingConfig        `yaml:"staging"`
+	Development    DevelopmentConfig    `yaml:"development"`
 	Project        ProjectInfo          `yaml:"project"`
 	Moca           string               `yaml:"moca"`
 	Production     ProductionConfig     `yaml:"production"`
 	Scheduler      SchedulerConfig      `yaml:"scheduler"`
 	Backup         BackupConfig         `yaml:"backup"`
 	Infrastructure InfrastructureConfig `yaml:"infrastructure"`
-	Development    DevelopmentConfig    `yaml:"development"`
 }
 
 // ProjectInfo holds the project-level metadata.
@@ -116,16 +116,12 @@ type StorageConfig struct {
 
 // DevelopmentConfig holds settings for the local development environment.
 type DevelopmentConfig struct {
-	// Port is the HTTP server port used in development.
-	Port int `yaml:"port,omitempty"`
-	// Workers is the number of background worker goroutines.
-	Workers int `yaml:"workers,omitempty"`
-	// AutoReload enables automatic server restart on source file changes.
-	AutoReload bool `yaml:"auto_reload,omitempty"`
-	// DeskDevServer enables the Vite dev server proxy for the React frontend.
-	DeskDevServer bool `yaml:"desk_dev_server,omitempty"`
-	// DeskPort is the port the Vite dev server listens on.
-	DeskPort int `yaml:"desk_port,omitempty"`
+	LogDir        string `yaml:"log_dir,omitempty"`
+	Port          int    `yaml:"port,omitempty"`
+	Workers       int    `yaml:"workers,omitempty"`
+	DeskPort      int    `yaml:"desk_port,omitempty"`
+	AutoReload    bool   `yaml:"auto_reload,omitempty"`
+	DeskDevServer bool   `yaml:"desk_dev_server,omitempty"`
 }
 
 // ProductionConfig holds settings for the production environment.

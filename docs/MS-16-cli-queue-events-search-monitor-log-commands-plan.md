@@ -258,7 +258,7 @@ All 8 command groups already exist as placeholder files in `cmd/moca/`:
 
 - **Task ID:** MS-16-T5
 - **Title:** Log Commands
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Replace all 3 placeholders in `cmd/moca/log.go`.
 
