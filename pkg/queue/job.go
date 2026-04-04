@@ -143,6 +143,12 @@ func valuesToJob(values map[string]interface{}) (Job, error) {
 	return j, nil
 }
 
+// ValuesToJob reconstructs a Job from a Redis stream message's Values map.
+// This is the exported wrapper around valuesToJob for use by CLI commands.
+func ValuesToJob(values map[string]interface{}) (Job, error) {
+	return valuesToJob(values)
+}
+
 // delayedEntry is the serialization format for sorted-set members
 // in the delayed job set. It wraps both the job and its target queue type.
 type delayedEntry struct {

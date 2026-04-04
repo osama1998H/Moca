@@ -20,6 +20,7 @@ import (
 	"github.com/osama1998H/moca/pkg/hooks"
 	"github.com/osama1998H/moca/pkg/meta"
 	"github.com/osama1998H/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/queue"
 	"github.com/osama1998H/moca/pkg/tenancy"
 	"github.com/spf13/cobra"
 )
@@ -180,6 +181,31 @@ func formatBytes(b int64) string {
 	default:
 		return fmt.Sprintf("%d B", b)
 	}
+}
+
+// listActiveSites returns the names of all active sites from the system database.
+// Reused by queue, events, search, monitor, and worker commands.
+func listActiveSites(ctx context.Context, svc *Services) ([]string, error) {
+	rows, err := svc.DB.SystemPool().Query(ctx, "SELECT name FROM sites WHERE status = 'active'")
+	if err != nil {
+		return nil, fmt.Errorf("list active sites: %w", err)
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("list active sites: scan: %w", err)
+		}
+		names = append(names, name)
+	}
+	return names, rows.Err()
+}
+
+// newQueueProducer creates a queue.Producer from the Services' Redis Queue client.
+func newQueueProducer(svc *Services) *queue.Producer {
+	return queue.NewProducer(svc.Redis.Queue, svc.Logger)
 }
 
 // gatherMigrations scans apps and converts manifest migrations to orm.AppMigration slice.
