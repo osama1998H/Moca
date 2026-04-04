@@ -94,6 +94,7 @@ func runServe(cmd *cobra.Command, _ []string) error {
 
 	if !noWorkers {
 		sup.Add(process.Subsystem{Name: "worker", Run: serve.WorkerSubsystem(
+			srv.DBManager(),
 			srv.RedisClients(),
 			srv.Registry(),
 			cfg.Infrastructure.Kafka,
@@ -146,7 +147,7 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	_, _ = fmt.Fprintf(w, "  URL:       http://%s\n", srv.Addr())
 	_, _ = fmt.Fprintf(w, "  PID:       %d\n", os.Getpid())
 	_, _ = fmt.Fprintf(w, "  Workers:   %s\n", enabledStr(!noWorkers))
-	_, _ = fmt.Fprintf(w, "  Scheduler: %s\n", enabledStr(!noScheduler))
+	_, _ = fmt.Fprintf(w, "  Scheduler: %s\n", enabledStr(!noScheduler && cfg.Scheduler.Enabled))
 	_, _ = fmt.Fprintf(w, "  Watcher:   %s\n", enabledStr(!noWatch))
 	_, _ = fmt.Fprintf(w, "  Outbox:    enabled\n")
 	_, _ = fmt.Fprintln(w)

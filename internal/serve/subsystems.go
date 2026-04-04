@@ -18,9 +18,10 @@ import (
 )
 
 // WorkerSubsystem creates a supervisor-compatible run function for the
-// background worker pool. It registers a search.sync handler when Kafka
-// is disabled and search is available.
+// background worker pool. It discovers active sites from the database and
+// registers a search.sync handler when Kafka is disabled and search is available.
 func WorkerSubsystem(
+	dbManager *orm.DBManager,
 	redisClients *drivers.RedisClients,
 	registry *meta.Registry,
 	kafkaCfg config.KafkaConfig,
@@ -28,9 +29,18 @@ func WorkerSubsystem(
 	logger *slog.Logger,
 ) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
+		// Discover active tenant sites from the system database.
+		siteLister := &meta.DBSiteLister{DB: dbManager}
+		sites, err := siteLister.ListActiveSites(ctx)
+		if err != nil {
+			logger.Warn("worker: failed to list active sites", slog.String("error", err.Error()))
+		}
+		if len(sites) == 0 {
+			logger.Warn("worker: no active sites found")
+		}
+
 		wpCfg := queue.DefaultWorkerPoolConfig()
-		// Dev server starts with no fixed site list; the worker pool
-		// will wait for shutdown. Future: discover sites dynamically.
+		wpCfg.Sites = sites
 		wpCfg.Logger = logger
 
 		wp := queue.NewWorkerPool(redisClients.Queue, wpCfg)
@@ -90,11 +100,17 @@ func SchedulerSubsystem(
 		}
 		scheduler := queue.NewScheduler(producer, opts...)
 
+		// Cron entries will be registered by apps via the hook registry in
+		// future milestones. For now the scheduler starts with zero entries,
+		// matching the standalone moca-scheduler binary behaviour.
+
 		le := queue.NewLeaderElection(redisClients.Queue, queue.LeaderElectionConfig{
 			Logger: logger,
 		})
 
-		logger.Info("scheduler started (waiting for leader election)")
+		logger.Info("scheduler started (waiting for leader election)",
+			slog.Int("cron_entries", scheduler.Entries()),
+		)
 		return scheduler.RunWithLeader(ctx, le)
 	}
 }
