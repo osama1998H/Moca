@@ -14,6 +14,21 @@ import (
 	"github.com/osama1998H/moca/internal/config"
 )
 
+// IndexInfo is a simplified representation of a Meilisearch index.
+type IndexInfo struct {
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	UID        string    `json:"uid"`
+	PrimaryKey string    `json:"primary_key"`
+}
+
+// IndexStats holds statistics for a single Meilisearch index.
+type IndexStats struct {
+	NumberOfDocuments int64 `json:"number_of_documents"`
+	IsIndexing        bool  `json:"is_indexing"`
+	RawDocumentDbSize int64 `json:"raw_document_db_size"`
+}
+
 var ErrUnavailable = errors.New("search unavailable")
 
 const meiliTaskPollInterval = 50 * time.Millisecond
@@ -23,6 +38,7 @@ type rawService interface {
 	CreateIndexWithContext(ctx context.Context, cfg *meilisearch.IndexConfig) (*meilisearch.TaskInfo, error)
 	DeleteIndexWithContext(ctx context.Context, uid string) (*meilisearch.TaskInfo, error)
 	GetIndexWithContext(ctx context.Context, uid string) (*meilisearch.IndexResult, error)
+	ListIndexesWithContext(ctx context.Context, param *meilisearch.IndexesQuery) (*meilisearch.IndexesResults, error)
 	WaitForTaskWithContext(ctx context.Context, taskUID int64, interval time.Duration) (*meilisearch.Task, error)
 	Close()
 }
@@ -34,6 +50,7 @@ type rawIndex interface {
 	UpdateFilterableAttributesWithContext(ctx context.Context, request *[]interface{}) (*meilisearch.TaskInfo, error)
 	UpdateSearchableAttributesWithContext(ctx context.Context, request *[]string) (*meilisearch.TaskInfo, error)
 	SearchWithContext(ctx context.Context, query string, request *meilisearch.SearchRequest) (*meilisearch.SearchResponse, error)
+	GetStatsWithContext(ctx context.Context) (*meilisearch.StatsIndex, error)
 	WaitForTaskWithContext(ctx context.Context, taskUID int64, interval time.Duration) (*meilisearch.Task, error)
 }
 
@@ -55,6 +72,10 @@ func (m *meiliServiceAdapter) DeleteIndexWithContext(ctx context.Context, uid st
 
 func (m *meiliServiceAdapter) GetIndexWithContext(ctx context.Context, uid string) (*meilisearch.IndexResult, error) {
 	return m.svc.GetIndexWithContext(ctx, uid)
+}
+
+func (m *meiliServiceAdapter) ListIndexesWithContext(ctx context.Context, param *meilisearch.IndexesQuery) (*meilisearch.IndexesResults, error) {
+	return m.svc.ListIndexesWithContext(ctx, param)
 }
 
 func (m *meiliServiceAdapter) WaitForTaskWithContext(ctx context.Context, taskUID int64, interval time.Duration) (*meilisearch.Task, error) {
@@ -91,6 +112,10 @@ func (m *meiliIndexAdapter) UpdateSearchableAttributesWithContext(ctx context.Co
 
 func (m *meiliIndexAdapter) SearchWithContext(ctx context.Context, query string, request *meilisearch.SearchRequest) (*meilisearch.SearchResponse, error) {
 	return m.idx.SearchWithContext(ctx, query, request)
+}
+
+func (m *meiliIndexAdapter) GetStatsWithContext(ctx context.Context) (*meilisearch.StatsIndex, error) {
+	return m.idx.GetStatsWithContext(ctx)
 }
 
 func (m *meiliIndexAdapter) WaitForTaskWithContext(ctx context.Context, taskUID int64, interval time.Duration) (*meilisearch.Task, error) {
@@ -170,6 +195,66 @@ func (c *Client) waitForIndexTask(ctx context.Context, index rawIndex, taskUID i
 		return fmt.Errorf("task %d failed: %s", task.TaskUID, task.Error.Message)
 	}
 	return nil
+}
+
+// ListIndexes returns all indexes whose UID starts with prefix.
+// Pass an empty prefix to list all indexes.
+func (c *Client) ListIndexes(ctx context.Context, prefix string) ([]IndexInfo, error) {
+	if !c.available() {
+		return nil, ErrUnavailable
+	}
+
+	var allResults []IndexInfo
+	var offset int64
+	const pageSize int64 = 100
+
+	for {
+		resp, err := c.svc.ListIndexesWithContext(ctx, &meilisearch.IndexesQuery{
+			Limit:  pageSize,
+			Offset: offset,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("list indexes: %w", err)
+		}
+
+		for _, idx := range resp.Results {
+			if prefix != "" && !strings.HasPrefix(idx.UID, prefix) {
+				continue
+			}
+			allResults = append(allResults, IndexInfo{
+				UID:        idx.UID,
+				PrimaryKey: idx.PrimaryKey,
+				CreatedAt:  idx.CreatedAt,
+				UpdatedAt:  idx.UpdatedAt,
+			})
+		}
+
+		offset += pageSize
+		if offset >= resp.Total {
+			break
+		}
+	}
+
+	return allResults, nil
+}
+
+// GetIndexStats returns statistics for a specific index by UID.
+func (c *Client) GetIndexStats(ctx context.Context, uid string) (*IndexStats, error) {
+	if !c.available() {
+		return nil, ErrUnavailable
+	}
+
+	index := c.svc.Index(uid)
+	stats, err := index.GetStatsWithContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get index stats %q: %w", uid, err)
+	}
+
+	return &IndexStats{
+		NumberOfDocuments: stats.NumberOfDocuments,
+		IsIndexing:        stats.IsIndexing,
+		RawDocumentDbSize: stats.RawDocumentDbSize,
+	}, nil
 }
 
 func isSearchNotFound(err error) bool {

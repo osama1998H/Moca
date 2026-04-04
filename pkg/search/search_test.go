@@ -50,6 +50,10 @@ func (s *fakeRawService) GetIndexWithContext(_ context.Context, uid string) (*me
 	return &meilisearch.IndexResult{UID: uid}, nil
 }
 
+func (s *fakeRawService) ListIndexesWithContext(_ context.Context, _ *meilisearch.IndexesQuery) (*meilisearch.IndexesResults, error) {
+	return &meilisearch.IndexesResults{}, nil
+}
+
 func (s *fakeRawService) WaitForTaskWithContext(_ context.Context, taskUID int64, _ time.Duration) (*meilisearch.Task, error) {
 	s.waited = append(s.waited, taskUID)
 	return &meilisearch.Task{TaskUID: taskUID, Status: meilisearch.TaskStatusSucceeded}, nil
@@ -102,6 +106,10 @@ func (i *fakeRawIndex) SearchWithContext(_ context.Context, query string, reques
 		i.searchResp = &meilisearch.SearchResponse{}
 	}
 	return i.searchResp, nil
+}
+
+func (i *fakeRawIndex) GetStatsWithContext(_ context.Context) (*meilisearch.StatsIndex, error) {
+	return &meilisearch.StatsIndex{}, nil
 }
 
 func (i *fakeRawIndex) WaitForTaskWithContext(_ context.Context, taskUID int64, _ time.Duration) (*meilisearch.Task, error) {

@@ -166,7 +166,7 @@ All 8 command groups already exist as placeholder files in `cmd/moca/`:
 
 - **Task ID:** MS-16-T3
 - **Title:** Search and Monitor Commands
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Replace all 3 placeholders in `cmd/moca/search.go` and 2 of 3 in `cmd/moca/monitor.go` (`monitor live` stays as a "deferred" placeholder).
 
