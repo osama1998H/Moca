@@ -191,12 +191,20 @@ func TestIntegration_OutboxPollerPublishesEvents(t *testing.T) {
 		t.Fatal("timed out waiting for outbox event")
 	}
 
-	cancel()
-
-	// Verify the row was marked as published.
-	if len(store.Published()) == 0 {
-		t.Error("expected row to be marked published")
+	// Poll for MarkPublished to complete — there's a window between Publish
+	// (which triggers the pub/sub message above) and MarkPublished in the
+	// outbox poller's processSite method.
+	deadline := time.After(3 * time.Second)
+	for len(store.Published()) == 0 {
+		select {
+		case <-deadline:
+			cancel()
+			t.Fatal("timed out waiting for row to be marked published")
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
+
+	cancel()
 }
 
 // fakeOutboxStore returns the configured rows once, then empty.
