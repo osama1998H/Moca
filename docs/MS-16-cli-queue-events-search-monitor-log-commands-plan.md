@@ -111,7 +111,7 @@ All 8 command groups already exist as placeholder files in `cmd/moca/`:
 
 - **Task ID:** MS-16-T2
 - **Title:** Worker and Scheduler Management Commands
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Replace all 12 placeholder subcommands across `cmd/moca/worker.go` (4) and `cmd/moca/scheduler.go` (8).
 

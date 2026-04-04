@@ -3,10 +3,14 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 
 	"golang.org/x/term"
 
@@ -15,6 +19,7 @@ import (
 	clicontext "github.com/osama1998H/moca/internal/context"
 	"github.com/osama1998H/moca/internal/drivers"
 	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/internal/process"
 	"github.com/osama1998H/moca/pkg/apps"
 	"github.com/osama1998H/moca/pkg/document"
 	"github.com/osama1998H/moca/pkg/hooks"
@@ -206,6 +211,73 @@ func listActiveSites(ctx context.Context, svc *Services) ([]string, error) {
 // newQueueProducer creates a queue.Producer from the Services' Redis Queue client.
 func newQueueProducer(svc *Services) *queue.Producer {
 	return queue.NewProducer(svc.Redis.Queue, svc.Logger)
+}
+
+// writePIDFile writes the current process PID to {dir}/.moca/{name}.pid.
+func writePIDFile(dir, name string) error {
+	pidDir := filepath.Join(dir, ".moca")
+	if err := os.MkdirAll(pidDir, 0o755); err != nil {
+		return fmt.Errorf("create pid directory: %w", err)
+	}
+	path := filepath.Join(pidDir, name+".pid")
+	data := []byte(strconv.Itoa(os.Getpid()) + "\n")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write pid file: %w", err)
+	}
+	return nil
+}
+
+// readPIDFile reads and parses the PID from {dir}/.moca/{name}.pid.
+func readPIDFile(dir, name string) (int, error) {
+	path := filepath.Join(dir, ".moca", name+".pid")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, fmt.Errorf("read pid file: %w", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return 0, fmt.Errorf("parse pid file: %w", err)
+	}
+	return pid, nil
+}
+
+// removePIDFile removes {dir}/.moca/{name}.pid. Returns nil if the file does not exist.
+func removePIDFile(dir, name string) error {
+	path := filepath.Join(dir, ".moca", name+".pid")
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove pid file: %w", err)
+	}
+	return nil
+}
+
+// stopProcess sends SIGTERM to the process identified by {dir}/.moca/{name}.pid.
+func stopProcess(dir, name string) error {
+	pid, err := readPIDFile(dir, name)
+	if err != nil {
+		return output.NewCLIError(fmt.Sprintf("No %s PID file found", name)).
+			WithErr(err).
+			WithFix(fmt.Sprintf("Is the %s running? Start it with 'moca %s start --foreground'.", name, name))
+	}
+	if !process.IsRunning(pid) {
+		_ = removePIDFile(dir, name)
+		return output.NewCLIError(fmt.Sprintf("The %s process (PID %d) is not running", name, pid)).
+			WithFix(fmt.Sprintf("The PID file was stale and has been removed. Start with 'moca %s start --foreground'.", name))
+	}
+	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
+		return fmt.Errorf("send SIGTERM to %s (PID %d): %w", name, pid, err)
+	}
+	_ = removePIDFile(dir, name)
+	return nil
+}
+
+// processStatus reads the PID file and checks if the process is running.
+// Returns the PID, whether it's running, and any error reading the PID file.
+func processStatus(dir, name string) (int, bool, error) {
+	pid, err := readPIDFile(dir, name)
+	if err != nil {
+		return 0, false, err
+	}
+	return pid, process.IsRunning(pid), nil
 }
 
 // gatherMigrations scans apps and converts manifest migrations to orm.AppMigration slice.
