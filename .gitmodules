@@ -1,0 +1,3 @@
+[submodule "desk"]
+	path = desk
+	url = https://github.com/osama1998H/moca-desk.git
