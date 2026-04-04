@@ -146,7 +146,7 @@ No external web research was needed. The design documents are comprehensive and 
 
 - **Task ID:** MS-17-T3
 - **Title:** Field Component Library and FieldRenderer
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Build the complete field component library and the `FieldRenderer` dispatch component. `FieldRenderer` reads `field_type` from `FieldDef` and renders the corresponding component via `FIELD_TYPE_MAP` (as specified in §9.2 lines 1534–1567). Each field component receives a standard `FieldProps` interface: `{field: FieldDef, value: any, onChange: (v: any) => void, readOnly: boolean, error?: string}`.
 
