@@ -84,17 +84,25 @@ type DocHookDefs struct{}
 
 // ViewMeta holds UI rendering configuration for a MetaType including
 // list views, form layouts, and dashboard widgets.
-// This is a placeholder; the full field set is defined in MS-08 (React UI).
 //
-// Completed in MS-08 (React UI).
-type ViewMeta struct{}
+// Populated in MS-17 (React Desk Foundation).
+type ViewMeta struct {
+	SortField  string `json:"sort_field,omitempty"`
+	SortOrder  string `json:"sort_order,omitempty"`
+	TitleField string `json:"title_field,omitempty"`
+	ImageField string `json:"image_field,omitempty"`
+}
 
 // LayoutHint provides UI layout guidance for a field within a form,
 // such as column span, section placement, and conditional visibility.
-// This is a placeholder; the full field set is defined in MS-08 (React UI).
 //
-// Completed in MS-08 (React UI).
-type LayoutHint struct{}
+// Populated in MS-17 (React Desk Foundation).
+type LayoutHint struct {
+	Label              string `json:"label,omitempty"`
+	ColSpan            int    `json:"col_span,omitempty"`
+	Collapsible        bool   `json:"collapsible,omitempty"`
+	CollapsedByDefault bool   `json:"collapsed_by_default,omitempty"`
+}
 
 // RateLimitConfig defines rate limiting parameters for API endpoints.
 // Window is the sliding window duration, MaxRequests is the cap within

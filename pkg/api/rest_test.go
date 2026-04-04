@@ -486,6 +486,221 @@ func TestHandleMeta_Success(t *testing.T) {
 	}
 }
 
+func TestBuildMetaResponse_UIFields(t *testing.T) {
+	maxVal := 100.0
+	minVal := 1.0
+	mt := &meta.MetaType{
+		Name:         "Invoice",
+		Label:        "Sales Invoice",
+		Module:       "Accounting",
+		TitleField:   "customer_name",
+		ImageField:   "image",
+		SortField:    "modified",
+		SortOrder:    "desc",
+		SearchFields: []string{"customer_name", "status"},
+		TrackChanges: true,
+		NamingRule:   meta.NamingStrategy{Rule: meta.NamingByPattern, Pattern: "SINV-.####"},
+		Fields: []meta.FieldDef{
+			{
+				Name:       "customer_name",
+				FieldType:  meta.FieldTypeData,
+				Label:      "Customer Name",
+				InAPI:      true,
+				InListView: true,
+				InFilter:   true,
+				InPreview:  true,
+				Required:   true,
+				DependsOn:  "eval:doc.customer",
+				Default:    "Guest",
+				MaxLength:  140,
+			},
+			{
+				Name:      "amount",
+				FieldType: meta.FieldTypeCurrency,
+				Label:     "Amount",
+				InAPI:     true,
+				MaxValue:  &maxVal,
+				MinValue:  &minVal,
+				Width:     "200px",
+			},
+			{
+				Name:      "details",
+				FieldType: meta.FieldTypeSectionBreak,
+				Label:     "Details",
+				LayoutHint: meta.LayoutHint{
+					Label:              "Details Section",
+					ColSpan:            12,
+					Collapsible:        true,
+					CollapsedByDefault: false,
+				},
+			},
+			{
+				Name:               "notes",
+				FieldType:          meta.FieldTypeLongText,
+				Label:              "Notes",
+				InAPI:              true,
+				Hidden:             true,
+				MandatoryDependsOn: "eval:doc.status=='Draft'",
+			},
+		},
+		APIConfig: &meta.APIConfig{
+			AllowGet:  true,
+			AllowList: true,
+		},
+	}
+
+	resp := buildMetaResponse(mt)
+
+	// Verify meta-level UI fields.
+	if resp.TitleField != "customer_name" {
+		t.Errorf("TitleField = %q, want %q", resp.TitleField, "customer_name")
+	}
+	if resp.ImageField != "image" {
+		t.Errorf("ImageField = %q, want %q", resp.ImageField, "image")
+	}
+	if resp.SortField != "modified" {
+		t.Errorf("SortField = %q, want %q", resp.SortField, "modified")
+	}
+	if resp.SortOrder != "desc" {
+		t.Errorf("SortOrder = %q, want %q", resp.SortOrder, "desc")
+	}
+	if len(resp.SearchFields) != 2 {
+		t.Fatalf("SearchFields length = %d, want 2", len(resp.SearchFields))
+	}
+	if !resp.TrackChanges {
+		t.Error("TrackChanges = false, want true")
+	}
+	if resp.NamingRule.Rule != meta.NamingByPattern {
+		t.Errorf("NamingRule.Rule = %q, want %q", resp.NamingRule.Rule, meta.NamingByPattern)
+	}
+	if resp.NamingRule.Pattern != "SINV-.####" {
+		t.Errorf("NamingRule.Pattern = %q, want %q", resp.NamingRule.Pattern, "SINV-.####")
+	}
+
+	// Verify field-level UI fields.
+	if len(resp.Fields) != 4 {
+		t.Fatalf("fields length = %d, want 4", len(resp.Fields))
+	}
+
+	f0 := resp.Fields[0] // customer_name
+	if !f0.InListView {
+		t.Error("customer_name.InListView = false, want true")
+	}
+	if !f0.InFilter {
+		t.Error("customer_name.InFilter = false, want true")
+	}
+	if !f0.InPreview {
+		t.Error("customer_name.InPreview = false, want true")
+	}
+	if f0.DependsOn != "eval:doc.customer" {
+		t.Errorf("customer_name.DependsOn = %q, want %q", f0.DependsOn, "eval:doc.customer")
+	}
+	if f0.Default != "Guest" {
+		t.Errorf("customer_name.Default = %v, want %q", f0.Default, "Guest")
+	}
+	if f0.MaxLength != 140 {
+		t.Errorf("customer_name.MaxLength = %d, want 140", f0.MaxLength)
+	}
+
+	f1 := resp.Fields[1] // amount
+	if f1.MaxValue == nil || *f1.MaxValue != 100.0 {
+		t.Errorf("amount.MaxValue = %v, want 100.0", f1.MaxValue)
+	}
+	if f1.MinValue == nil || *f1.MinValue != 1.0 {
+		t.Errorf("amount.MinValue = %v, want 1.0", f1.MinValue)
+	}
+	if f1.Width != "200px" {
+		t.Errorf("amount.Width = %q, want %q", f1.Width, "200px")
+	}
+
+	f2 := resp.Fields[2] // details (SectionBreak)
+	if f2.LayoutLabel != "Details Section" {
+		t.Errorf("details.LayoutLabel = %q, want %q", f2.LayoutLabel, "Details Section")
+	}
+	if f2.ColSpan != 12 {
+		t.Errorf("details.ColSpan = %d, want 12", f2.ColSpan)
+	}
+	if !f2.Collapsible {
+		t.Error("details.Collapsible = false, want true")
+	}
+
+	f3 := resp.Fields[3] // notes
+	if !f3.Hidden {
+		t.Error("notes.Hidden = false, want true")
+	}
+	if f3.MandatoryDependsOn != "eval:doc.status=='Draft'" {
+		t.Errorf("notes.MandatoryDependsOn = %q, want %q", f3.MandatoryDependsOn, "eval:doc.status=='Draft'")
+	}
+}
+
+func TestHandleMeta_IncludesUIFields(t *testing.T) {
+	resolver := &mockMeta{
+		getFn: func(_ context.Context, _, _ string) (*meta.MetaType, error) {
+			return &meta.MetaType{
+				Name:       "TestItem",
+				TitleField: "title",
+				SortField:  "modified",
+				SortOrder:  "desc",
+				NamingRule: meta.NamingStrategy{Rule: meta.NamingUUID},
+				APIConfig: &meta.APIConfig{
+					Enabled:  true,
+					AllowGet: true,
+				},
+				Fields: []meta.FieldDef{
+					{Name: "title", FieldType: meta.FieldTypeData, Label: "Title", InAPI: true, InListView: true, InFilter: true},
+					{Name: "status", FieldType: meta.FieldTypeSelect, Label: "Status", InAPI: true, Hidden: true, DependsOn: "eval:doc.title"},
+				},
+			}, nil
+		},
+	}
+	h := newHandler(nil, resolver)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "v1")
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/meta/TestItem", nil)
+	r = contextWithSiteAndUser(r)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var env successEnvelope
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	data, ok := env.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data type = %T, want map", env.Data)
+	}
+	if data["title_field"] != "customer_name" && data["title_field"] != "title" {
+		// Just verify the field is present.
+		if _, exists := data["title_field"]; !exists {
+			t.Error("title_field missing from meta response")
+		}
+	}
+	if data["sort_field"] != "modified" {
+		t.Errorf("sort_field = %v, want %q", data["sort_field"], "modified")
+	}
+
+	fields, ok := data["fields"].([]any)
+	if !ok || len(fields) < 1 {
+		t.Fatalf("fields missing or empty")
+	}
+	f0, ok := fields[0].(map[string]any)
+	if !ok {
+		t.Fatalf("field[0] type = %T, want map", fields[0])
+	}
+	if f0["in_list_view"] != true {
+		t.Errorf("field[0].in_list_view = %v, want true", f0["in_list_view"])
+	}
+	if f0["in_filter"] != true {
+		t.Errorf("field[0].in_filter = %v, want true", f0["in_filter"])
+	}
+}
+
 // ── Permission denied ───────────────────────────────────────────────────────
 
 func TestHandleGet_PermissionDenied(t *testing.T) {

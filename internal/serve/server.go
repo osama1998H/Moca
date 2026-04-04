@@ -142,8 +142,16 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	hc := observe.NewHealthChecker(dbManager.SystemPool(), redisClients, version, logger)
 	hc.RegisterRoutes(gw.Mux())
 
-	// ── Static files & WebSocket stub ───────────────────────────────────
-	registerStaticFiles(gw.Mux(), cfg.StaticDir, logger)
+	// ── Desk frontend (dev proxy or static files) & WebSocket stub ──────
+	if cfg.Config != nil && cfg.Config.Development.DeskDevServer {
+		deskPort := cfg.Config.Development.DeskPort
+		if deskPort == 0 {
+			deskPort = 3000
+		}
+		registerDeskDevProxy(gw.Mux(), deskPort, logger)
+	} else {
+		registerStaticFiles(gw.Mux(), cfg.StaticDir, logger)
+	}
 	registerWebSocketStub(gw.Mux())
 
 	// ── HTTP server ─────────────────────────────────────────────────────

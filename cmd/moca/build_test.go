@@ -26,9 +26,9 @@ func TestBuildCommandSubcommands(t *testing.T) {
 		}
 	}
 
-	// Verify app and server have real implementations (non-nil RunE).
+	// Verify app, server, and desk have real implementations (non-nil RunE).
 	for _, sub := range subs {
-		if sub.Name() == "app" || sub.Name() == "server" {
+		if sub.Name() == "app" || sub.Name() == "server" || sub.Name() == "desk" {
 			if sub.RunE == nil {
 				t.Errorf("subcommand %q has nil RunE (still a placeholder?)", sub.Name())
 			}
@@ -60,6 +60,29 @@ func TestBuildAppFlags(t *testing.T) {
 	// Verify requires exactly 1 arg.
 	if appCmd.Args == nil {
 		t.Error("app subcommand has no Args validator")
+	}
+}
+
+func TestBuildDeskFlags(t *testing.T) {
+	cmd := NewBuildCommand()
+
+	var deskCmd *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "desk" {
+			deskCmd = sub
+			break
+		}
+	}
+	if deskCmd == nil {
+		t.Fatal("desk subcommand not found")
+	}
+
+	if deskCmd.RunE == nil {
+		t.Error("desk subcommand has nil RunE — still a placeholder")
+	}
+
+	if deskCmd.Flags().Lookup("verbose") == nil {
+		t.Error("desk subcommand missing flag --verbose")
 	}
 }
 

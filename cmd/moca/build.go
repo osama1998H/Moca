@@ -21,7 +21,7 @@ func NewBuildCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		newSubcommand("desk", "Build React Desk frontend"),
+		newBuildDeskCmd(),
 		newSubcommand("portal", "Build portal/website assets"),
 		newSubcommand("assets", "Build all static assets"),
 		newBuildAppCmd(),
@@ -29,6 +29,99 @@ func NewBuildCommand() *cobra.Command {
 	)
 
 	return cmd
+}
+
+// ---------------------------------------------------------------------------
+// build desk
+// ---------------------------------------------------------------------------
+
+func newBuildDeskCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "desk",
+		Short: "Build React Desk frontend",
+		Long: `Build the React Desk frontend using Vite.
+Runs 'npx vite build' in the desk/ directory, producing optimized
+production assets in desk/dist/.`,
+		RunE: runBuildDesk,
+	}
+
+	f := cmd.Flags()
+	f.Bool("verbose", false, "Show Vite build output")
+
+	return cmd
+}
+
+func runBuildDesk(cmd *cobra.Command, _ []string) error {
+	w := output.NewWriter(cmd)
+
+	ctx, err := requireProject(cmd)
+	if err != nil {
+		return err
+	}
+	projectRoot := ctx.ProjectRoot
+	verbose, _ := cmd.Flags().GetBool("verbose")
+
+	deskDir := filepath.Join(projectRoot, "desk")
+
+	// Verify desk/ directory exists with a package.json.
+	pkgJSON := filepath.Join(deskDir, "package.json")
+	if _, err := os.Stat(pkgJSON); err != nil {
+		return output.NewCLIError("No desk/ project found").
+			WithErr(err).
+			WithCause(fmt.Sprintf("%s does not exist", pkgJSON)).
+			WithFix("Run 'moca new desk' to scaffold the React Desk project, or create desk/package.json manually.")
+	}
+
+	// Run npx vite build.
+	buildCmd := exec.Command("npx", "vite", "build")
+	buildCmd.Dir = deskDir
+	buildCmd.Env = append(os.Environ(), "NODE_ENV=production")
+
+	if verbose {
+		buildCmd.Stdout = os.Stdout
+		buildCmd.Stderr = os.Stderr
+	}
+
+	s := w.NewSpinner("Building React Desk frontend...")
+	if !verbose {
+		s.Start()
+	}
+
+	out, runErr := runCmdCaptureStderr(buildCmd, verbose)
+
+	if !verbose {
+		if runErr != nil {
+			s.Stop("Failed")
+		} else {
+			s.Stop("OK")
+		}
+	}
+
+	if runErr != nil {
+		if out != "" {
+			w.Print(out)
+		}
+		return output.NewCLIError("Desk build failed").
+			WithErr(runErr).
+			WithFix("Fix the build errors above and try again. Ensure Node.js and npm are installed.")
+	}
+
+	// Report output directory size if it exists.
+	distDir := filepath.Join(deskDir, "dist")
+	if info, statErr := os.Stat(distDir); statErr == nil && info.IsDir() {
+		var totalSize int64
+		_ = filepath.Walk(distDir, func(_ string, fi os.FileInfo, _ error) error {
+			if fi != nil && !fi.IsDir() {
+				totalSize += fi.Size()
+			}
+			return nil
+		})
+		w.PrintSuccess(fmt.Sprintf("Desk build complete: %s (%s)", distDir, formatBytes(totalSize)))
+	} else {
+		w.PrintSuccess("Desk build complete")
+	}
+
+	return nil
 }
 
 // ---------------------------------------------------------------------------

@@ -365,35 +365,57 @@ func (e *emptyBodyError) Error() string { return "empty request body" }
 
 // apiFieldDef is the API-safe representation of a field definition.
 type apiFieldDef struct {
-	Name        string `json:"name"`
-	FieldType   string `json:"field_type"`
-	Label       string `json:"label"`
-	APIAlias    string `json:"api_alias,omitempty"`
-	Options     string `json:"options,omitempty"`
-	Required    bool   `json:"required"`
-	ReadOnly    bool   `json:"read_only"`
-	APIReadOnly bool   `json:"api_read_only,omitempty"`
-	InAPI       bool   `json:"in_api"`
-	Searchable  bool   `json:"searchable,omitempty"`
-	Filterable  bool   `json:"filterable,omitempty"`
-	Unique      bool   `json:"unique,omitempty"`
+	Default            any      `json:"default,omitempty"`
+	MaxValue           *float64 `json:"max_value,omitempty"`
+	MinValue           *float64 `json:"min_value,omitempty"`
+	Name               string   `json:"name"`
+	FieldType          string   `json:"field_type"`
+	Label              string   `json:"label"`
+	APIAlias           string   `json:"api_alias,omitempty"`
+	Options            string   `json:"options,omitempty"`
+	DependsOn          string   `json:"depends_on,omitempty"`
+	MandatoryDependsOn string   `json:"mandatory_depends_on,omitempty"`
+	Width              string   `json:"width,omitempty"`
+	LayoutLabel        string   `json:"layout_label,omitempty"`
+	MaxLength          int      `json:"max_length,omitempty"`
+	ColSpan            int      `json:"col_span,omitempty"`
+	Required           bool     `json:"required"`
+	ReadOnly           bool     `json:"read_only"`
+	APIReadOnly        bool     `json:"api_read_only,omitempty"`
+	InAPI              bool     `json:"in_api"`
+	InListView         bool     `json:"in_list_view,omitempty"`
+	InFilter           bool     `json:"in_filter,omitempty"`
+	InPreview          bool     `json:"in_preview,omitempty"`
+	Hidden             bool     `json:"hidden,omitempty"`
+	Searchable         bool     `json:"searchable,omitempty"`
+	Filterable         bool     `json:"filterable,omitempty"`
+	Unique             bool     `json:"unique,omitempty"`
+	Collapsible        bool     `json:"collapsible,omitempty"`
+	CollapsedByDefault bool     `json:"collapsed_by_default,omitempty"`
 }
 
 // apiMetaResponse is the API-safe representation of a MetaType.
 type apiMetaResponse struct {
-	Name          string        `json:"name"`
-	Label         string        `json:"label,omitempty"`
-	Description   string        `json:"description,omitempty"`
-	Module        string        `json:"module,omitempty"`
-	Fields        []apiFieldDef `json:"fields"`
-	IsSingle      bool          `json:"is_single"`
-	IsSubmittable bool          `json:"is_submittable"`
-	IsChildTable  bool          `json:"is_child_table"`
-	AllowGet      bool          `json:"allow_get"`
-	AllowCreate   bool          `json:"allow_create"`
-	AllowUpdate   bool          `json:"allow_update"`
-	AllowDelete   bool          `json:"allow_delete"`
-	AllowList     bool          `json:"allow_list"`
+	Name          string              `json:"name"`
+	Label         string              `json:"label,omitempty"`
+	Description   string              `json:"description,omitempty"`
+	Module        string              `json:"module,omitempty"`
+	NamingRule    meta.NamingStrategy  `json:"naming_rule"`
+	TitleField    string              `json:"title_field,omitempty"`
+	ImageField    string              `json:"image_field,omitempty"`
+	SortField     string              `json:"sort_field,omitempty"`
+	SortOrder     string              `json:"sort_order,omitempty"`
+	SearchFields  []string            `json:"search_fields,omitempty"`
+	Fields        []apiFieldDef       `json:"fields"`
+	IsSingle      bool                `json:"is_single"`
+	IsSubmittable bool                `json:"is_submittable"`
+	IsChildTable  bool                `json:"is_child_table"`
+	TrackChanges  bool                `json:"track_changes,omitempty"`
+	AllowGet      bool                `json:"allow_get"`
+	AllowCreate   bool                `json:"allow_create"`
+	AllowUpdate   bool                `json:"allow_update"`
+	AllowDelete   bool                `json:"allow_delete"`
+	AllowList     bool                `json:"allow_list"`
 }
 
 func buildMetaResponse(mt *meta.MetaType) apiMetaResponse {
@@ -402,6 +424,13 @@ func buildMetaResponse(mt *meta.MetaType) apiMetaResponse {
 		Label:         mt.Label,
 		Description:   mt.Description,
 		Module:        mt.Module,
+		NamingRule:    mt.NamingRule,
+		TitleField:    mt.TitleField,
+		ImageField:    mt.ImageField,
+		SortField:     mt.SortField,
+		SortOrder:     mt.SortOrder,
+		SearchFields:  mt.SearchFields,
+		TrackChanges:  mt.TrackChanges,
 		IsSingle:      mt.IsSingle,
 		IsSubmittable: mt.IsSubmittable,
 		IsChildTable:  mt.IsChildTable,
@@ -416,18 +445,33 @@ func buildMetaResponse(mt *meta.MetaType) apiMetaResponse {
 	resp.Fields = make([]apiFieldDef, 0, len(mt.Fields))
 	for _, f := range mt.Fields {
 		resp.Fields = append(resp.Fields, apiFieldDef{
-			Name:        f.Name,
-			FieldType:   string(f.FieldType),
-			Label:       f.Label,
-			Required:    f.Required,
-			ReadOnly:    f.ReadOnly,
-			APIReadOnly: f.APIReadOnly,
-			APIAlias:    f.APIAlias,
-			InAPI:       f.InAPI,
-			Options:     f.Options,
-			Searchable:  f.Searchable,
-			Filterable:  f.Filterable,
-			Unique:      f.Unique,
+			Name:               f.Name,
+			FieldType:          string(f.FieldType),
+			Label:              f.Label,
+			Required:           f.Required,
+			ReadOnly:           f.ReadOnly,
+			APIReadOnly:        f.APIReadOnly,
+			APIAlias:           f.APIAlias,
+			InAPI:              f.InAPI,
+			Options:            f.Options,
+			DependsOn:          f.DependsOn,
+			MandatoryDependsOn: f.MandatoryDependsOn,
+			Default:            f.Default,
+			MaxLength:          f.MaxLength,
+			MaxValue:           f.MaxValue,
+			MinValue:           f.MinValue,
+			Width:              f.Width,
+			InListView:         f.InListView,
+			InFilter:           f.InFilter,
+			InPreview:          f.InPreview,
+			Hidden:             f.Hidden,
+			Searchable:         f.Searchable,
+			Filterable:         f.Filterable,
+			Unique:             f.Unique,
+			ColSpan:            f.LayoutHint.ColSpan,
+			Collapsible:        f.LayoutHint.Collapsible,
+			CollapsedByDefault: f.LayoutHint.CollapsedByDefault,
+			LayoutLabel:        f.LayoutHint.Label,
 		})
 	}
 	return resp

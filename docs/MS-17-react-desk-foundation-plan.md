@@ -51,7 +51,7 @@ No external web research was needed. The design documents are comprehensive and 
 
 - **Task ID:** MS-17-T1
 - **Title:** Extend Meta API for Frontend Consumption and Implement Build/Dev Pipeline
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Two backend changes that unblock all frontend work:
 

@@ -119,7 +119,6 @@ func (ft FieldType) IsStorable() bool {
 // FieldDef defines a single field within a MetaType schema, including its
 // storage type, validation rules, API exposure settings, and UI layout hints.
 type FieldDef struct {
-	LayoutHint         LayoutHint `json:"layout_hint"`
 	Default            any        `json:"default,omitempty"`
 	MaxValue           *float64   `json:"max_value,omitempty"`
 	MinValue           *float64   `json:"min_value,omitempty"`
@@ -133,6 +132,7 @@ type FieldDef struct {
 	FieldType          FieldType  `json:"field_type"`
 	Label              string     `json:"label"`
 	ValidationRegex    string     `json:"validation_regex,omitempty"`
+	LayoutHint         LayoutHint `json:"layout_hint"`
 	MaxLength          int        `json:"max_length,omitempty"`
 	Hidden             bool       `json:"hidden"`
 	InAPI              bool       `json:"in_api"`

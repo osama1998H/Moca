@@ -73,11 +73,12 @@ func runServe(cmd *cobra.Command, _ []string) error {
 
 	// ── Server ──────────────────────────────────────────────────────────
 	srv, err := serve.NewServer(cmd.Context(), serve.ServerConfig{
-		Config:  cfg,
-		Logger:  logger,
-		Host:    host,
-		Port:    port,
-		Version: Version,
+		Config:    cfg,
+		Logger:    logger,
+		Host:      host,
+		Port:      port,
+		Version:   Version,
+		StaticDir: filepath.Join(projectRoot, "desk", "dist"),
 	})
 	if err != nil {
 		return output.NewCLIError("Failed to start server").
