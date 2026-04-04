@@ -165,7 +165,7 @@ No external web research was needed. All implementation patterns are fully valid
 
 - **Task ID:** MS-15-T3
 - **Title:** Event Producer Abstraction — Kafka + Redis Pub/Sub Fallback
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Implement the event producer abstraction in `pkg/events/` with dual backends: Kafka (franz-go) when `kafka.enabled: true`, Redis pub/sub when `kafka.enabled: false`.
 
