@@ -55,12 +55,12 @@ func TestColorConfig_AllColorsContainText(t *testing.T) {
 		fn   func(string) string
 		name string
 	}{
-		{"Success", cc.Success},
-		{"Warning", cc.Warning},
-		{"Error", cc.Error},
-		{"Info", cc.Info},
-		{"Muted", cc.Muted},
-		{"Bold", cc.Bold},
+		{cc.Success, "Success"},
+		{cc.Warning, "Warning"},
+		{cc.Error, "Error"},
+		{cc.Info, "Info"},
+		{cc.Muted, "Muted"},
+		{cc.Bold, "Bold"},
 	}
 
 	for _, m := range methods {
