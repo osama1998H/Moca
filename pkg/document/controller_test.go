@@ -16,22 +16,22 @@ func TestBaseController_NoOpLifecycleMethods(t *testing.T) {
 		fn   func() error
 		name string
 	}{
-		{"BeforeInsert", func() error { return bc.BeforeInsert(dc, doc) }},
-		{"AfterInsert", func() error { return bc.AfterInsert(dc, doc) }},
-		{"BeforeValidate", func() error { return bc.BeforeValidate(dc, doc) }},
-		{"Validate", func() error { return bc.Validate(dc, doc) }},
-		{"BeforeSave", func() error { return bc.BeforeSave(dc, doc) }},
-		{"AfterSave", func() error { return bc.AfterSave(dc, doc) }},
-		{"OnUpdate", func() error { return bc.OnUpdate(dc, doc) }},
-		{"BeforeSubmit", func() error { return bc.BeforeSubmit(dc, doc) }},
-		{"OnSubmit", func() error { return bc.OnSubmit(dc, doc) }},
-		{"BeforeCancel", func() error { return bc.BeforeCancel(dc, doc) }},
-		{"OnCancel", func() error { return bc.OnCancel(dc, doc) }},
-		{"OnTrash", func() error { return bc.OnTrash(dc, doc) }},
-		{"AfterDelete", func() error { return bc.AfterDelete(dc, doc) }},
-		{"OnChange", func() error { return bc.OnChange(dc, doc) }},
-		{"BeforeRename", func() error { return bc.BeforeRename(dc, doc, "old", "new") }},
-		{"AfterRename", func() error { return bc.AfterRename(dc, doc, "old", "new") }},
+		{name: "BeforeInsert", fn: func() error { return bc.BeforeInsert(dc, doc) }},
+		{name: "AfterInsert", fn: func() error { return bc.AfterInsert(dc, doc) }},
+		{name: "BeforeValidate", fn: func() error { return bc.BeforeValidate(dc, doc) }},
+		{name: "Validate", fn: func() error { return bc.Validate(dc, doc) }},
+		{name: "BeforeSave", fn: func() error { return bc.BeforeSave(dc, doc) }},
+		{name: "AfterSave", fn: func() error { return bc.AfterSave(dc, doc) }},
+		{name: "OnUpdate", fn: func() error { return bc.OnUpdate(dc, doc) }},
+		{name: "BeforeSubmit", fn: func() error { return bc.BeforeSubmit(dc, doc) }},
+		{name: "OnSubmit", fn: func() error { return bc.OnSubmit(dc, doc) }},
+		{name: "BeforeCancel", fn: func() error { return bc.BeforeCancel(dc, doc) }},
+		{name: "OnCancel", fn: func() error { return bc.OnCancel(dc, doc) }},
+		{name: "OnTrash", fn: func() error { return bc.OnTrash(dc, doc) }},
+		{name: "AfterDelete", fn: func() error { return bc.AfterDelete(dc, doc) }},
+		{name: "OnChange", fn: func() error { return bc.OnChange(dc, doc) }},
+		{name: "BeforeRename", fn: func() error { return bc.BeforeRename(dc, doc, "old", "new") }},
+		{name: "AfterRename", fn: func() error { return bc.AfterRename(dc, doc, "old", "new") }},
 	}
 
 	for _, m := range methods {
