@@ -175,6 +175,12 @@ func TestEmitter_PreservesExistingEventID(t *testing.T) {
 
 	emitter.Emit("topic", DocumentEvent{EventID: "custom-id", DocType: "X"})
 
+	if producer.calls != 1 {
+		t.Fatalf("calls = %d, want 1", producer.calls)
+	}
+	if producer.event == nil {
+		t.Fatal("expected captured event")
+	}
 	if producer.event.EventID != "custom-id" {
 		t.Errorf("EventID = %q, want custom-id", producer.event.EventID)
 	}
@@ -248,6 +254,12 @@ func TestEmitter_LegacyMapPayload_PrevData(t *testing.T) {
 		"prev_data": prevData,
 	})
 
+	if producer.calls != 1 {
+		t.Fatalf("calls = %d, want 1", producer.calls)
+	}
+	if producer.event == nil {
+		t.Fatal("expected captured event")
+	}
 	if producer.event.PrevData == nil {
 		t.Error("PrevData should be set")
 	}

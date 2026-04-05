@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestWriteJSON(t *testing.T) {
+func TestWriteJSON_IndentedOutput(t *testing.T) {
 	var buf bytes.Buffer
 	data := map[string]any{"key": "value", "count": 42}
 	if err := WriteJSON(&buf, data); err != nil {
@@ -26,7 +26,7 @@ func TestWriteJSON(t *testing.T) {
 	}
 }
 
-func TestWriteJSON_Nil(t *testing.T) {
+func TestWriteJSON_NilValue(t *testing.T) {
 	var buf bytes.Buffer
 	if err := WriteJSON(&buf, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -57,7 +57,7 @@ func TestWriteJSON_Array(t *testing.T) {
 	}
 }
 
-func TestWriteJSONCompact(t *testing.T) {
+func TestWriteJSONCompact_BasicObject(t *testing.T) {
 	var buf bytes.Buffer
 	data := map[string]string{"key": "value"}
 	if err := WriteJSONCompact(&buf, data); err != nil {
@@ -74,7 +74,7 @@ func TestWriteJSONCompact(t *testing.T) {
 	}
 }
 
-func TestWriteJSONCompact_Nil(t *testing.T) {
+func TestWriteJSONCompact_NilValue(t *testing.T) {
 	var buf bytes.Buffer
 	if err := WriteJSONCompact(&buf, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)

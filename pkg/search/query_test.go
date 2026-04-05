@@ -163,11 +163,11 @@ func TestSliceValues(t *testing.T) {
 		wantLen int
 		wantErr bool
 	}{
-		{"any_slice", []any{1, "two", 3.0}, 3, false},
-		{"string_slice", []string{"a", "b"}, 2, false},
-		{"int_slice", []int{1, 2, 3}, 3, false},
-		{"not_a_slice", "string", 0, true},
-		{"int_not_slice", 42, 0, true},
+		{name: "any_slice", input: []any{1, "two", 3.0}, wantLen: 3, wantErr: false},
+		{name: "string_slice", input: []string{"a", "b"}, wantLen: 2, wantErr: false},
+		{name: "int_slice", input: []int{1, 2, 3}, wantLen: 3, wantErr: false},
+		{name: "not_a_slice", input: "string", wantLen: 0, wantErr: true},
+		{name: "int_not_slice", input: 42, wantLen: 0, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

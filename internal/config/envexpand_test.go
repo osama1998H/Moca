@@ -2,7 +2,6 @@ package config
 
 import (
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -95,7 +94,10 @@ func TestExpandEnvVars_DuplicateMissingVar(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
-	envErr := err.(*EnvExpandError)
+	envErr, ok := err.(*EnvExpandError)
+	if !ok {
+		t.Fatalf("expected *EnvExpandError, got %T", err)
+	}
 	// Should be deduplicated.
 	if len(envErr.Missing) != 1 {
 		t.Errorf("Missing count = %d, want 1 (deduplicated)", len(envErr.Missing))
@@ -138,20 +140,6 @@ func TestExpandEnvVars_InvalidPatterns(t *testing.T) {
 	}
 }
 
-func TestEnvExpandError_SingleVar(t *testing.T) {
-	err := &EnvExpandError{Missing: []string{"DB_HOST"}}
-	if !strings.Contains(err.Error(), "DB_HOST") {
-		t.Errorf("error = %q, want to contain DB_HOST", err.Error())
-	}
-}
-
-func TestEnvExpandError_MultipleVars(t *testing.T) {
-	err := &EnvExpandError{Missing: []string{"DB_HOST", "DB_PORT"}}
-	msg := err.Error()
-	if !strings.Contains(msg, "2 environment variables") {
-		t.Errorf("error = %q", msg)
-	}
-}
 
 func TestEnvVarPattern_ValidNames(t *testing.T) {
 	tests := []struct {

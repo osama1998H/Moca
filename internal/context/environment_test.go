@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestResolveEnvironment_Default(t *testing.T) {
-	os.Unsetenv("MOCA_ENV")
+func TestResolveEnvironment_FallbackDefault(t *testing.T) {
+	t.Setenv("MOCA_ENV", "")
 	cmd := &cobra.Command{}
 
 	got := resolveEnvironment(cmd, "")
@@ -18,7 +18,7 @@ func TestResolveEnvironment_Default(t *testing.T) {
 	}
 }
 
-func TestResolveEnvironment_EnvVar(t *testing.T) {
+func TestResolveEnvironment_FromEnvVar(t *testing.T) {
 	t.Setenv("MOCA_ENV", "production")
 	cmd := &cobra.Command{}
 
@@ -28,8 +28,8 @@ func TestResolveEnvironment_EnvVar(t *testing.T) {
 	}
 }
 
-func TestResolveEnvironment_StateFile(t *testing.T) {
-	os.Unsetenv("MOCA_ENV")
+func TestResolveEnvironment_FromStateFile(t *testing.T) {
+	t.Setenv("MOCA_ENV", "")
 
 	dir := t.TempDir()
 	mocaDir := filepath.Join(dir, ".moca")
@@ -47,8 +47,8 @@ func TestResolveEnvironment_StateFile(t *testing.T) {
 	}
 }
 
-func TestResolveEnvironment_EmptyStateFile(t *testing.T) {
-	os.Unsetenv("MOCA_ENV")
+func TestResolveEnvironment_EmptyStateFileFallback(t *testing.T) {
+	t.Setenv("MOCA_ENV", "")
 
 	dir := t.TempDir()
 	mocaDir := filepath.Join(dir, ".moca")
@@ -66,7 +66,7 @@ func TestResolveEnvironment_EmptyStateFile(t *testing.T) {
 	}
 }
 
-func TestResolveEnvironment_EnvVarPrecedence(t *testing.T) {
+func TestResolveEnvironment_EnvVarBeatsStateFile(t *testing.T) {
 	t.Setenv("MOCA_ENV", "production")
 
 	// Even with a state file present, env var should win.

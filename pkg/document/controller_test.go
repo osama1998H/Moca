@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestBaseController_AllMethodsReturnNil(t *testing.T) {
+func TestBaseController_NoOpLifecycleMethods(t *testing.T) {
 	bc := BaseController{}
 	dc := NewDocContext(context.Background(), nil, nil)
 	var doc Document // nil doc — testing no-op behavior

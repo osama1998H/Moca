@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestResolveSite_Empty(t *testing.T) {
-	os.Unsetenv("MOCA_SITE")
+func TestResolveSite_EmptyContext(t *testing.T) {
+	t.Setenv("MOCA_SITE", "")
 	cmd := &cobra.Command{}
 
 	got := resolveSite(cmd, "")
@@ -18,7 +18,7 @@ func TestResolveSite_Empty(t *testing.T) {
 	}
 }
 
-func TestResolveSite_EnvVar(t *testing.T) {
+func TestResolveSite_FromEnvVar(t *testing.T) {
 	t.Setenv("MOCA_SITE", "acme")
 	cmd := &cobra.Command{}
 
@@ -28,8 +28,8 @@ func TestResolveSite_EnvVar(t *testing.T) {
 	}
 }
 
-func TestResolveSite_StateFile(t *testing.T) {
-	os.Unsetenv("MOCA_SITE")
+func TestResolveSite_FromStateFile(t *testing.T) {
+	t.Setenv("MOCA_SITE", "")
 
 	dir := t.TempDir()
 	mocaDir := filepath.Join(dir, ".moca")
@@ -47,7 +47,7 @@ func TestResolveSite_StateFile(t *testing.T) {
 	}
 }
 
-func TestResolveSite_EnvVarPrecedence(t *testing.T) {
+func TestResolveSite_EnvVarBeatsStateFile(t *testing.T) {
 	t.Setenv("MOCA_SITE", "env-site")
 
 	dir := t.TempDir()

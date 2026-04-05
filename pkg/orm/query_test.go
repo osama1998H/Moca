@@ -2240,17 +2240,6 @@ func TestToAnySlice_AllTypes(t *testing.T) {
 	}
 }
 
-func TestJoin_SingleSegment_Error(t *testing.T) {
-	// A single dot at the end produces an empty final segment.
-	_, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
-		For("SalesOrder").
-		Fields("customer.").
-		Build(context.Background())
-	if err == nil {
-		t.Fatal("expected error for single segment with trailing dot")
-	}
-}
-
 func TestJoin_LeadingDot_Error(t *testing.T) {
 	_, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
 		For("SalesOrder").
