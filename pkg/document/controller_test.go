@@ -141,8 +141,8 @@ func (e *testExtension) Wrap(inner DocLifecycle) DocLifecycle {
 type wrappedLifecycle struct {
 	BaseController
 	inner   DocLifecycle
-	extName string
 	calls   *[]string
+	extName string
 }
 
 func (w *wrappedLifecycle) BeforeInsert(dc *DocContext, doc Document) error {
