@@ -40,31 +40,21 @@ func TestHasSearchableFields(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "with_searchable_data",
+			name: "with_searchable_field",
 			mt: &meta.MetaType{
 				Name: "SalesOrder",
 				Fields: []meta.FieldDef{
-					{FieldName: "customer", FieldType: meta.FieldTypeData, InListView: true},
+					{Name: "customer", FieldType: meta.FieldTypeData, Searchable: true},
 				},
 			},
 			want: true,
 		},
 		{
-			name: "with_searchable_text",
+			name: "no_searchable_fields",
 			mt: &meta.MetaType{
 				Name: "SalesOrder",
 				Fields: []meta.FieldDef{
-					{FieldName: "description", FieldType: meta.FieldTypeText},
-				},
-			},
-			want: true,
-		},
-		{
-			name: "only_non_searchable",
-			mt: &meta.MetaType{
-				Name: "SalesOrder",
-				Fields: []meta.FieldDef{
-					{FieldName: "section", FieldType: meta.FieldTypeSectionBreak},
+					{Name: "section", FieldType: meta.FieldTypeSectionBreak},
 				},
 			},
 			want: false,
@@ -93,18 +83,21 @@ func TestSearchableAttributes(t *testing.T) {
 	mt := &meta.MetaType{
 		Name: "SalesOrder",
 		Fields: []meta.FieldDef{
-			{FieldName: "customer", FieldType: meta.FieldTypeData},
-			{FieldName: "description", FieldType: meta.FieldTypeText},
-			{FieldName: "section", FieldType: meta.FieldTypeSectionBreak}, // not searchable
-			{FieldName: "total", FieldType: meta.FieldTypeFloat},         // not searchable
+			{Name: "customer", FieldType: meta.FieldTypeData, Searchable: true},
+			{Name: "description", FieldType: meta.FieldTypeText, Searchable: true},
+			{Name: "section", FieldType: meta.FieldTypeSectionBreak},        // not searchable
+			{Name: "total", FieldType: meta.FieldTypeFloat, Searchable: false}, // explicitly not searchable
 		},
 	}
 
 	attrs := searchableAttributes(mt)
-	// Should include text-searchable fields.
 	found := map[string]bool{}
 	for _, a := range attrs {
 		found[a] = true
+	}
+	// "name" is always included as a base searchable attribute.
+	if !found["name"] {
+		t.Error("expected 'name' in searchable attributes (always included)")
 	}
 	if !found["customer"] {
 		t.Error("expected 'customer' in searchable attributes")
@@ -113,7 +106,10 @@ func TestSearchableAttributes(t *testing.T) {
 		t.Error("expected 'description' in searchable attributes")
 	}
 	if found["section"] {
-		t.Error("section_break should not be searchable")
+		t.Error("section should not be searchable")
+	}
+	if found["total"] {
+		t.Error("total should not be searchable")
 	}
 }
 
@@ -121,10 +117,10 @@ func TestFilterableAttributes(t *testing.T) {
 	mt := &meta.MetaType{
 		Name: "SalesOrder",
 		Fields: []meta.FieldDef{
-			{FieldName: "customer", FieldType: meta.FieldTypeLink, Options: "Customer"},
-			{FieldName: "status", FieldType: meta.FieldTypeSelect},
-			{FieldName: "total", FieldType: meta.FieldTypeFloat},
-			{FieldName: "section", FieldType: meta.FieldTypeSectionBreak},
+			{Name: "customer", FieldType: meta.FieldTypeLink, Options: "Customer", Filterable: true},
+			{Name: "status", FieldType: meta.FieldTypeSelect, Filterable: true},
+			{Name: "total", FieldType: meta.FieldTypeFloat},
+			{Name: "section", FieldType: meta.FieldTypeSectionBreak},
 		},
 	}
 
@@ -133,14 +129,25 @@ func TestFilterableAttributes(t *testing.T) {
 		t.Fatal("expected non-empty filterable attributes")
 	}
 
-	// Base attributes should always be included.
 	found := map[string]bool{}
 	for _, a := range attrs {
 		found[a] = true
 	}
+	// Base attributes should always be included.
 	for _, base := range baseFilterableAttributes {
 		if !found[base] {
 			t.Errorf("expected base attribute %q in filterable", base)
 		}
+	}
+	// User-defined filterable fields.
+	if !found["customer"] {
+		t.Error("expected 'customer' in filterable attributes")
+	}
+	if !found["status"] {
+		t.Error("expected 'status' in filterable attributes")
+	}
+	// Non-filterable fields should not be included (unless in base set).
+	if found["total"] {
+		t.Error("'total' should not be filterable (not marked)")
 	}
 }

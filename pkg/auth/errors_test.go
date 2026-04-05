@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -25,14 +26,15 @@ func TestErrSessionNotFound(t *testing.T) {
 }
 
 func TestErrUserNotFound_IsComparison(t *testing.T) {
-	wrapped := errors.New("wrapper: " + ErrUserNotFound.Error())
-	// Sentinel errors should be comparable.
-	if !errors.Is(ErrUserNotFound, ErrUserNotFound) {
-		t.Error("ErrUserNotFound should be equal to itself")
+	wrapped := fmt.Errorf("wrapper: %w", ErrUserNotFound)
+	// Wrapped with %w should be matchable via errors.Is.
+	if !errors.Is(wrapped, ErrUserNotFound) {
+		t.Error("fmt.Errorf %%w wrapping should match with errors.Is")
 	}
-	// Wrapped errors should NOT match unless using %w.
-	if errors.Is(wrapped, ErrUserNotFound) {
-		t.Error("simple wrapping should not match with errors.Is")
+	// Simple string wrapping should NOT match.
+	plain := errors.New("wrapper: " + ErrUserNotFound.Error())
+	if errors.Is(plain, ErrUserNotFound) {
+		t.Error("plain string wrapping should not match with errors.Is")
 	}
 }
 

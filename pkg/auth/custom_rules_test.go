@@ -39,9 +39,6 @@ func TestCustomRuleRegistry_Evaluate_NotRegistered(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unregistered rule")
 	}
-	if !errors.Is(err, err) { // generic check
-		t.Logf("error: %v", err)
-	}
 }
 
 func TestCustomRuleRegistry_Evaluate_Allow(t *testing.T) {
