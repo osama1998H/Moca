@@ -13,6 +13,7 @@ import (
 	"github.com/osama1998H/moca/internal/config"
 	"github.com/osama1998H/moca/internal/drivers"
 	"github.com/osama1998H/moca/internal/process"
+	"github.com/osama1998H/moca/pkg/api"
 	"github.com/osama1998H/moca/pkg/meta"
 	"github.com/osama1998H/moca/pkg/observe"
 	"github.com/osama1998H/moca/pkg/orm"
@@ -98,6 +99,14 @@ func run() error {
 			)
 		}
 	}
+
+	// Webhook delivery handler.
+	webhookDispatcher := api.NewWebhookDispatcher(
+		queue.NewProducer(redisClients.Queue, logger),
+		dbManager,
+		logger,
+	)
+	wp.Handle(api.JobTypeWebhookDelivery, webhookDispatcher.DeliveryHandler)
 
 	// Register a default logging handler for unhandled job types.
 	// Real handlers will be registered by T5 when integrating with the app system.

@@ -279,8 +279,8 @@ func TestGenerateSystemTablesDDL_AllTablesPresent(t *testing.T) {
 
 	// The base system tables plus outbox compatibility alters / indexes must
 	// all be present.
-	if len(stmts) != 15 {
-		t.Errorf("GenerateSystemTablesDDL() returned %d statements; want 15", len(stmts))
+	if len(stmts) != 18 {
+		t.Errorf("GenerateSystemTablesDDL() returned %d statements; want 18", len(stmts))
 		for i, s := range stmts {
 			t.Logf("  [%d] %s", i, s.Comment)
 		}
@@ -303,6 +303,9 @@ func TestGenerateSystemTablesDDL_AllTablesPresent(t *testing.T) {
 		"idx_outbox_pending",
 		"tab_migration_log",
 		"idx_migration_log_batch",
+		"tab_webhook_log",
+		"idx_webhook_log_doctype",
+		"idx_webhook_log_event",
 	}
 	for _, ec := range expectedComments {
 		if _, ok := findStmtByComment(stmts, ec); !ok {

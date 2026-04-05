@@ -107,7 +107,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 
 - **Task ID:** MS-18-T2
 - **Title:** Webhook Dispatch Engine with Background Delivery
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Implement webhook matching, payload construction, HMAC-SHA256 signing, background dispatch via Redis Streams, retry with exponential backoff, and delivery logging.
 

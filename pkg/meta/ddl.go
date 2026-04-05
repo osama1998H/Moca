@@ -302,5 +302,29 @@ WHERE "status" IS NULL OR ("status" = 'pending' AND COALESCE("processed", false)
 			SQL:     `CREATE INDEX IF NOT EXISTS idx_migration_log_batch ON tab_migration_log ("batch")`,
 			Comment: "create index idx_migration_log_batch on tab_migration_log",
 		},
+		{
+			SQL: `CREATE TABLE IF NOT EXISTS tab_webhook_log (
+	"name"            TEXT PRIMARY KEY,
+	"webhook_event"   TEXT NOT NULL,
+	"webhook_url"     TEXT NOT NULL,
+	"doctype"         TEXT NOT NULL,
+	"document_name"   TEXT NOT NULL,
+	"status_code"     INTEGER,
+	"response_body"   TEXT,
+	"duration_ms"     INTEGER,
+	"attempt"         INTEGER NOT NULL DEFAULT 1,
+	"error_message"   TEXT,
+	"created_at"      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
+			Comment: "create system table tab_webhook_log",
+		},
+		{
+			SQL:     `CREATE INDEX IF NOT EXISTS idx_webhook_log_doctype ON tab_webhook_log ("doctype", "document_name")`,
+			Comment: "create index idx_webhook_log_doctype on tab_webhook_log",
+		},
+		{
+			SQL:     `CREATE INDEX IF NOT EXISTS idx_webhook_log_event ON tab_webhook_log ("webhook_event")`,
+			Comment: "create index idx_webhook_log_event on tab_webhook_log",
+		},
 	}
 }

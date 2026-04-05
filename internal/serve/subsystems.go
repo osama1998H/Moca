@@ -10,6 +10,7 @@ import (
 
 	"github.com/osama1998H/moca/internal/config"
 	"github.com/osama1998H/moca/internal/drivers"
+	"github.com/osama1998H/moca/pkg/api"
 	"github.com/osama1998H/moca/pkg/events"
 	"github.com/osama1998H/moca/pkg/meta"
 	"github.com/osama1998H/moca/pkg/orm"
@@ -57,6 +58,14 @@ func WorkerSubsystem(
 				logger.Warn("worker: search sync disabled", slog.String("error", err.Error()))
 			}
 		}
+
+		// Webhook delivery handler.
+		webhookDispatcher := api.NewWebhookDispatcher(
+			queue.NewProducer(redisClients.Queue, logger),
+			dbManager,
+			logger,
+		)
+		wp.Handle(api.JobTypeWebhookDelivery, webhookDispatcher.DeliveryHandler)
 
 		// Default handler for unrecognised job types.
 		wp.Handle("_default", func(_ context.Context, job queue.Job) error {

@@ -18,6 +18,7 @@ import (
 	"github.com/osama1998H/moca/pkg/meta"
 	"github.com/osama1998H/moca/pkg/observe"
 	"github.com/osama1998H/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/queue"
 	"github.com/osama1998H/moca/pkg/search"
 )
 
@@ -81,6 +82,11 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 
 	hookRegistry := hooks.NewHookRegistry()
 	docManager.SetHookDispatcher(hooks.NewDocEventDispatcher(hookRegistry))
+
+	// Webhook dispatch engine — enqueues delivery jobs on document events.
+	queueProducer := queue.NewProducer(redisClients.Queue, logger)
+	webhookDispatcher := api.NewWebhookDispatcher(queueProducer, dbManager, logger)
+	webhookDispatcher.RegisterHooks(hookRegistry)
 
 	// ── Authentication ──────────────────────────────────────────────────
 	jwtCfg := auth.DefaultJWTConfig()
