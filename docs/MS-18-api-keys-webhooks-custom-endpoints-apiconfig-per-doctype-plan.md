@@ -173,7 +173,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 
 - **Task ID:** MS-18-T3
 - **Title:** Per-DocType APIConfig Enforcement, Custom Endpoints, and Whitelisted Methods
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Implement the remaining APIConfig enforcement features: per-DocType custom middleware, custom endpoint routing, whitelisted API methods, and per-DocType rate limiting.
 

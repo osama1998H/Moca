@@ -28,9 +28,12 @@ type Gateway struct {
 	auth          Authenticator
 	perm          PermissionChecker
 	fieldPerm     Transformer
-	siteResolver  SiteResolver
-	apiKeyStore   APIKeyValidator
-	cors          CORSConfig
+	siteResolver       SiteResolver
+	apiKeyStore        APIKeyValidator
+	middlewareRegistry *MiddlewareRegistry
+	handlerRegistry    *HandlerRegistry
+	methodRegistry     *MethodRegistry
+	cors               CORSConfig
 }
 
 // GatewayOption configures a Gateway during construction.
@@ -186,6 +189,33 @@ func WithVersionRouter(vr *VersionRouter) GatewayOption {
 func WithLogger(l *slog.Logger) GatewayOption {
 	return func(g *Gateway) { g.logger = l }
 }
+
+// WithMiddlewareRegistry sets the named middleware registry.
+func WithMiddlewareRegistry(r *MiddlewareRegistry) GatewayOption {
+	return func(g *Gateway) { g.middlewareRegistry = r }
+}
+
+// WithHandlerRegistry sets the custom endpoint handler registry.
+func WithHandlerRegistry(r *HandlerRegistry) GatewayOption {
+	return func(g *Gateway) { g.handlerRegistry = r }
+}
+
+// WithMethodRegistry sets the whitelisted method registry.
+func WithMethodRegistry(r *MethodRegistry) GatewayOption {
+	return func(g *Gateway) { g.methodRegistry = r }
+}
+
+// RateLimiter returns the gateway's rate limiter.
+func (g *Gateway) RateLimiter() *RateLimiter { return g.rateLimiter }
+
+// MiddlewareRegistry returns the gateway's named middleware registry.
+func (g *Gateway) MiddlewareRegistry() *MiddlewareRegistry { return g.middlewareRegistry }
+
+// HandlerRegistry returns the gateway's custom endpoint handler registry.
+func (g *Gateway) HandlerRegistry() *HandlerRegistry { return g.handlerRegistry }
+
+// MethodRegistry returns the gateway's whitelisted method registry.
+func (g *Gateway) MethodRegistry() *MethodRegistry { return g.methodRegistry }
 
 // SetVersionRouter sets the version router after gateway construction.
 // This resolves the circular construction dependency: ResourceHandler needs

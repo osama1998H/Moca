@@ -3,8 +3,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
+	"strconv"
 
 	"github.com/osama1998H/moca/pkg/auth"
 	"github.com/osama1998H/moca/pkg/document"
@@ -35,11 +38,13 @@ type MetaResolver interface {
 
 // ResourceHandler bridges HTTP requests to DocManager CRUD operations.
 type ResourceHandler struct {
-	crud      CRUDService
-	meta      MetaResolver
-	perm      PermissionChecker
-	fieldPerm Transformer
-	logger    *slog.Logger
+	crud        CRUDService
+	meta        MetaResolver
+	perm        PermissionChecker
+	fieldPerm   Transformer
+	rateLimiter *RateLimiter
+	mwRegistry  *MiddlewareRegistry
+	logger      *slog.Logger
 }
 
 func newDocContext(ctx context.Context, site *tenancy.SiteContext, user *auth.User) *document.DocContext {
@@ -51,11 +56,13 @@ func newDocContext(ctx context.Context, site *tenancy.SiteContext, user *auth.Us
 // NewResourceHandler creates a ResourceHandler wired to the given Gateway.
 func NewResourceHandler(gw *Gateway) *ResourceHandler {
 	return &ResourceHandler{
-		crud:      gw.DocManager(),
-		meta:      gw.Registry(),
-		perm:      gw.PermChecker(),
-		fieldPerm: gw.FieldLevelTransformer(),
-		logger:    gw.Logger(),
+		crud:        gw.DocManager(),
+		meta:        gw.Registry(),
+		perm:        gw.PermChecker(),
+		fieldPerm:   gw.FieldLevelTransformer(),
+		rateLimiter: gw.RateLimiter(),
+		mwRegistry:  gw.MiddlewareRegistry(),
+		logger:      gw.Logger(),
 	}
 }
 
@@ -79,32 +86,34 @@ func (h *ResourceHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	opts, err := parseListParams(r, mt.APIConfig)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_PARAMS", err.Error())
-		return
-	}
-
-	docCtx := newDocContext(r.Context(), site, user)
-	docs, total, err := h.crud.GetList(docCtx, mt.Name, opts)
-	if err != nil {
-		h.handleCRUDError(w, r, err)
-		return
-	}
-
-	chain := buildTransformerChain(r.Context(), mt, h.fieldPerm)
-	ctx := WithOperationType(r.Context(), OpList)
-	data := make([]map[string]any, len(docs))
-	for i, d := range docs {
-		item := d.AsMap()
-		item, err = chain.TransformResponse(ctx, mt, item)
+	h.applyDocTypeMiddleware(mt, func(w http.ResponseWriter, r *http.Request) {
+		opts, err := parseListParams(r, mt.APIConfig)
 		if err != nil {
-			h.handleCRUDError(w, r, transformError("response", err))
+			writeError(w, http.StatusBadRequest, "INVALID_PARAMS", err.Error())
 			return
 		}
-		data[i] = item
-	}
-	writeListSuccess(w, data, total, opts.Limit, opts.Offset)
+
+		docCtx := newDocContext(r.Context(), site, user)
+		docs, total, err := h.crud.GetList(docCtx, mt.Name, opts)
+		if err != nil {
+			h.handleCRUDError(w, r, err)
+			return
+		}
+
+		chain := buildTransformerChain(r.Context(), mt, h.fieldPerm)
+		ctx := WithOperationType(r.Context(), OpList)
+		data := make([]map[string]any, len(docs))
+		for i, d := range docs {
+			item := d.AsMap()
+			item, err = chain.TransformResponse(ctx, mt, item)
+			if err != nil {
+				h.handleCRUDError(w, r, transformError("response", err))
+				return
+			}
+			data[i] = item
+		}
+		writeListSuccess(w, data, total, opts.Limit, opts.Offset)
+	})(w, r)
 }
 
 func (h *ResourceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
@@ -113,34 +122,36 @@ func (h *ResourceHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	docCtx := newDocContext(r.Context(), site, user)
+	h.applyDocTypeMiddleware(mt, func(w http.ResponseWriter, r *http.Request) {
+		docCtx := newDocContext(r.Context(), site, user)
 
-	var doc *document.DynamicDoc
-	var err error
-	if mt.IsSingle {
-		doc, err = h.crud.GetSingle(docCtx, mt.Name)
-	} else {
-		name := r.PathValue("name")
-		if name == "" {
-			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "document name is required")
+		var doc *document.DynamicDoc
+		var err error
+		if mt.IsSingle {
+			doc, err = h.crud.GetSingle(docCtx, mt.Name)
+		} else {
+			name := r.PathValue("name")
+			if name == "" {
+				writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "document name is required")
+				return
+			}
+			doc, err = h.crud.Get(docCtx, mt.Name, name)
+		}
+		if err != nil {
+			h.handleCRUDError(w, r, err)
 			return
 		}
-		doc, err = h.crud.Get(docCtx, mt.Name, name)
-	}
-	if err != nil {
-		h.handleCRUDError(w, r, err)
-		return
-	}
 
-	chain := buildTransformerChain(r.Context(), mt, h.fieldPerm)
-	ctx := WithOperationType(r.Context(), OpGet)
-	data := doc.AsMap()
-	data, err = chain.TransformResponse(ctx, mt, data)
-	if err != nil {
-		h.handleCRUDError(w, r, transformError("response", err))
-		return
-	}
-	writeSuccess(w, http.StatusOK, data)
+		chain := buildTransformerChain(r.Context(), mt, h.fieldPerm)
+		ctx := WithOperationType(r.Context(), OpGet)
+		data := doc.AsMap()
+		data, err = chain.TransformResponse(ctx, mt, data)
+		if err != nil {
+			h.handleCRUDError(w, r, transformError("response", err))
+			return
+		}
+		writeSuccess(w, http.StatusOK, data)
+	})(w, r)
 }
 
 func (h *ResourceHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
@@ -153,35 +164,37 @@ func (h *ResourceHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	values, err := h.decodeBody(w, r)
-	if err != nil {
-		return // error already written
-	}
-
-	chain := buildTransformerChain(r.Context(), mt, h.fieldPerm)
-	ctx := WithOperationType(r.Context(), OpCreate)
-	values, err = chain.TransformRequest(ctx, mt, values)
-	if err != nil {
-		if !mapErrorResponse(w, err) {
-			writeError(w, http.StatusBadRequest, "TRANSFORM_ERROR", err.Error())
+	h.applyDocTypeMiddleware(mt, func(w http.ResponseWriter, r *http.Request) {
+		values, err := h.decodeBody(w, r)
+		if err != nil {
+			return // error already written
 		}
-		return
-	}
 
-	docCtx := newDocContext(r.Context(), site, user)
-	doc, err := h.crud.Insert(docCtx, mt.Name, values)
-	if err != nil {
-		h.handleCRUDError(w, r, err)
-		return
-	}
+		chain := buildTransformerChain(r.Context(), mt, h.fieldPerm)
+		ctx := WithOperationType(r.Context(), OpCreate)
+		values, err = chain.TransformRequest(ctx, mt, values)
+		if err != nil {
+			if !mapErrorResponse(w, err) {
+				writeError(w, http.StatusBadRequest, "TRANSFORM_ERROR", err.Error())
+			}
+			return
+		}
 
-	data := doc.AsMap()
-	data, err = chain.TransformResponse(ctx, mt, data)
-	if err != nil {
-		h.handleCRUDError(w, r, transformError("response", err))
-		return
-	}
-	writeSuccess(w, http.StatusCreated, data)
+		docCtx := newDocContext(r.Context(), site, user)
+		doc, err := h.crud.Insert(docCtx, mt.Name, values)
+		if err != nil {
+			h.handleCRUDError(w, r, err)
+			return
+		}
+
+		data := doc.AsMap()
+		data, err = chain.TransformResponse(ctx, mt, data)
+		if err != nil {
+			h.handleCRUDError(w, r, transformError("response", err))
+			return
+		}
+		writeSuccess(w, http.StatusCreated, data)
+	})(w, r)
 }
 
 func (h *ResourceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
@@ -190,41 +203,43 @@ func (h *ResourceHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := r.PathValue("name")
-	if name == "" && !mt.IsSingle {
-		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "document name is required")
-		return
-	}
-
-	values, err := h.decodeBody(w, r)
-	if err != nil {
-		return
-	}
-
-	chain := buildTransformerChain(r.Context(), mt, h.fieldPerm)
-	ctx := WithOperationType(r.Context(), OpUpdate)
-	values, err = chain.TransformRequest(ctx, mt, values)
-	if err != nil {
-		if !mapErrorResponse(w, err) {
-			writeError(w, http.StatusBadRequest, "TRANSFORM_ERROR", err.Error())
+	h.applyDocTypeMiddleware(mt, func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		if name == "" && !mt.IsSingle {
+			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "document name is required")
+			return
 		}
-		return
-	}
 
-	docCtx := newDocContext(r.Context(), site, user)
-	doc, err := h.crud.Update(docCtx, mt.Name, name, values)
-	if err != nil {
-		h.handleCRUDError(w, r, err)
-		return
-	}
+		values, err := h.decodeBody(w, r)
+		if err != nil {
+			return
+		}
 
-	data := doc.AsMap()
-	data, err = chain.TransformResponse(ctx, mt, data)
-	if err != nil {
-		h.handleCRUDError(w, r, transformError("response", err))
-		return
-	}
-	writeSuccess(w, http.StatusOK, data)
+		chain := buildTransformerChain(r.Context(), mt, h.fieldPerm)
+		ctx := WithOperationType(r.Context(), OpUpdate)
+		values, err = chain.TransformRequest(ctx, mt, values)
+		if err != nil {
+			if !mapErrorResponse(w, err) {
+				writeError(w, http.StatusBadRequest, "TRANSFORM_ERROR", err.Error())
+			}
+			return
+		}
+
+		docCtx := newDocContext(r.Context(), site, user)
+		doc, err := h.crud.Update(docCtx, mt.Name, name, values)
+		if err != nil {
+			h.handleCRUDError(w, r, err)
+			return
+		}
+
+		data := doc.AsMap()
+		data, err = chain.TransformResponse(ctx, mt, data)
+		if err != nil {
+			h.handleCRUDError(w, r, transformError("response", err))
+			return
+		}
+		writeSuccess(w, http.StatusOK, data)
+	})(w, r)
 }
 
 func (h *ResourceHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
@@ -237,18 +252,20 @@ func (h *ResourceHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := r.PathValue("name")
-	if name == "" {
-		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "document name is required")
-		return
-	}
+	h.applyDocTypeMiddleware(mt, func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		if name == "" {
+			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "document name is required")
+			return
+		}
 
-	docCtx := newDocContext(r.Context(), site, user)
-	if err := h.crud.Delete(docCtx, mt.Name, name); err != nil {
-		h.handleCRUDError(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+		docCtx := newDocContext(r.Context(), site, user)
+		if err := h.crud.Delete(docCtx, mt.Name, name); err != nil {
+			h.handleCRUDError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})(w, r)
 }
 
 func (h *ResourceHandler) handleMeta(w http.ResponseWriter, r *http.Request) {
@@ -256,8 +273,11 @@ func (h *ResourceHandler) handleMeta(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	resp := filterMetaFields(buildMetaResponse(mt), mt, r.Context())
-	writeSuccess(w, http.StatusOK, resp)
+
+	h.applyDocTypeMiddleware(mt, func(w http.ResponseWriter, r *http.Request) {
+		resp := filterMetaFields(buildMetaResponse(mt), mt, r.Context())
+		writeSuccess(w, http.StatusOK, resp)
+	})(w, r)
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -316,7 +336,46 @@ func (h *ResourceHandler) resolveRequest(
 		return nil, nil, nil, false
 	}
 
+	// Per-DocType rate limiting (additional to the global per-user limit).
+	if h.rateLimiter != nil && mt.APIConfig.RateLimit != nil {
+		userID := "anonymous"
+		if user.Email != "" {
+			userID = user.Email
+		}
+		key := fmt.Sprintf("rl:%s:%s:%s", site.Name, userID, doctype)
+		allowed, retryAfter, _ := h.rateLimiter.Allow(r.Context(), key, mt.APIConfig.RateLimit)
+		if !allowed {
+			retrySeconds := int(math.Ceil(retryAfter.Seconds()))
+			if retrySeconds < 1 {
+				retrySeconds = 1
+			}
+			w.Header().Set("Retry-After", strconv.Itoa(retrySeconds))
+			writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many requests for "+doctype)
+			return nil, nil, nil, false
+		}
+	}
+
 	return mt, site, user, true
+}
+
+// applyDocTypeMiddleware wraps handler with per-DocType middleware from
+// APIConfig.Middleware, resolved through the MiddlewareRegistry.
+// Returns the original handler unchanged if no middleware is configured.
+func (h *ResourceHandler) applyDocTypeMiddleware(mt *meta.MetaType, handler http.HandlerFunc) http.HandlerFunc {
+	if h.mwRegistry == nil || mt.APIConfig == nil || len(mt.APIConfig.Middleware) == 0 {
+		return handler
+	}
+	composed, err := h.mwRegistry.Chain(mt.APIConfig.Middleware)
+	if err != nil {
+		if h.logger != nil {
+			h.logger.Error("per-doctype middleware resolution failed",
+				slog.String("doctype", mt.Name),
+				slog.String("error", err.Error()),
+			)
+		}
+		return handler // degrade gracefully: skip unresolvable middleware
+	}
+	return composed(handler).ServeHTTP
 }
 
 // decodeBody reads and decodes the JSON request body into a map.

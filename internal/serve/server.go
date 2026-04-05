@@ -119,6 +119,11 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	rateLimiter := api.NewRateLimiter(redisClients.Cache, logger)
 	siteResolver := api.NewDBSiteResolver(dbManager, redisClients.Cache, logger)
 
+	// Registries for custom middleware, endpoint handlers, and whitelisted methods.
+	mwRegistry := api.NewMiddlewareRegistry()
+	handlerRegistry := api.NewHandlerRegistry()
+	methodRegistry := api.NewMethodRegistry()
+
 	gw := api.NewGateway(
 		api.WithDocManager(docManager),
 		api.WithRegistry(registry),
@@ -131,6 +136,9 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		api.WithPermissionChecker(scopeEnforcer),
 		api.WithAPIKeyStore(apiKeyStore),
 		api.WithFieldLevelTransformer(fieldLevelTransformer),
+		api.WithMiddlewareRegistry(mwRegistry),
+		api.WithHandlerRegistry(handlerRegistry),
+		api.WithMethodRegistry(methodRegistry),
 	)
 
 	handler := api.NewResourceHandler(gw)
@@ -141,6 +149,14 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 
 	authHandler := api.NewAuthHandler(jwtCfg, sessionMgr, userLoader, logger)
 	authHandler.RegisterRoutes(gw.Mux(), "v1")
+
+	// Custom endpoint router for per-DocType custom endpoints.
+	customRouter := api.NewCustomEndpointRouter(registry, handlerRegistry, mwRegistry, scopeEnforcer, rateLimiter, logger)
+	customRouter.RegisterRoutes(gw.Mux(), "v1")
+
+	// Whitelisted method handler for /api/v1/method/{name}.
+	methodHandler := api.NewMethodHandler(methodRegistry, logger)
+	methodHandler.RegisterRoutes(gw.Mux(), "v1")
 
 	vr := api.NewVersionRouter(handler, logger)
 	gw.SetVersionRouter(vr)
