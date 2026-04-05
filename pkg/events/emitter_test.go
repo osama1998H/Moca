@@ -152,6 +152,9 @@ func TestEmitter_DocumentEventPointer(t *testing.T) {
 	if producer.calls != 1 {
 		t.Fatalf("calls = %d, want 1", producer.calls)
 	}
+	if producer.event == nil {
+		t.Fatal("expected captured event")
+	}
 	if producer.event.DocType != "SalesOrder" {
 		t.Errorf("DocType = %q", producer.event.DocType)
 	}

@@ -44,8 +44,11 @@ func TestExpandEnvVars_MultipleVars(t *testing.T) {
 }
 
 func TestExpandEnvVars_MissingVar(t *testing.T) {
-	// Ensure the variable is unset.
-	os.Unsetenv("MOCA_TEST_MISSING_VAR_XYZ")
+	// Use t.Setenv to register cleanup, then unset so LookupEnv returns false.
+	t.Setenv("MOCA_TEST_MISSING_VAR_XYZ", "")
+	if err := os.Unsetenv("MOCA_TEST_MISSING_VAR_XYZ"); err != nil {
+		t.Fatalf("failed to unset env var: %v", err)
+	}
 
 	src := []byte("host: ${MOCA_TEST_MISSING_VAR_XYZ}")
 	_, err := ExpandEnvVars(src)
@@ -63,8 +66,14 @@ func TestExpandEnvVars_MissingVar(t *testing.T) {
 }
 
 func TestExpandEnvVars_MultipleMissingVars(t *testing.T) {
-	os.Unsetenv("MOCA_TEST_MISS_A")
-	os.Unsetenv("MOCA_TEST_MISS_B")
+	t.Setenv("MOCA_TEST_MISS_A", "")
+	if err := os.Unsetenv("MOCA_TEST_MISS_A"); err != nil {
+		t.Fatalf("failed to unset env var: %v", err)
+	}
+	t.Setenv("MOCA_TEST_MISS_B", "")
+	if err := os.Unsetenv("MOCA_TEST_MISS_B"); err != nil {
+		t.Fatalf("failed to unset env var: %v", err)
+	}
 
 	src := []byte("a: ${MOCA_TEST_MISS_A}\nb: ${MOCA_TEST_MISS_B}")
 	_, err := ExpandEnvVars(src)
@@ -86,7 +95,10 @@ func TestExpandEnvVars_MultipleMissingVars(t *testing.T) {
 }
 
 func TestExpandEnvVars_DuplicateMissingVar(t *testing.T) {
-	os.Unsetenv("MOCA_TEST_DUP")
+	t.Setenv("MOCA_TEST_DUP", "")
+	if err := os.Unsetenv("MOCA_TEST_DUP"); err != nil {
+		t.Fatalf("failed to unset env var: %v", err)
+	}
 
 	src := []byte("a: ${MOCA_TEST_DUP}\nb: ${MOCA_TEST_DUP}")
 	_, err := ExpandEnvVars(src)

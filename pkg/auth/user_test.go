@@ -51,7 +51,6 @@ func TestUser_FieldAssignment(t *testing.T) {
 
 func TestUser_EmptyRoles(t *testing.T) {
 	u := User{
-		Email: "guest@example.com",
 		Roles: []string{},
 	}
 	if len(u.Roles) != 0 {
@@ -61,7 +60,6 @@ func TestUser_EmptyRoles(t *testing.T) {
 
 func TestUser_NilUserDefaults(t *testing.T) {
 	u := User{
-		Email:        "user@example.com",
 		UserDefaults: nil,
 	}
 	// Accessing nil map should return zero value.

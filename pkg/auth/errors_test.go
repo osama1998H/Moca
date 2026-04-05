@@ -57,9 +57,5 @@ func TestPermDeniedError_Message(t *testing.T) {
 	}
 }
 
-func TestPermDeniedError_ImplementsError(t *testing.T) {
-	var err error = &PermDeniedError{User: "test", Doctype: "Doc", Perm: "read"}
-	if err == nil {
-		t.Fatal("should implement error interface")
-	}
-}
+// Compile-time check that PermDeniedError implements error.
+var _ error = (*PermDeniedError)(nil)

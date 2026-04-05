@@ -13,8 +13,8 @@ func TestBaseController_NoOpLifecycleMethods(t *testing.T) {
 	var doc Document // nil doc — testing no-op behavior
 
 	methods := []struct {
-		name string
 		fn   func() error
+		name string
 	}{
 		{"BeforeInsert", func() error { return bc.BeforeInsert(dc, doc) }},
 		{"AfterInsert", func() error { return bc.AfterInsert(dc, doc) }},
@@ -130,8 +130,8 @@ func (s *stubLifecycle) BeforeInsert(_ *DocContext, _ Document) error {
 }
 
 type testExtension struct {
-	name  string
 	calls *[]string
+	name  string
 }
 
 func (e *testExtension) Wrap(inner DocLifecycle) DocLifecycle {

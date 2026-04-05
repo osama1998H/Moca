@@ -52,8 +52,8 @@ func TestColorConfig_AllColorsContainText(t *testing.T) {
 	text := "test_string"
 
 	methods := []struct {
-		name string
 		fn   func(string) string
+		name string
 	}{
 		{"Success", cc.Success},
 		{"Warning", cc.Warning},
