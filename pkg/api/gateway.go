@@ -29,6 +29,7 @@ type Gateway struct {
 	perm          PermissionChecker
 	fieldPerm     Transformer
 	siteResolver  SiteResolver
+	apiKeyStore   APIKeyValidator
 	cors          CORSConfig
 }
 
@@ -66,7 +67,7 @@ func (g *Gateway) Handler() http.Handler {
 		h = g.versionRouter.Middleware()(h)
 	}
 	h = rateLimitMiddleware(g.rateLimiter, g.defaultRate)(h)
-	h = authMiddleware(g.auth)(h)
+	h = authMiddleware(g.auth, g.apiKeyStore)(h)
 	h = tenantMiddleware(g.siteResolver)(h)
 	h = corsMiddleware(g.cors)(h)
 	h = requestIDMiddleware(g.logger)(h)
@@ -156,6 +157,11 @@ func WithFieldLevelTransformer(t Transformer) GatewayOption {
 // WithSiteResolver sets the site resolver for tenant middleware.
 func WithSiteResolver(sr SiteResolver) GatewayOption {
 	return func(g *Gateway) { g.siteResolver = sr }
+}
+
+// WithAPIKeyStore sets the API key validator for token-based authentication.
+func WithAPIKeyStore(v APIKeyValidator) GatewayOption {
+	return func(g *Gateway) { g.apiKeyStore = v }
 }
 
 // WithRateLimiter sets the rate limiter and default rate limit config.

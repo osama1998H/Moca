@@ -88,9 +88,13 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	userLoader := auth.NewUserLoader(logger)
 	authenticator := auth.NewMocaAuthenticator(jwtCfg, sessionMgr, userLoader, api.SiteFromContext, logger)
 
+	// ── API Key Authentication ───────────────────────────────────────────
+	apiKeyStore := api.NewAPIKeyStore(userLoader.LoadByEmail, redisClients.Cache, logger)
+
 	// ── Permissions ─────────────────────────────────────────────────────
 	permResolver := auth.NewCachedPermissionResolver(registry, redisClients.Cache, nil, logger)
 	permChecker := auth.NewRoleBasedPermChecker(permResolver, api.SiteFromContext, logger)
+	scopeEnforcer := api.NewScopeEnforcer(permChecker)
 	fieldLevelTransformer := api.NewFieldLevelTransformer(permResolver)
 
 	// ── Search ──────────────────────────────────────────────────────────
@@ -118,7 +122,8 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		api.WithRateLimiter(rateLimiter, nil),
 		api.WithSearchService(searchService),
 		api.WithAuthenticator(authenticator),
-		api.WithPermissionChecker(permChecker),
+		api.WithPermissionChecker(scopeEnforcer),
+		api.WithAPIKeyStore(apiKeyStore),
 		api.WithFieldLevelTransformer(fieldLevelTransformer),
 	)
 

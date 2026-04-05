@@ -208,7 +208,7 @@ func TestTenantMiddleware_SiteNotFound(t *testing.T) {
 // --- authMiddleware ---
 
 func TestAuthMiddleware_SetsUser(t *testing.T) {
-	handler := authMiddleware(NoopAuthenticator{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := authMiddleware(NoopAuthenticator{}, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		u := UserFromContext(r.Context())
 		if u == nil || u.Email != "Guest" {
 			t.Errorf("user = %v, want Guest", u)
@@ -229,7 +229,7 @@ func (failingAuth) Authenticate(_ *http.Request) (*auth.User, error) {
 }
 
 func TestAuthMiddleware_Failure(t *testing.T) {
-	handler := authMiddleware(failingAuth{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := authMiddleware(failingAuth{}, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("handler should not be called")
 	}))
 

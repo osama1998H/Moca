@@ -91,20 +91,37 @@ func (rl *RateLimiter) Allow(ctx context.Context, key string, cfg *meta.RateLimi
 	return true, 0, nil
 }
 
-// rateLimitMiddleware wraps requests with rate limiting using the Gateway's
-// default rate limit config. The key is built from site + user identity.
+// rateLimitMiddleware wraps requests with rate limiting. When an API key is
+// present in context, it uses the key-specific rate limit config and a Redis
+// key pattern of "rl:{site}:apikey:{keyID}". Otherwise it falls back to the
+// default per-user pattern "rl:{site}:{user}".
 func rateLimitMiddleware(rl *RateLimiter, defaultCfg *meta.RateLimitConfig) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if rl == nil || defaultCfg == nil || defaultCfg.MaxRequests <= 0 {
+			// Determine rate limit key and config.
+			var key string
+			cfg := defaultCfg
+
+			if apiKeyID := APIKeyIDFromContext(r.Context()); apiKeyID != "" {
+				// Per-key rate limiting: use key-specific config if set.
+				site := "unknown"
+				if s := SiteFromContext(r.Context()); s != nil {
+					site = s.Name
+				}
+				key = fmt.Sprintf("rl:%s:apikey:%s", site, apiKeyID)
+				if apiCfg := APIRateLimitFromContext(r.Context()); apiCfg != nil {
+					cfg = apiCfg
+				}
+			} else {
+				key = rateLimitKey(r.Context())
+			}
+
+			if rl == nil || cfg == nil || cfg.MaxRequests <= 0 {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			// Build rate limit key from site and user.
-			key := rateLimitKey(r.Context())
-
-			allowed, retryAfter, _ := rl.Allow(r.Context(), key, defaultCfg)
+			allowed, retryAfter, _ := rl.Allow(r.Context(), key, cfg)
 			if !allowed {
 				retrySeconds := int(math.Ceil(retryAfter.Seconds()))
 				if retrySeconds < 1 {

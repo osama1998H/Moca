@@ -211,7 +211,12 @@ func siteFromPath(path string) (siteID, strippedPath string) {
 
 // authMiddleware authenticates the request and stores the user in context.
 // It also re-enriches the logger with the resolved user identity.
-func authMiddleware(authn Authenticator) Middleware {
+//
+// When apiKeys is non-nil, the middleware first checks for an "Authorization: token KEY:SECRET"
+// header. If present, API key validation is attempted. On failure, a 401/403 is returned
+// immediately — the request does NOT fall through to JWT/session/Guest auth.
+// If no token header is present, the regular auth chain is used.
+func authMiddleware(authn Authenticator, apiKeys APIKeyValidator) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Skip auth for non-API paths (static assets, health).
@@ -220,6 +225,35 @@ func authMiddleware(authn Authenticator) Middleware {
 				return
 			}
 
+			// 1. Try API key auth if configured and token header is present.
+			if apiKeys != nil {
+				if keyID, _ := extractTokenAuth(r); keyID != "" {
+					identity, err := apiKeys.ValidateRequest(r.Context(), r)
+					if err != nil {
+						// Do NOT fall through — caller explicitly chose token auth.
+						writeAPIKeyError(w, err)
+						return
+					}
+					ctx := WithUser(r.Context(), identity.User)
+					ctx = WithAPIKeyID(ctx, identity.KeyID)
+					ctx = WithAPIScopes(ctx, identity.Scopes)
+					if identity.RateLimit != nil {
+						ctx = WithAPIRateLimit(ctx, identity.RateLimit)
+					}
+
+					// Re-enrich logger with API key identity.
+					reqID := RequestIDFromContext(ctx)
+					logger := observe.LoggerFromContext(ctx)
+					logger = observe.WithRequest(logger, reqID, identity.User.Email)
+					logger = logger.With(slog.String("api_key", identity.KeyID))
+					ctx = observe.ContextWithLogger(ctx, logger)
+
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+			}
+
+			// 2. Regular auth (JWT / session cookie / Guest fallback).
 			user, err := authn.Authenticate(r)
 			if err != nil {
 				http.Error(w, `{"error":{"code":"AUTH_FAILED","message":"authentication failed"}}`, http.StatusUnauthorized)
@@ -236,5 +270,19 @@ func authMiddleware(authn Authenticator) Middleware {
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
+	}
+}
+
+// writeAPIKeyError maps API key validation errors to appropriate HTTP responses.
+func writeAPIKeyError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, ErrIPNotAllowed):
+		http.Error(w, `{"error":{"code":"IP_NOT_ALLOWED","message":"request IP not in API key allowlist"}}`, http.StatusForbidden)
+	case errors.Is(err, ErrAPIKeyExpired):
+		http.Error(w, `{"error":{"code":"API_KEY_EXPIRED","message":"api key has expired"}}`, http.StatusUnauthorized)
+	case errors.Is(err, ErrAPIKeyRevoked):
+		http.Error(w, `{"error":{"code":"API_KEY_REVOKED","message":"api key has been revoked"}}`, http.StatusUnauthorized)
+	default:
+		http.Error(w, `{"error":{"code":"AUTH_FAILED","message":"invalid api key credentials"}}`, http.StatusUnauthorized)
 	}
 }
