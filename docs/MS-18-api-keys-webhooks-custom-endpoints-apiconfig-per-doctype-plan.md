@@ -216,7 +216,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 
 - **Task ID:** MS-18-T4
 - **Title:** CLI Commands for API Management
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Replace all placeholder `newSubcommand()` calls in `cmd/moca/api.go` with real implementations:
 
