@@ -291,11 +291,165 @@ func TestSanitizeGUCKey(t *testing.T) {
 		{"key with spaces", "keywithspaces"},
 		{"key!@#$%", "key"},
 		{"", ""},
+		// Edge cases: inputs that become empty after sanitization.
+		{"!@#$%^&*()", ""},
+		{"---", ""},
+		{"   ", ""},
+		// Unicode characters (non-ASCII letters are preserved by unicode.IsLetter).
+		{"café", "café"},
+		{"über", "über"},
+		{"日本語", "日本語"},
+		// Mixed special + valid.
+		{"a!b@c#d", "abcd"},
+		// Underscores preserved.
+		{"__double__", "__double__"},
+		// Numbers.
+		{"field123", "field123"},
+		{"123start", "123start"},
 	}
 	for _, tt := range tests {
 		got := sanitizeGUCKey(tt.input)
 		if got != tt.want {
 			t.Errorf("sanitizeGUCKey(%q) = %q, want %q", tt.input, got, tt.want)
 		}
+	}
+}
+
+func TestRoleToSnake_EdgeCases(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		// Unicode letters are lowercased.
+		{"Ünter Manager", "ünter_manager"},
+		// Multiple consecutive spaces become multiple underscores.
+		{"Sales  User", "sales__user"},
+		// Only special chars → empty.
+		{"!@#$%", ""},
+		// Digits preserved.
+		{"Role 123", "role_123"},
+		// Mix of spaces, hyphens, underscores.
+		{"Sales-User_Admin Team", "sales_user_admin_team"},
+	}
+	for _, tt := range tests {
+		got := roleToSnake(tt.input)
+		if got != tt.want {
+			t.Errorf("roleToSnake(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestGenerateRLSPolicies_EmptyPermissions(t *testing.T) {
+	mt := &MetaType{
+		Name:        "EmptyPerms",
+		Permissions: nil,
+	}
+	stmts := GenerateRLSPolicies(mt)
+	// ENABLE + FORCE + admin(drop+create) = 4 (no match policies)
+	if len(stmts) != 4 {
+		t.Fatalf("expected 4 statements for nil permissions, got %d", len(stmts))
+	}
+}
+
+func TestGenerateRLSPolicies_EmptyMatchFieldOrValue(t *testing.T) {
+	mt := &MetaType{
+		Name: "PartialMatch",
+		Permissions: []PermRule{
+			{Role: "User", MatchField: "company", MatchValue: ""},    // empty value
+			{Role: "User", MatchField: "", MatchValue: "company"},    // empty field
+			{Role: "User", MatchField: "", MatchValue: ""},           // both empty
+			{Role: "User", MatchField: "company", MatchValue: "company"}, // valid
+		},
+	}
+	stmts := GenerateRLSPolicies(mt)
+	// Only 1 valid match rule → 6 statements.
+	if len(stmts) != 6 {
+		t.Fatalf("expected 6 statements (only 1 valid match), got %d", len(stmts))
+	}
+}
+
+func TestGenerateRLSPolicies_SpecialCharsInMatchValue(t *testing.T) {
+	mt := &MetaType{
+		Name: "SpecialChars",
+		Permissions: []PermRule{
+			{Role: "User", MatchField: "company", MatchValue: "my-company!@#"},
+		},
+	}
+	stmts := GenerateRLSPolicies(mt)
+	// Should sanitize the GUC key.
+	var foundGUC bool
+	for _, s := range stmts {
+		if strings.Contains(s.SQL, "moca.current_user_mycompany") {
+			foundGUC = true
+		}
+	}
+	if !foundGUC {
+		t.Error("expected sanitized GUC key 'moca.current_user_mycompany'")
+		for _, s := range stmts {
+			t.Logf("  SQL: %s", s.SQL)
+		}
+	}
+}
+
+func TestGenerateDropRLSPolicies_EmptyPermissions(t *testing.T) {
+	mt := &MetaType{
+		Name:        "EmptyPerms",
+		Permissions: nil,
+	}
+	stmts := GenerateDropRLSPolicies(mt)
+	// admin drop + DISABLE = 2 (no match policies to drop)
+	if len(stmts) != 2 {
+		t.Fatalf("expected 2 statements for nil permissions, got %d", len(stmts))
+	}
+	if !strings.Contains(stmts[0].SQL, "DROP POLICY IF EXISTS") {
+		t.Errorf("expected DROP POLICY for admin, got: %s", stmts[0].SQL)
+	}
+	if !strings.Contains(stmts[1].SQL, "DISABLE ROW LEVEL SECURITY") {
+		t.Errorf("expected DISABLE RLS, got: %s", stmts[1].SQL)
+	}
+}
+
+func TestGenerateDropRLSPolicies_SingleSkipped(t *testing.T) {
+	mt := &MetaType{Name: "S", IsSingle: true}
+	if stmts := GenerateDropRLSPolicies(mt); stmts != nil {
+		t.Errorf("expected nil for single, got %d", len(stmts))
+	}
+}
+
+func TestGenerateDropRLSPolicies_ChildTableSkipped(t *testing.T) {
+	mt := &MetaType{Name: "C", IsChildTable: true}
+	if stmts := GenerateDropRLSPolicies(mt); stmts != nil {
+		t.Errorf("expected nil for child table, got %d", len(stmts))
+	}
+}
+
+func TestGenerateDropRLSPolicies_Deterministic(t *testing.T) {
+	mt := &MetaType{
+		Name: "SalesOrder",
+		Permissions: []PermRule{
+			{Role: "Sales User", MatchField: "company", MatchValue: "company"},
+			{Role: "Territory Manager", MatchField: "territory", MatchValue: "territory"},
+		},
+	}
+	stmts1 := GenerateDropRLSPolicies(mt)
+	stmts2 := GenerateDropRLSPolicies(mt)
+	if len(stmts1) != len(stmts2) {
+		t.Fatal("non-deterministic statement count")
+	}
+	for i := range stmts1 {
+		if stmts1[i].SQL != stmts2[i].SQL {
+			t.Errorf("stmt[%d] not deterministic:\n  run1: %s\n  run2: %s", i, stmts1[i].SQL, stmts2[i].SQL)
+		}
+	}
+}
+
+func TestRlsPolicyName(t *testing.T) {
+	got := rlsPolicyName("tab_sales_order", "admin")
+	if got != "moca_tab_sales_order_admin" {
+		t.Errorf("rlsPolicyName = %q, want %q", got, "moca_tab_sales_order_admin")
+	}
+	got = rlsPolicyName("tab_x", "match_0")
+	if got != "moca_tab_x_match_0" {
+		t.Errorf("rlsPolicyName = %q, want %q", got, "moca_tab_x_match_0")
 	}
 }

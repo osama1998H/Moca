@@ -386,3 +386,266 @@ func TestTenantMiddleware_ResolutionPriority(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 	})
 }
+
+// --- tenantMiddleware: skip paths ---
+
+func TestTenantMiddleware_SkipsDeskPath(t *testing.T) {
+	resolver := &mockSiteResolver{sites: map[string]*tenancy.SiteContext{}}
+	var called bool
+	handler := tenantMiddleware(resolver)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		// No site header, no subdomain — should still reach handler.
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/desk/index.html", nil)
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Error("handler should be called for /desk/ paths")
+	}
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+func TestTenantMiddleware_SkipsHealthPath(t *testing.T) {
+	resolver := &mockSiteResolver{sites: map[string]*tenancy.SiteContext{}}
+	var called bool
+	handler := tenantMiddleware(resolver)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Error("handler should be called for /health")
+	}
+}
+
+func TestTenantMiddleware_SkipsWebSocketPath(t *testing.T) {
+	resolver := &mockSiteResolver{sites: map[string]*tenancy.SiteContext{}}
+	var called bool
+	handler := tenantMiddleware(resolver)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Error("handler should be called for /ws")
+	}
+}
+
+// --- authMiddleware: skip paths ---
+
+func TestAuthMiddleware_SkipsDeskPath(t *testing.T) {
+	var called bool
+	handler := authMiddleware(failingAuth{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/desk/app.js", nil)
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Error("handler should be called for /desk/ paths even with failing auth")
+	}
+}
+
+func TestAuthMiddleware_SkipsHealthPath(t *testing.T) {
+	var called bool
+	handler := authMiddleware(failingAuth{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Error("handler should be called for /health even with failing auth")
+	}
+}
+
+// --- siteFromPath edge cases ---
+
+func TestSiteFromPath_EdgeCases(t *testing.T) {
+	tests := []struct {
+		path      string
+		wantSite  string
+		wantStrip string
+	}{
+		// Sites with special characters in name.
+		{"/sites/acme-corp/api/v1/resource/X", "acme-corp", "/api/v1/resource/X"},
+		{"/sites/site_123/api", "site_123", "/api"},
+		// Double slashes.
+		{"/sites/acme//api", "acme", "//api"},
+		// Only site name, no trailing slash.
+		{"/sites/acme", "acme", "/"},
+		// Prefix but missing site name.
+		{"/sites/", "", ""},
+		// Not the prefix at all.
+		{"/api/sites/acme", "", ""},
+		// Case sensitivity.
+		{"/Sites/acme/api", "", ""},
+		{"/SITES/acme/api", "", ""},
+	}
+	for _, tt := range tests {
+		site, stripped := siteFromPath(tt.path)
+		if site != tt.wantSite || stripped != tt.wantStrip {
+			t.Errorf("siteFromPath(%q) = (%q, %q), want (%q, %q)",
+				tt.path, site, stripped, tt.wantSite, tt.wantStrip)
+		}
+	}
+}
+
+// --- subdomainFromHost edge cases ---
+
+func TestSubdomainFromHost_EdgeCases(t *testing.T) {
+	tests := []struct {
+		host string
+		want string
+	}{
+		// IP address.
+		{"192.168.1.1", "192"},
+		{"192.168.1.1:8080", "192"},
+		// Empty string.
+		{"", ""},
+		// Only port.
+		{":8080", ""},
+		// Multi-level subdomains.
+		{"a.b.c.d.example.com", "a"},
+		// Localhost variations.
+		{"localhost", ""},
+		{"localhost:3000", ""},
+		{"site1.localhost", "site1"},
+		{"site1.localhost:3000", "site1"},
+		// Two-part domain (no subdomain).
+		{"example.com", ""},
+		{"example.com:443", ""},
+	}
+	for _, tt := range tests {
+		got := subdomainFromHost(tt.host)
+		if got != tt.want {
+			t.Errorf("subdomainFromHost(%q) = %q, want %q", tt.host, got, tt.want)
+		}
+	}
+}
+
+// --- CORS edge cases ---
+
+func TestCORSMiddleware_WildcardOrigin(t *testing.T) {
+	cfg := CORSConfig{AllowedOrigins: []string{"*"}}
+	handler := corsMiddleware(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Origin", "https://anything.example.com")
+	handler.ServeHTTP(rr, req)
+
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://anything.example.com" {
+		t.Errorf("Allow-Origin = %q, want %q", got, "https://anything.example.com")
+	}
+}
+
+func TestCORSMiddleware_NoOriginHeader(t *testing.T) {
+	cfg := CORSConfig{AllowedOrigins: []string{"*"}}
+	handler := corsMiddleware(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	// No Origin header.
+	handler.ServeHTTP(rr, req)
+
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("expected no Allow-Origin header without Origin, got %q", got)
+	}
+}
+
+func TestCORSMiddleware_MaxAgeZero(t *testing.T) {
+	cfg := CORSConfig{
+		AllowedOrigins: []string{"https://example.com"},
+		MaxAge:         0, // should omit header
+	}
+	handler := corsMiddleware(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Origin", "https://example.com")
+	handler.ServeHTTP(rr, req)
+
+	if got := rr.Header().Get("Access-Control-Max-Age"); got != "" {
+		t.Errorf("expected no Max-Age header for 0 value, got %q", got)
+	}
+}
+
+func TestCORSMiddleware_CustomMethodsAndHeaders(t *testing.T) {
+	cfg := CORSConfig{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{"GET", "PATCH"},
+		AllowedHeaders: []string{"X-Custom"},
+	}
+	handler := corsMiddleware(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Origin", "https://example.com")
+	handler.ServeHTTP(rr, req)
+
+	if got := rr.Header().Get("Access-Control-Allow-Methods"); got != "GET, PATCH" {
+		t.Errorf("Allow-Methods = %q, want %q", got, "GET, PATCH")
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Headers"); got != "X-Custom" {
+		t.Errorf("Allow-Headers = %q, want %q", got, "X-Custom")
+	}
+}
+
+// --- originAllowed ---
+
+func TestOriginAllowed(t *testing.T) {
+	tests := []struct {
+		origin  string
+		allowed []string
+		want    bool
+	}{
+		{"https://example.com", []string{"https://example.com"}, true},
+		{"https://evil.com", []string{"https://example.com"}, false},
+		{"https://any.com", []string{"*"}, true},
+		{"https://example.com", nil, false},
+		{"https://example.com", []string{}, false},
+		{"", []string{"*"}, true},
+	}
+	for _, tt := range tests {
+		got := originAllowed(tt.origin, tt.allowed)
+		if got != tt.want {
+			t.Errorf("originAllowed(%q, %v) = %v, want %v", tt.origin, tt.allowed, got, tt.want)
+		}
+	}
+}
+
+// --- generateRequestID ---
+
+func TestGenerateRequestID_Unique(t *testing.T) {
+	ids := make(map[string]struct{}, 100)
+	for i := 0; i < 100; i++ {
+		id := generateRequestID()
+		if len(id) != 32 { // 16 bytes = 32 hex chars
+			t.Errorf("ID length = %d, want 32", len(id))
+		}
+		if _, exists := ids[id]; exists {
+			t.Errorf("duplicate ID generated: %s", id)
+		}
+		ids[id] = struct{}{}
+	}
+}

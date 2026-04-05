@@ -1979,3 +1979,300 @@ func TestJoin_FullSQLStructure(t *testing.T) {
 		t.Errorf("args = %v, want [West 10 5]", args)
 	}
 }
+
+// ── SQL injection prevention & edge-case tests ────────────────────────────
+
+func TestExtra_InvalidFieldName_SQLInjection(t *testing.T) {
+	// Attempt SQL injection through _extra field names.
+	injections := []struct {
+		name  string
+		field string
+	}{
+		{"single_quote", "'; DROP TABLE tab_sales_order; --"},
+		{"double_quote", `"; DROP TABLE tab_sales_order; --`},
+		{"backslash", `field\'; DROP TABLE users; --`},
+		{"semicolon", "field; SELECT * FROM pg_shadow"},
+		{"comment_dash", "field--comment"},
+		{"comment_slash", "field/*comment*/"},
+		{"parentheses", "field()"},
+		{"equals_sign", "field=1"},
+		{"space_in_name", "field name"},
+		{"tab_in_name", "field\tname"},
+		{"newline_in_name", "field\nname"},
+		{"null_byte", "field\x00name"},
+		{"unicode_homoglyph", "fіeld"}, // Cyrillic і
+		{"leading_digit", "1field"},
+		{"only_digits", "123"},
+		{"special_chars", "field!@#$%^&*()"},
+		{"arrow_operator", "field->>'injection'"},
+		{"pipe_operator", "field||'injection'"},
+		{"cast_attempt", "field)::text; --"},
+		{"subquery_attempt", "field FROM tab_user WHERE 1=1)--"},
+	}
+
+	for _, tt := range injections {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+				For("SalesOrder").
+				Where(Filter{Field: tt.field, Operator: OpEqual, Value: "x"}).
+				Build(context.Background())
+			if err == nil {
+				t.Errorf("expected error for injection attempt with field %q, but query succeeded", tt.field)
+			}
+		})
+	}
+}
+
+func TestExtra_ValidFieldNames(t *testing.T) {
+	// These should all be valid _extra field names.
+	validNames := []string{
+		"custom_field",
+		"_leading_underscore",
+		"a",
+		"field_with_123_numbers",
+		"abc123",
+		"_",
+		"__double_underscore",
+	}
+	for _, name := range validNames {
+		t.Run(name, func(t *testing.T) {
+			_, _, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+				For("SalesOrder").
+				Fields(name).
+				Build(context.Background())
+			if err != nil {
+				t.Errorf("field %q should be valid, got error: %v", name, err)
+			}
+		})
+	}
+}
+
+func TestExtraFieldNameRegex_Boundary(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		valid bool
+	}{
+		{"empty_string", "", false},
+		{"just_underscore", "_", true},
+		{"starts_with_number", "0field", false},
+		{"uppercase", "Field", false},
+		{"mixed_case", "myField", false},
+		{"hyphen", "my-field", false},
+		{"dot", "my.field", false},
+		{"space", "my field", false},
+		{"valid_long", "a_very_long_field_name_with_many_underscores_and_numbers_123", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extraFieldNameRe.MatchString(tt.input)
+			if got != tt.valid {
+				t.Errorf("extraFieldNameRe.MatchString(%q) = %v, want %v", tt.input, got, tt.valid)
+			}
+		})
+	}
+}
+
+func TestBuild_NotIn_EmptySlice(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProvider(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "status", Operator: OpNotIn, Value: []string{}}).
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for empty NOT IN slice")
+	}
+	if !strings.Contains(err.Error(), "empty slice") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBuild_Between_NonSlice(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProvider(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "total", Operator: OpBetween, Value: "not-a-slice"}).
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for non-slice BETWEEN value")
+	}
+	if !strings.Contains(err.Error(), "must be a slice") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBuild_JSONContains_UnmarshalableValue(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProvider(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "tags", Operator: OpJSONContains, Value: make(chan int)}).
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for unmarshable JSON value")
+	}
+	if !strings.Contains(err.Error(), "json marshal") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestWhereOr_UnknownOperator(t *testing.T) {
+	qb := NewQueryBuilder(testProvider(), "site1").
+		For("SalesOrder").
+		WhereOr(Filter{Field: "customer", Operator: "INVALID", Value: "x"})
+	_, _, err := qb.Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for unknown operator in WhereOr")
+	}
+	if !strings.Contains(err.Error(), "unknown operator") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestWhereOr_FullTextError(t *testing.T) {
+	qb := NewQueryBuilder(testProvider(), "site1").
+		For("SalesOrder").
+		WhereOr(Filter{Field: "customer", Operator: OpFullText, Value: "search"})
+	_, _, err := qb.Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for @@ in WhereOr")
+	}
+	if !strings.Contains(err.Error(), "not available until MS-15") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestWhereOr_ProducesOrClause(t *testing.T) {
+	sql, args, err := NewQueryBuilder(testProviderWithExtra(), "site1").
+		For("SalesOrder").
+		Where(Filter{Field: "status", Operator: OpEqual, Value: "Draft"}).
+		WhereOr(
+			Filter{Field: "customer", Operator: OpEqual, Value: "ACME"},
+			Filter{Field: "total", Operator: OpGreater, Value: 100},
+		).
+		Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Main filter AND-ed with OR group.
+	if !strings.Contains(sql, `"status" = $1`) {
+		t.Errorf("expected main filter, got: %s", sql)
+	}
+	if !strings.Contains(sql, `("customer" = $2 OR "total" > $3)`) {
+		t.Errorf("expected OR group, got: %s", sql)
+	}
+	if len(args) != 5 { // 3 filter values + limit + offset
+		t.Errorf("args count = %d, want 5", len(args))
+	}
+}
+
+func TestBuild_Limit_Negative(t *testing.T) {
+	qb := NewQueryBuilder(testProvider(), "site1").For("SalesOrder").Limit(-10)
+	_, args, err := qb.Build(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	limitArg := args[len(args)-2]
+	if limitArg != 20 {
+		t.Errorf("limit = %v, want 20 (clamped from -10)", limitArg)
+	}
+}
+
+func TestInferCast_EdgeCases(t *testing.T) {
+	tests := []struct {
+		value any
+		name  string
+		want  string
+	}{
+		{"string_value", "string", ""},
+		{nil, "nil", ""},
+		{42, "int", "NUMERIC"},
+		{int64(42), "int64", "NUMERIC"},
+		{uint(42), "uint", "NUMERIC"},
+		{float32(3.14), "float32", "NUMERIC"},
+		{float64(3.14), "float64", "NUMERIC"},
+		{true, "bool", "BOOLEAN"},
+		{time.Now(), "time", "TIMESTAMPTZ"},
+		{[]any{42, 100}, "slice_int", "NUMERIC"},
+		{[]any{"a", "b"}, "slice_string", ""},
+		{[]any{}, "empty_slice", ""},
+		{struct{}{}, "struct", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := inferCast(tt.value)
+			if got != tt.want {
+				t.Errorf("inferCast(%T) = %q, want %q", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestToAnySlice_AllTypes(t *testing.T) {
+	tests := []struct {
+		input   any
+		name    string
+		wantLen int
+		wantErr bool
+	}{
+		{"not_a_slice", "non_slice", 0, true},
+		{42, "int_non_slice", 0, true},
+		{nil, "nil_non_slice", 0, true},
+		{[]string{"a", "b"}, "string_slice", 2, false},
+		{[]int{1, 2, 3}, "int_slice", 3, false},
+		{[]int64{1, 2}, "int64_slice", 2, false},
+		{[]float64{1.0}, "float64_slice", 1, false},
+		{[]any{1, "two", 3.0}, "any_slice", 3, false},
+		{[]string{}, "empty_string_slice", 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := toAnySlice(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(result) != tt.wantLen {
+				t.Errorf("len = %d, want %d", len(result), tt.wantLen)
+			}
+		})
+	}
+}
+
+func TestJoin_SingleSegment_Error(t *testing.T) {
+	// A single dot at the end produces an empty final segment.
+	_, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("customer.").
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for single segment with trailing dot")
+	}
+}
+
+func TestJoin_LeadingDot_Error(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields(".customer").
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for leading dot")
+	}
+	if !strings.Contains(err.Error(), "empty segment") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestJoin_DoubleDot_Error(t *testing.T) {
+	_, _, err := NewQueryBuilder(testProviderWithJoins(), "site1").
+		For("SalesOrder").
+		Fields("customer..territory").
+		Build(context.Background())
+	if err == nil {
+		t.Fatal("expected error for double dot")
+	}
+	if !strings.Contains(err.Error(), "empty segment") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}

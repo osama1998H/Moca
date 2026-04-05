@@ -134,3 +134,174 @@ func containsAll(s string, subs ...string) bool {
 	}
 	return true
 }
+
+// ── Additional edge-case tests ─────────────────────────────────────────────
+
+func TestEmitter_NilReceiver_DoesNotPanic(t *testing.T) {
+	var e *Emitter
+	e.Emit("test.topic", DocumentEvent{DocType: "SalesOrder"})
+}
+
+func TestEmitter_DocumentEventPointer(t *testing.T) {
+	producer := &captureProducer{}
+	emitter := NewEmitter(producer)
+
+	event := &DocumentEvent{DocType: "SalesOrder", DocName: "SO-001"}
+	emitter.Emit("test.topic", event)
+
+	if producer.calls != 1 {
+		t.Fatalf("calls = %d, want 1", producer.calls)
+	}
+	if producer.event.DocType != "SalesOrder" {
+		t.Errorf("DocType = %q", producer.event.DocType)
+	}
+}
+
+func TestEmitter_NilDocumentEventPointer(t *testing.T) {
+	producer := &captureProducer{}
+	emitter := NewEmitter(producer)
+
+	var event *DocumentEvent
+	emitter.Emit("test.topic", event)
+
+	if producer.calls != 0 {
+		t.Error("should not publish nil *DocumentEvent")
+	}
+}
+
+func TestEmitter_PreservesExistingEventID(t *testing.T) {
+	producer := &captureProducer{}
+	emitter := NewEmitter(producer)
+
+	emitter.Emit("topic", DocumentEvent{EventID: "custom-id", DocType: "X"})
+
+	if producer.event.EventID != "custom-id" {
+		t.Errorf("EventID = %q, want custom-id", producer.event.EventID)
+	}
+}
+
+func TestEmitter_LegacyMapPayload_Update(t *testing.T) {
+	producer := &captureProducer{}
+	emitter := NewEmitter(producer)
+
+	emitter.Emit("SalesOrder:update", map[string]any{"name": "SO-001"})
+
+	if producer.calls != 1 {
+		t.Fatalf("calls = %d, want 1", producer.calls)
+	}
+	if producer.event.EventType != EventTypeDocUpdated {
+		t.Errorf("EventType = %q, want %q", producer.event.EventType, EventTypeDocUpdated)
+	}
+}
+
+func TestEmitter_LegacyMapPayload_Delete(t *testing.T) {
+	producer := &captureProducer{}
+	emitter := NewEmitter(producer)
+
+	emitter.Emit("SalesOrder:delete", map[string]any{"name": "SO-001"})
+
+	if producer.calls != 1 {
+		t.Fatalf("calls = %d, want 1", producer.calls)
+	}
+	if producer.event.EventType != EventTypeDocDeleted {
+		t.Errorf("EventType = %q, want %q", producer.event.EventType, EventTypeDocDeleted)
+	}
+}
+
+func TestEmitter_LegacyMapPayload_MissingColon(t *testing.T) {
+	producer := &captureProducer{}
+	emitter := NewEmitter(producer)
+
+	emitter.Emit("SalesOrder", map[string]any{"name": "SO-001"})
+	if producer.calls != 0 {
+		t.Error("should not publish for topic without colon separator")
+	}
+}
+
+func TestEmitter_LegacyMapPayload_EmptyDoctype(t *testing.T) {
+	producer := &captureProducer{}
+	emitter := NewEmitter(producer)
+
+	emitter.Emit(":insert", map[string]any{"name": "SO-001"})
+	if producer.calls != 0 {
+		t.Error("should not publish for empty doctype")
+	}
+}
+
+func TestEmitter_LegacyMapPayload_EmptyAction(t *testing.T) {
+	producer := &captureProducer{}
+	emitter := NewEmitter(producer)
+
+	emitter.Emit("SalesOrder:", map[string]any{"name": "SO-001"})
+	if producer.calls != 0 {
+		t.Error("should not publish for empty action")
+	}
+}
+
+func TestEmitter_LegacyMapPayload_PrevData(t *testing.T) {
+	producer := &captureProducer{}
+	emitter := NewEmitter(producer)
+
+	prevData := map[string]any{"status": "Draft"}
+	emitter.Emit("SalesOrder:insert", map[string]any{
+		"name":      "SO-001",
+		"prev_data": prevData,
+	})
+
+	if producer.event.PrevData == nil {
+		t.Error("PrevData should be set")
+	}
+}
+
+func TestLegacyActionEventType_AllCases(t *testing.T) {
+	tests := []struct {
+		action   string
+		wantType string
+		wantOK   bool
+	}{
+		{"insert", EventTypeDocCreated, true},
+		{"update", EventTypeDocUpdated, true},
+		{"delete", EventTypeDocDeleted, true},
+		{"submit", "", false},
+		{"cancel", "", false},
+		{"", "", false},
+		{"INSERT", "", false},
+	}
+	for _, tt := range tests {
+		gotType, gotOK := legacyActionEventType(tt.action)
+		if gotType != tt.wantType || gotOK != tt.wantOK {
+			t.Errorf("legacyActionEventType(%q) = (%q, %v), want (%q, %v)",
+				tt.action, gotType, gotOK, tt.wantType, tt.wantOK)
+		}
+	}
+}
+
+func TestPayloadType_Variants(t *testing.T) {
+	if got := payloadType(nil); got != "<nil>" {
+		t.Errorf("nil = %q", got)
+	}
+	if got := payloadType("str"); got != "string" {
+		t.Errorf("string = %q", got)
+	}
+	if got := payloadType(42); got != "int" {
+		t.Errorf("int = %q", got)
+	}
+	if got := payloadType(DocumentEvent{}); got != "events.DocumentEvent" {
+		t.Errorf("DocumentEvent = %q", got)
+	}
+}
+
+func TestStringValue_Variants(t *testing.T) {
+	s, ok := stringValue("hello")
+	if !ok || s != "hello" {
+		t.Errorf("string = (%q, %v)", s, ok)
+	}
+	_, ok = stringValue(42)
+	if ok {
+		t.Error("int should return false")
+	}
+	_, ok = stringValue(nil)
+	if ok {
+		t.Error("nil should return false")
+	}
+}
