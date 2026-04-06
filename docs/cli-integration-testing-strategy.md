@@ -25,89 +25,43 @@ This document defines a set of **story-driven CLI integration test flows**, each
 
 ## 2. Infrastructure Design
 
-### 2.1 Docker Compose as the Foundation
+### 2.1 Infrastructure for Flow 01
 
-Every workflow uses a single `docker-compose.ci.yml` that extends the existing `docker-compose.yml` with additional services when needed.
+Flow 01 uses **GitHub Actions `services:`** directly, matching the current CI setup in this repository. This keeps the first story self-contained and easy to debug.
+
+`docker-compose.ci.yml` remains a sensible follow-up once there are multiple flows sharing the same infrastructure contract, but it is not introduced for Flow 01.
+
+The base service set for Flow 01 is:
+
+- PostgreSQL
+- Redis
+- Meilisearch
+
+Additional services like Kafka or MinIO can be layered into later flows when they are actually exercised.
 
 ```yaml
-# docker-compose.ci.yml
-# Used exclusively by GitHub Actions CLI integration flows.
-
-services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: moca
-      POSTGRES_PASSWORD: moca_test
-      POSTGRES_DB: moca_test
-    ports: ["5433:5432"]
-    tmpfs: /var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U moca"]
-      interval: 3s
-      retries: 10
-
-  redis:
-    image: redis:7-alpine
-    ports: ["6380:6379"]
-    tmpfs: /data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 3s
-      retries: 10
-
-  meilisearch:
-    image: getmeili/meilisearch:v1.12
-    environment:
-      MEILI_MASTER_KEY: moca_test
-      MEILI_NO_ANALYTICS: "true"
-    ports: ["7700:7700"]
-    tmpfs: /meili_data
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:7700/health"]
-      interval: 3s
-      retries: 10
-
-  # Only started by flows that need Kafka
-  kafka:
-    image: bitnami/kafka:3.7
-    environment:
-      KAFKA_CFG_NODE_ID: 0
-      KAFKA_CFG_PROCESS_ROLES: controller,broker
-      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
-    ports: ["9092:9092"]
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092"]
-      interval: 5s
-      retries: 15
-    profiles: ["kafka"]
-
-  # Only started by flows that need S3-compatible storage
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: moca_test
-      MINIO_ROOT_PASSWORD: moca_test_secret
-    ports: ["9000:9000", "9001:9001"]
-    tmpfs: /data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      retries: 10
-    profiles: ["storage"]
+# .github/workflows/cli-flow-01-project-bootstrap.yml
+jobs:
+  bootstrap-clean:
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: moca_test
+          POSTGRES_USER: moca
+          POSTGRES_PASSWORD: moca_test
+      redis:
+        image: redis:7-alpine
+      meilisearch:
+        image: getmeili/meilisearch:v1.12
+        env:
+          MEILI_MASTER_KEY: moca_test
+          MEILI_NO_ANALYTICS: "true"
 ```
-
-Flows that need Kafka pass `--profile kafka` to `docker compose up`. Flows that need MinIO pass `--profile storage`. Most flows only need PG + Redis + Meilisearch — the base services.
 
 ### 2.2 Reusable Workflow Skeleton
 
-Every flow shares a common preamble. To avoid duplication, define a **reusable workflow** that handles setup:
+The workflow skeleton below is still useful as a design target, but the actual Flow 01 implementation stays in a single workflow file. Extracting a reusable workflow is deferred until at least a second CLI flow exists.
 
 ```yaml
 # .github/workflows/_cli-test-setup.yml
@@ -373,9 +327,9 @@ moca init . --name test-erp \
 # Step 3 — Verify project structure
 test -f moca.yaml
 test -f moca.lock
-test -d apps/core
 test -f go.work
 test -d .moca
+test -f apps/core/manifest.yaml
 
 # Step 4 — Verify moca.yaml contents
 moca config get project.name         # → "test-erp"
@@ -391,15 +345,16 @@ moca status --json
 **Assertions:**
 
 - `moca version` exits 0, output matches semver pattern.
+- `moca version --json` keeps the existing JSON fields: `version`, `commit`, `build_date`, `go_version`, `os`, `arch`.
 - `moca init` exits 0, creates all expected files/directories.
 - `moca.yaml` contains correct project name and port overrides.
 - `moca doctor` exits 0, reports PostgreSQL and Redis as healthy.
-- `moca status` shows project detected, no active site.
+- `moca status --json` reports `active_site = "none"` immediately after bootstrap.
 
 **Chaos Variant:**
 
 - Run `moca init .` again in the same directory. Must exit with a clear "project already exists" error (not overwrite).
-- Run `moca init .` with Postgres stopped. Must exit non-zero with a connection error, not a panic.
+- Run `moca init .` with Postgres pointed at an unused port. Must exit non-zero with a connection error, not a panic.
 
 ---
 
@@ -1592,7 +1547,7 @@ jobs:
           source test/cli-harness.sh
           echo "── moca version ──"
           assert_success "version exits 0" moca version
-          assert_stdout_contains "version --json is valid JSON" '"cli_version"' moca version --json
+          assert_json_field "version --json exposes version field" '.version' '0.1.0' moca version
           assert_stdout_contains "version --short is semver" '^v[0-9]+\.[0-9]+\.[0-9]+' moca version --short
           print_summary
 
@@ -1610,7 +1565,7 @@ jobs:
           assert_file_exists "moca.lock created" /tmp/test-project/moca.lock
           assert_file_exists "go.work created" /tmp/test-project/go.work
           assert_file_exists ".moca dir created" /tmp/test-project/.moca
-          assert_file_exists "core app present" /tmp/test-project/apps/core
+          assert_file_exists "core app present" /tmp/test-project/apps/core/manifest.yaml
           print_summary
 
       - name: "Test: moca config"
@@ -1628,8 +1583,9 @@ jobs:
           cd /tmp/test-project
           echo "── doctor ──"
           assert_success "doctor healthy" moca doctor
-          assert_success "doctor --json" moca doctor --json
+          assert_stdout_contains "doctor --json reports PostgreSQL" '"name": "PostgreSQL reachable"' moca doctor --json
           assert_success "status" moca status
+          assert_json_field "status active site none" '.active_site' 'none' moca status
           print_summary
 
       - name: Upload test logs
@@ -1759,7 +1715,6 @@ Flows are grouped by when they become fully testable based on the roadmap.
   release.yml                               # Existing: release builds
   nightly.yml                               # Existing: nightly builds
   benchmark.yml                             # Existing: performance benchmarks
-  _cli-test-setup.yml                       # NEW: reusable setup workflow
   cli-flow-01-project-bootstrap.yml         # NEW: Flow 01
   cli-flow-02-site-lifecycle.yml            # NEW: Flow 02
   cli-flow-03-app-workflow.yml              # NEW: Flow 03
@@ -1768,11 +1723,6 @@ Flows are grouped by when they become fully testable based on the roadmap.
 
 test/
   cli-harness.sh                            # NEW: shared assertion functions
-  fixtures/                                 # NEW: test fixture data
-    translations-ar.csv
-    seed-users.json
-
-docker-compose.ci.yml                       # NEW: CI-specific compose file
 ```
 
 ---

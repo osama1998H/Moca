@@ -1,8 +1,18 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	goredis "github.com/redis/go-redis/v9"
+
+	"github.com/osama1998H/moca/internal/config"
 	clicontext "github.com/osama1998H/moca/internal/context"
 	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/pkg/search"
 	"github.com/spf13/cobra"
 )
 
@@ -30,6 +40,49 @@ type DoctorResult struct {
 	Message string       `json:"message"`
 }
 
+const doctorTimeout = 3 * time.Second
+
+var (
+	doctorCheckPostgres = func(ctx context.Context, cfg config.DatabaseConfig) error {
+		ctx, cancel := context.WithTimeout(ctx, doctorTimeout)
+		defer cancel()
+
+		pool, err := pgxpool.New(ctx, buildInitDSN(cfg))
+		if err != nil {
+			return err
+		}
+		defer pool.Close()
+
+		return pool.Ping(ctx)
+	}
+	doctorCheckRedis = func(ctx context.Context, cfg config.RedisConfig) error {
+		ctx, cancel := context.WithTimeout(ctx, doctorTimeout)
+		defer cancel()
+
+		client := goredis.NewClient(&goredis.Options{
+			Addr:     fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+			Password: cfg.Password,
+			DB:       cfg.DbCache,
+		})
+		defer client.Close() //nolint:errcheck
+
+		return client.Ping(ctx).Err()
+	}
+	doctorCheckMeilisearch = func(ctx context.Context, cfg config.SearchConfig) error {
+		ctx, cancel := context.WithTimeout(ctx, doctorTimeout)
+		defer cancel()
+
+		client, err := search.NewClient(cfg)
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+
+		_, err = client.ListIndexes(ctx, "")
+		return err
+	}
+)
+
 // NewDoctorCommand returns the "moca doctor" command.
 func NewDoctorCommand() *cobra.Command {
 	return &cobra.Command{
@@ -42,12 +95,23 @@ func NewDoctorCommand() *cobra.Command {
 
 			checks := defaultChecks()
 			results := make([]DoctorResult, 0, len(checks))
+			hasFailure := false
 			for _, check := range checks {
-				results = append(results, check.Run(ctx))
+				result := check.Run(ctx)
+				results = append(results, result)
+				if result.Status == DoctorFail {
+					hasFailure = true
+				}
 			}
 
 			if w.Mode() == output.ModeJSON {
-				return w.PrintJSON(results)
+				if err := w.PrintJSON(results); err != nil {
+					return err
+				}
+				if hasFailure {
+					return errors.New("one or more health checks failed")
+				}
+				return nil
 			}
 
 			w.Print("System Health Check\n")
@@ -57,7 +121,13 @@ func NewDoctorCommand() *cobra.Command {
 			for _, r := range results {
 				rows = append(rows, []string{r.Name, formatStatus(r.Status, w.Color()), r.Message})
 			}
-			return w.PrintTable(headers, rows)
+			if err := w.PrintTable(headers, rows); err != nil {
+				return err
+			}
+			if hasFailure {
+				return errors.New("one or more health checks failed")
+			}
+			return nil
 		},
 	}
 }
@@ -69,6 +139,7 @@ func defaultChecks() []DoctorCheck {
 		&configCheck{},
 		&postgresCheck{},
 		&redisCheck{},
+		&meiliCheck{},
 	}
 }
 
@@ -129,22 +200,94 @@ func (c *configCheck) Run(ctx *clicontext.CLIContext) DoctorResult {
 type postgresCheck struct{}
 
 func (c *postgresCheck) Name() string { return "PostgreSQL reachable" }
-func (c *postgresCheck) Run(_ *clicontext.CLIContext) DoctorResult {
+func (c *postgresCheck) Run(ctx *clicontext.CLIContext) DoctorResult {
+	if ctx == nil || ctx.Project == nil {
+		return DoctorResult{
+			Name:    c.Name(),
+			Status:  DoctorSkip,
+			Message: "No project detected",
+		}
+	}
+	if err := doctorCheckPostgres(context.Background(), ctx.Project.Infrastructure.Database); err != nil {
+		return DoctorResult{
+			Name:    c.Name(),
+			Status:  DoctorFail,
+			Message: err.Error(),
+		}
+	}
 	return DoctorResult{
 		Name:    c.Name(),
-		Status:  DoctorSkip,
-		Message: "Driver check not yet implemented",
+		Status:  DoctorPass,
+		Message: "Connected successfully",
 	}
 }
 
-// redisCheck is a placeholder for Redis connectivity checking.
+// redisCheck verifies Redis connectivity using the cache database.
 type redisCheck struct{}
 
 func (c *redisCheck) Name() string { return "Redis reachable" }
-func (c *redisCheck) Run(_ *clicontext.CLIContext) DoctorResult {
+func (c *redisCheck) Run(ctx *clicontext.CLIContext) DoctorResult {
+	if ctx == nil || ctx.Project == nil {
+		return DoctorResult{
+			Name:    c.Name(),
+			Status:  DoctorSkip,
+			Message: "No project detected",
+		}
+	}
+	if err := doctorCheckRedis(context.Background(), ctx.Project.Infrastructure.Redis); err != nil {
+		return DoctorResult{
+			Name:    c.Name(),
+			Status:  DoctorFail,
+			Message: err.Error(),
+		}
+	}
 	return DoctorResult{
 		Name:    c.Name(),
-		Status:  DoctorSkip,
-		Message: "Driver check not yet implemented",
+		Status:  DoctorPass,
+		Message: "Connected successfully",
+	}
+}
+
+// meiliCheck verifies Meilisearch connectivity when configured.
+type meiliCheck struct{}
+
+func (c *meiliCheck) Name() string { return "Meilisearch reachable" }
+func (c *meiliCheck) Run(ctx *clicontext.CLIContext) DoctorResult {
+	if ctx == nil || ctx.Project == nil {
+		return DoctorResult{
+			Name:    c.Name(),
+			Status:  DoctorSkip,
+			Message: "No project detected",
+		}
+	}
+
+	cfg := ctx.Project.Infrastructure.Search
+	if cfg.Engine == "" || cfg.Host == "" {
+		return DoctorResult{
+			Name:    c.Name(),
+			Status:  DoctorSkip,
+			Message: "Search not configured",
+		}
+	}
+
+	err := doctorCheckMeilisearch(context.Background(), cfg)
+	if err == nil {
+		return DoctorResult{
+			Name:    c.Name(),
+			Status:  DoctorPass,
+			Message: "Connected successfully",
+		}
+	}
+	if errors.Is(err, search.ErrUnavailable) {
+		return DoctorResult{
+			Name:    c.Name(),
+			Status:  DoctorSkip,
+			Message: "Search not configured for Meilisearch",
+		}
+	}
+	return DoctorResult{
+		Name:    c.Name(),
+		Status:  DoctorFail,
+		Message: err.Error(),
 	}
 }

@@ -1,0 +1,212 @@
+name: "CLI Flow 01: Project Bootstrap"
+
+on:
+  workflow_dispatch:
+    inputs:
+      chaos:
+        description: "Run chaos variants"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap-clean:
+    name: "Clean-Room Bootstrap"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: moca_test
+          POSTGRES_USER: moca
+          POSTGRES_PASSWORD: moca_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U moca -d moca_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      meilisearch:
+        image: getmeili/meilisearch:v1.12
+        ports:
+          - 7700:7700
+        env:
+          MEILI_ENV: development
+          MEILI_MASTER_KEY: moca_test
+          MEILI_NO_ANALYTICS: "true"
+        options: >-
+          --health-cmd "wget --no-verbose --spider http://127.0.0.1:7700/health || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.1"
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build moca
+        run: make build-moca VERSION=0.1.0
+
+      - name: Add bin to PATH
+        run: echo "${{ github.workspace }}/bin" >> "$GITHUB_PATH"
+
+      - name: "Test: version and completion"
+        run: |
+          source test/cli-harness.sh
+          assert_success "version exits 0" moca version
+          assert_json_field "version --json exposes version field" '.version' '0.1.0' moca version
+          assert_stdout_contains "version --short is semver" '^v[0-9]+\.[0-9]+\.[0-9]+$' moca version --short
+          assert_success "completion bash" moca completion bash
+          assert_success "completion zsh" moca completion zsh
+          assert_success "completion fish" moca completion fish
+          print_summary
+
+      - name: "Test: init"
+        run: |
+          source test/cli-harness.sh
+          mkdir -p /tmp/test-project
+          cd /tmp/test-project
+          assert_success "init creates project" moca init . \
+            --name test-erp \
+            --db-host localhost --db-port 5433 \
+            --db-user moca --db-password moca_test \
+            --redis-host localhost --redis-port 6380 \
+            --minimal --no-kafka
+          assert_file_exists "moca.yaml created" /tmp/test-project/moca.yaml
+          assert_file_exists "moca.lock created" /tmp/test-project/moca.lock
+          assert_file_exists "go.work created" /tmp/test-project/go.work
+          assert_file_exists ".moca dir created" /tmp/test-project/.moca
+          assert_file_exists "core app copied" /tmp/test-project/apps/core/manifest.yaml
+          print_summary
+
+      - name: "Test: config, doctor, status"
+        run: |
+          source test/cli-harness.sh
+          cd /tmp/test-project
+          assert_stdout_contains "project name correct" 'test-erp' moca config get project.name
+          assert_success "config list --json" moca config list --json
+          assert_success "doctor healthy" moca doctor
+          assert_stdout_contains "doctor --json reports PostgreSQL" '"name": "PostgreSQL reachable"' moca doctor --json
+          assert_success "status" moca status
+          assert_json_field "status active site is none" '.active_site' 'none' moca status
+          print_summary
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-flow-01-logs
+          path: /tmp/cli-test-*
+          retention-days: 7
+
+  bootstrap-chaos:
+    name: "Chaos: double init and unreachable PostgreSQL"
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.chaos }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: moca_test
+          POSTGRES_USER: moca
+          POSTGRES_PASSWORD: moca_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U moca -d moca_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.1"
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build moca
+        run: make build-moca VERSION=0.1.0
+
+      - name: Add bin to PATH
+        run: echo "${{ github.workspace }}/bin" >> "$GITHUB_PATH"
+
+      - name: "Chaos: double init"
+        run: |
+          source test/cli-harness.sh
+          mkdir -p /tmp/chaos-project
+          cd /tmp/chaos-project
+          assert_success "first init succeeds" moca init . \
+            --name chaos-test \
+            --db-host localhost --db-port 5433 \
+            --db-user moca --db-password moca_test \
+            --redis-host localhost --redis-port 6380 \
+            --minimal --no-kafka
+          assert_failure "second init fails cleanly" moca init . \
+            --name chaos-test \
+            --db-host localhost --db-port 5433 \
+            --db-user moca --db-password moca_test \
+            --redis-host localhost --redis-port 6380 \
+            --minimal --no-kafka
+          print_summary
+
+      - name: "Chaos: unreachable PostgreSQL"
+        run: |
+          source test/cli-harness.sh
+          mkdir -p /tmp/chaos-project-unreachable
+          cd /tmp/chaos-project-unreachable
+          assert_failure "init fails when PostgreSQL is unreachable" moca init . \
+            --name broken-test \
+            --db-host 127.0.0.1 --db-port 65432 \
+            --db-user moca --db-password moca_test \
+            --redis-host localhost --redis-port 6380 \
+            --minimal --no-kafka
+          print_summary
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-flow-01-chaos-logs
+          path: /tmp/cli-test-*
+          retention-days: 7

@@ -155,6 +155,12 @@ func testProjectConfig() *config.ProjectConfig {
 				DbSession: 2,
 				DbPubSub:  3,
 			},
+			Search: config.SearchConfig{
+				Engine: "meilisearch",
+				Host:   "localhost",
+				Port:   7700,
+				APIKey: "moca_test",
+			},
 		},
 		Apps: map[string]config.AppConfig{
 			"core": {Source: "builtin", Version: "*"},
@@ -306,12 +312,18 @@ func TestCLI_InitCreatesProject(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(targetDir, "moca.lock")); err != nil {
 		t.Errorf("moca.lock not found: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(targetDir, "go.work")); err != nil {
+		t.Errorf("go.work not found: %v", err)
+	}
 
 	// Verify directory structure.
 	for _, dir := range []string{"apps", ".moca", "sites"} {
 		if _, err := os.Stat(filepath.Join(targetDir, dir)); err != nil {
 			t.Errorf("directory %q not found: %v", dir, err)
 		}
+	}
+	if _, err := os.Stat(filepath.Join(targetDir, "apps", "core", "manifest.yaml")); err != nil {
+		t.Errorf("apps/core bootstrap not found: %v", err)
 	}
 
 	// Verify core app registered in the system database configured by moca init.
@@ -334,6 +346,25 @@ func TestCLI_InitCreatesProject(t *testing.T) {
 	if !coreExists {
 		t.Error("core app not registered in moca_system.apps after init")
 	}
+
+	stdout, _, err := executeWithContext(t, targetDir, "", "doctor", "--json")
+	if err != nil {
+		t.Fatalf("doctor --json: %v", err)
+	}
+	if !strings.Contains(stdout, `"PostgreSQL reachable"`) || !strings.Contains(stdout, `"Redis reachable"`) {
+		t.Fatalf("doctor output missing infrastructure checks:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, `"status": "pass"`) {
+		t.Fatalf("doctor output missing passing checks:\n%s", stdout)
+	}
+
+	stdout, _, err = executeWithContext(t, targetDir, "", "status", "--json")
+	if err != nil {
+		t.Fatalf("status --json: %v", err)
+	}
+	if !strings.Contains(stdout, `"active_site": "none"`) {
+		t.Fatalf("status output missing active_site none:\n%s", stdout)
+	}
 }
 
 func TestCLI_InitExistingProject_Error(t *testing.T) {
@@ -350,6 +381,27 @@ func TestCLI_InitExistingProject_Error(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("expected 'already exists' error, got: %v", err)
+	}
+}
+
+func TestCLI_InitFailsWhenPostgresUnavailable(t *testing.T) {
+	tmpDir := t.TempDir()
+	targetDir := filepath.Join(tmpDir, "broken-project")
+
+	_, _, err := executeInit(t,
+		"init", targetDir,
+		"--db-host", "127.0.0.1",
+		"--db-port", "65432",
+		"--db-user", cliTestUser,
+		"--db-password", cliTestPassword,
+		"--redis-host", "localhost",
+		"--redis-port", fmt.Sprintf("%d", cliRedisPort),
+	)
+	if err == nil {
+		t.Fatal("expected init failure with unreachable PostgreSQL, got nil")
+	}
+	if !strings.Contains(err.Error(), "Cannot connect to PostgreSQL") {
+		t.Fatalf("unexpected init error: %v", err)
 	}
 }
 

@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	goredis "github.com/redis/go-redis/v9"
@@ -21,6 +23,16 @@ import (
 )
 
 const defaultMocaConstraint = ">=0.1.0"
+
+var (
+	runInitPostgres         = initPostgres
+	runInitRedis            = initRedis
+	runInitRegisterCoreApp  = registerCoreApp
+	runInitCopyCoreAppFiles = copyCoreAppFiles
+	runInitWriteGoWork      = writeGoWork
+	runInitGit              = initGit
+	initCoreAppSource       = locateCoreAppSource
+)
 
 // NewInitCommand returns the "moca init" command.
 func NewInitCommand() *cobra.Command {
@@ -97,7 +109,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// 6. Connect to PostgreSQL and create system schema.
 	s = w.NewSpinner("Connecting to PostgreSQL...")
 	s.Start()
-	if err := initPostgres(ctx, cfg); err != nil {
+	if err := runInitPostgres(ctx, cfg); err != nil {
 		s.Stop("Failed")
 		return err // already a CLIError
 	}
@@ -106,7 +118,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// 7. Connect to Redis.
 	s = w.NewSpinner("Connecting to Redis...")
 	s.Start()
-	if err := initRedis(ctx, cfg, w); err != nil {
+	if err := runInitRedis(ctx, cfg, w); err != nil {
 		// Non-fatal: warn and continue.
 		s.Stop("Redis unavailable (non-fatal)")
 		w.PrintWarning(fmt.Sprintf("Redis connection failed: %v", err))
@@ -118,7 +130,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// 8. Register core app in moca_system.apps.
 	s = w.NewSpinner("Registering core app...")
 	s.Start()
-	if err := registerCoreApp(ctx, cfg); err != nil {
+	if err := runInitRegisterCoreApp(ctx, cfg); err != nil {
 		s.Stop("Failed")
 		return output.NewCLIError("Failed to register core app").
 			WithErr(err).
@@ -126,7 +138,27 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	s.Stop("Core app registered")
 
-	// 9. Write moca.lock.
+	// 9. Copy the bundled core app into apps/core.
+	s = w.NewSpinner("Bootstrapping core app files...")
+	s.Start()
+	if err := runInitCopyCoreAppFiles(targetDir); err != nil {
+		s.Stop("Failed")
+		return output.NewCLIError("Failed to copy core app files").
+			WithErr(err).
+			WithCause(err.Error())
+	}
+	s.Stop("Core app files copied")
+
+	// 10. Write go.work.
+	s = w.NewSpinner("Writing go.work...")
+	s.Start()
+	if err := runInitWriteGoWork(targetDir); err != nil {
+		s.Stop("Failed")
+		return output.NewCLIError("Failed to write go.work").WithErr(err)
+	}
+	s.Stop("go.work written")
+
+	// 11. Write moca.lock.
 	s = w.NewSpinner("Generating moca.lock...")
 	s.Start()
 	if err := writeMocaLock(targetDir); err != nil {
@@ -135,10 +167,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	s.Stop("moca.lock generated")
 
-	// 10. Git init.
+	// 12. Git init.
 	s = w.NewSpinner("Initializing git repository...")
 	s.Start()
-	if err := initGit(targetDir); err != nil {
+	if err := runInitGit(targetDir); err != nil {
 		s.Stop("Skipped (git not available)")
 	} else {
 		s.Stop("Git repository initialized")
@@ -258,6 +290,93 @@ func createProjectDirs(targetDir string) error {
 		}
 	}
 	return nil
+}
+
+func writeGoWork(targetDir string) error {
+	const content = "go 1.26.1\n\nuse (\n\t./apps/core\n)\n"
+	return os.WriteFile(filepath.Join(targetDir, "go.work"), []byte(content), 0o644)
+}
+
+func copyCoreAppFiles(targetDir string) error {
+	srcDir, err := initCoreAppSource()
+	if err != nil {
+		return err
+	}
+	dstDir := filepath.Join(targetDir, "apps", "core")
+	return copyDir(srcDir, dstDir)
+}
+
+func locateCoreAppSource() (string, error) {
+	candidates := make([]string, 0, 6)
+
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "apps", "core"),
+			filepath.Join(filepath.Dir(exeDir), "apps", "core"),
+			filepath.Join(filepath.Dir(filepath.Dir(exeDir)), "apps", "core"),
+		)
+	}
+
+	if _, file, _, ok := runtime.Caller(0); ok {
+		candidates = append(candidates, filepath.Join(filepath.Dir(file), "..", "..", "apps", "core"))
+	}
+
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(candidate, "manifest.yaml")); err == nil {
+			return filepath.Clean(candidate), nil
+		}
+	}
+
+	return "", fmt.Errorf("could not locate bundled apps/core source")
+}
+
+func copyDir(srcDir, dstDir string) error {
+	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return err
+		}
+		targetPath := filepath.Join(dstDir, relPath)
+
+		if info.IsDir() {
+			return os.MkdirAll(targetPath, info.Mode())
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		return copyFile(path, targetPath, info.Mode())
+	})
+}
+
+func copyFile(src, dst string, mode os.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close() //nolint:errcheck
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	defer out.Close() //nolint:errcheck
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Close()
 }
 
 // writeMocaYAML marshals the config and writes it to moca.yaml.

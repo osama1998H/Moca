@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 // NewVersionCommand returns the "moca version" command.
 func NewVersionCommand() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print MOCA CLI version information",
 		Long:  "Display the version, commit hash, build date, Go version, and OS/architecture of the MOCA CLI binary.",
@@ -25,11 +26,16 @@ func NewVersionCommand() *cobra.Command {
 				Arch:      runtime.GOARCH,
 			}
 
+			shortFlag, _ := cmd.Flags().GetBool("short")
 			jsonFlag, _ := cmd.Flags().GetBool("json")
 			if jsonFlag {
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
 				return enc.Encode(info)
+			}
+			if shortFlag {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), shortVersion(info.Version))
+				return nil
 			}
 
 			w := cmd.OutOrStdout()
@@ -42,6 +48,8 @@ func NewVersionCommand() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().Bool("short", false, "Print only the version number")
+	return cmd
 }
 
 // VersionInfo holds version metadata for JSON output.
@@ -52,4 +60,18 @@ type VersionInfo struct {
 	GoVersion string `json:"go_version"`
 	OS        string `json:"os"`
 	Arch      string `json:"arch"`
+}
+
+func shortVersion(version string) string {
+	if version == "" {
+		return version
+	}
+	if strings.HasPrefix(version, "v") {
+		return version
+	}
+	first := version[0]
+	if first >= '0' && first <= '9' {
+		return "v" + version
+	}
+	return version
 }
