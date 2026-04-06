@@ -168,6 +168,10 @@ func OutboxSubsystem(
 			}
 		}
 
+		// Compose the WebSocket pub/sub relay hook (best-effort).
+		wsHook := events.WebSocketPublishHook(redisClients.PubSub, logger)
+		afterPublish = events.ComposeHooks(afterPublish, wsHook)
+
 		poller, err := events.NewOutboxPoller(events.OutboxPollerConfig{
 			Store:        store,
 			Sites:        siteLister,

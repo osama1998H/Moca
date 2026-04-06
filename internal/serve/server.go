@@ -46,6 +46,7 @@ type Server struct {
 	docManager   *document.DocManager
 	hookRegistry *hooks.HookRegistry
 	searchClient *search.Client
+	hub          *Hub
 	config       *config.ProjectConfig
 	logger       *slog.Logger
 }
@@ -179,7 +180,8 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	} else {
 		registerStaticFiles(gw.Mux(), cfg.StaticDir, logger)
 	}
-	registerWebSocketStub(gw.Mux())
+	hub := NewHub(logger)
+	registerWebSocket(gw.Mux(), hub, jwtCfg, logger)
 
 	// ── HTTP server ─────────────────────────────────────────────────────
 	host := cfg.Host
@@ -206,6 +208,7 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		docManager:   docManager,
 		hookRegistry: hookRegistry,
 		searchClient: searchClient,
+		hub:          hub,
 		config:       cfg.Config,
 		logger:       logger,
 	}, nil
@@ -224,6 +227,15 @@ func (s *Server) Run(ctx context.Context) error {
 		s.logger.Info("server started", slog.String("addr", s.httpServer.Addr))
 		if err := s.httpServer.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			listenErr <- err
+		}
+	}()
+
+	// Start the Redis pub/sub → WebSocket bridge.
+	bridge := NewPubSubBridge(s.hub, s.redisClients.PubSub, s.logger)
+	s.hub.SetOnSubscriptionChange(bridge.OnSubscriptionChange)
+	go func() {
+		if err := bridge.Run(ctx); err != nil && ctx.Err() == nil {
+			s.logger.Error("pubsub bridge failed", slog.String("error", err.Error()))
 		}
 	}()
 

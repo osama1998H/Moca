@@ -1,7 +1,6 @@
 package serve
 
 import (
-	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -51,24 +50,6 @@ func TestRegisterStaticFiles_NoDir(t *testing.T) {
 	registerStaticFiles(mux, "/tmp/does-not-exist-moca-test", logger)
 }
 
-func TestRegisterWebSocketStub(t *testing.T) {
-	mux := http.NewServeMux()
-	registerWebSocketStub(mux)
-
-	req := httptest.NewRequest("GET", "/ws", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("expected 501, got %d", rec.Code)
-	}
-
-	var body map[string]string
-	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-		t.Fatal(err)
-	}
-	if body["error"] != "WebSocket not implemented" {
-		t.Fatalf("unexpected body: %v", body)
-	}
-}
+// TestRegisterWebSocketStub was removed — the stub has been replaced by the
+// real WebSocket handler. See websocket_test.go for the replacement tests.
 
