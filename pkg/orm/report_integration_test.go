@@ -15,6 +15,7 @@ import (
 func setupReportFixtures(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
+	schema := queryTestSchema()
 
 	if _, err := adminPool.Exec(ctx, fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %[1]s.tab_report_test (
@@ -29,13 +30,13 @@ func setupReportFixtures(t *testing.T) {
 			('R-003', 'Draft',      75.00),
 			('R-004', 'Cancelled', 300.00),
 			('R-005', 'Draft',      50.00);
-	`, queryTestSchema)); err != nil {
+	`, schema)); err != nil {
 		t.Fatalf("setup report fixtures: %v", err)
 	}
 
 	t.Cleanup(func() {
 		_, _ = adminPool.Exec(context.Background(), fmt.Sprintf(
-			"DROP TABLE IF EXISTS %s.tab_report_test CASCADE", queryTestSchema,
+			"DROP TABLE IF EXISTS %s.tab_report_test CASCADE", schema,
 		))
 	})
 }
