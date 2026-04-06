@@ -14,6 +14,9 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/osama1998H/Moca/actions/workflows/ci.yml">
+    <img src="https://github.com/osama1998H/Moca/actions/workflows/ci.yml/badge.svg?branch=main&event=push" alt="CI">
+  </a>
   <img src="https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white" alt="Go 1.26+">
   <img src="https://img.shields.io/badge/PostgreSQL-16+-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 16+">
     <img src="https://img.shields.io/badge/Redis-7+-4169E1?logo=redis&logoColor=Red" alt="Redis 7+">

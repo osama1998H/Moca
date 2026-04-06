@@ -1,5 +1,7 @@
 # Spike 2: Redis Streams Consumer Groups
 
+[![CI](https://github.com/osama1998H/Moca/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/osama1998H/Moca/actions/workflows/ci.yml)
+
 **Status:** Completed
 **Task:** MS-00-T3
 **Design Reference:** `MOCA_SYSTEM_DESIGN.md` §5.2 (lines 1073-1107), ADR-002

@@ -1,5 +1,7 @@
 # Spike 1: PostgreSQL Schema-Per-Tenant Isolation
 
+[![CI](https://github.com/osama1998H/Moca/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/osama1998H/Moca/actions/workflows/ci.yml)
+
 **Status:** Completed
 **Task:** MS-00-T2
 **Design Reference:** `docs/blocker-resolution-strategies.md` (Blocker 2, lines 66-178)
