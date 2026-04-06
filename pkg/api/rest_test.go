@@ -17,12 +17,13 @@ import (
 // ── Mocks ───────────────────────────────────────────────────────────────────
 
 type mockCRUD struct {
-	insertFn    func(ctx *document.DocContext, doctype string, values map[string]any) (*document.DynamicDoc, error)
-	updateFn    func(ctx *document.DocContext, doctype, name string, values map[string]any) (*document.DynamicDoc, error)
-	deleteFn    func(ctx *document.DocContext, doctype, name string) error
-	getFn       func(ctx *document.DocContext, doctype, name string) (*document.DynamicDoc, error)
-	getListFn   func(ctx *document.DocContext, doctype string, opts document.ListOptions) ([]*document.DynamicDoc, int, error)
-	getSingleFn func(ctx *document.DocContext, doctype string) (*document.DynamicDoc, error)
+	insertFn      func(ctx *document.DocContext, doctype string, values map[string]any) (*document.DynamicDoc, error)
+	updateFn      func(ctx *document.DocContext, doctype, name string, values map[string]any) (*document.DynamicDoc, error)
+	deleteFn      func(ctx *document.DocContext, doctype, name string) error
+	getFn         func(ctx *document.DocContext, doctype, name string) (*document.DynamicDoc, error)
+	getListFn     func(ctx *document.DocContext, doctype string, opts document.ListOptions) ([]*document.DynamicDoc, int, error)
+	getSingleFn   func(ctx *document.DocContext, doctype string) (*document.DynamicDoc, error)
+	getVersionsFn func(ctx *document.DocContext, doctype, docname string, limit, offset int) ([]document.VersionRecord, int, error)
 }
 
 func (m *mockCRUD) Insert(ctx *document.DocContext, doctype string, values map[string]any) (*document.DynamicDoc, error) {
@@ -42,6 +43,9 @@ func (m *mockCRUD) GetList(ctx *document.DocContext, doctype string, opts docume
 }
 func (m *mockCRUD) GetSingle(ctx *document.DocContext, doctype string) (*document.DynamicDoc, error) {
 	return m.getSingleFn(ctx, doctype)
+}
+func (m *mockCRUD) GetVersions(ctx *document.DocContext, doctype, docname string, limit, offset int) ([]document.VersionRecord, int, error) {
+	return m.getVersionsFn(ctx, doctype, docname, limit, offset)
 }
 
 type mockMeta struct {

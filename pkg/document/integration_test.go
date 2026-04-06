@@ -990,3 +990,177 @@ func TestInteg_GetList_Pagination(t *testing.T) {
 		t.Errorf("page size = %d, want 2", len(docs))
 	}
 }
+
+// ── Version Tracking Integration Tests ──────────────────────────────────────
+
+// queryVersionCount counts version records for a given doctype/docname.
+func queryVersionCount(t *testing.T, doctype, docname string) int {
+	t.Helper()
+	var count int
+	err := namingTestPool.QueryRow(
+		context.Background(),
+		`SELECT COUNT(*) FROM tab_version WHERE "ref_doctype" = $1 AND "docname" = $2`,
+		doctype, docname,
+	).Scan(&count)
+	if err != nil {
+		t.Fatalf("queryVersionCount(%q, %q): %v", doctype, docname, err)
+	}
+	return count
+}
+
+// queryLatestVersionData fetches the data JSONB from the most recent version record.
+func queryLatestVersionData(t *testing.T, doctype, docname string) map[string]any {
+	t.Helper()
+	var dataBytes []byte
+	err := namingTestPool.QueryRow(
+		context.Background(),
+		`SELECT "data" FROM tab_version WHERE "ref_doctype" = $1 AND "docname" = $2 ORDER BY "creation" DESC LIMIT 1`,
+		doctype, docname,
+	).Scan(&dataBytes)
+	if err != nil {
+		t.Fatalf("queryLatestVersionData(%q, %q): %v", doctype, docname, err)
+	}
+	var data map[string]any
+	if err := json.Unmarshal(dataBytes, &data); err != nil {
+		t.Fatalf("unmarshal version data: %v", err)
+	}
+	return data
+}
+
+func TestInsert_CreatesVersion(t *testing.T) {
+	skipIfNoInfra(t)
+	dctx := newIntegCtx(t)
+
+	doc, err := integDocManager.Insert(dctx, "IntegVersionedDoc", map[string]any{
+		"customer": "VersionTestCustomer",
+		"amount":   42.5,
+	})
+	if err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+	t.Cleanup(func() { cleanupDocs(t, "IntegVersionedDoc", doc.Name()) })
+
+	count := queryVersionCount(t, "IntegVersionedDoc", doc.Name())
+	if count != 1 {
+		t.Fatalf("expected 1 version after insert, got %d", count)
+	}
+
+	data := queryLatestVersionData(t, "IntegVersionedDoc", doc.Name())
+	// Insert should have nil changed and a full snapshot.
+	if data["changed"] != nil {
+		t.Errorf("expected changed=nil on insert, got %v", data["changed"])
+	}
+	snapshot, ok := data["snapshot"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected snapshot to be a map, got %T", data["snapshot"])
+	}
+	if snapshot["customer"] != "VersionTestCustomer" {
+		t.Errorf("snapshot.customer = %v, want VersionTestCustomer", snapshot["customer"])
+	}
+}
+
+func TestUpdate_CreatesVersionWithDiff(t *testing.T) {
+	skipIfNoInfra(t)
+	dctx := newIntegCtx(t)
+
+	doc, err := integDocManager.Insert(dctx, "IntegVersionedDoc", map[string]any{
+		"customer": "OriginalCustomer",
+		"amount":   10.0,
+	})
+	if err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+	t.Cleanup(func() { cleanupDocs(t, "IntegVersionedDoc", doc.Name()) })
+
+	// Update the document.
+	_, err = integDocManager.Update(dctx, "IntegVersionedDoc", doc.Name(), map[string]any{
+		"customer": "UpdatedCustomer",
+	})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	count := queryVersionCount(t, "IntegVersionedDoc", doc.Name())
+	if count != 2 {
+		t.Fatalf("expected 2 versions after insert+update, got %d", count)
+	}
+
+	data := queryLatestVersionData(t, "IntegVersionedDoc", doc.Name())
+	changed, ok := data["changed"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected changed to be a map, got %T", data["changed"])
+	}
+	custChange, ok := changed["customer"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected changed.customer to be a map, got %T", changed["customer"])
+	}
+	if custChange["old"] != "OriginalCustomer" {
+		t.Errorf("changed.customer.old = %v, want OriginalCustomer", custChange["old"])
+	}
+	if custChange["new"] != "UpdatedCustomer" {
+		t.Errorf("changed.customer.new = %v, want UpdatedCustomer", custChange["new"])
+	}
+}
+
+func TestInsert_NoVersionWhenTrackChangesDisabled(t *testing.T) {
+	skipIfNoInfra(t)
+	dctx := newIntegCtx(t)
+
+	// IntegTestOrder has track_changes=false (default).
+	doc, err := integDocManager.Insert(dctx, "IntegTestOrder", map[string]any{
+		"customer": "NoVersionCustomer",
+		"amount":   99.0,
+	})
+	if err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+	t.Cleanup(func() { cleanupDocs(t, "IntegTestOrder", doc.Name()) })
+
+	count := queryVersionCount(t, "IntegTestOrder", doc.Name())
+	if count != 0 {
+		t.Fatalf("expected 0 versions for non-tracked doctype, got %d", count)
+	}
+}
+
+func TestGetVersions_Ordering(t *testing.T) {
+	skipIfNoInfra(t)
+	dctx := newIntegCtx(t)
+
+	doc, err := integDocManager.Insert(dctx, "IntegVersionedDoc", map[string]any{
+		"customer": "OrderingTest",
+		"amount":   1.0,
+	})
+	if err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+	t.Cleanup(func() { cleanupDocs(t, "IntegVersionedDoc", doc.Name()) })
+
+	// Perform 2 updates to create 3 total versions.
+	for i := 2; i <= 3; i++ {
+		_, err = integDocManager.Update(dctx, "IntegVersionedDoc", doc.Name(), map[string]any{
+			"amount": float64(i),
+		})
+		if err != nil {
+			t.Fatalf("Update %d: %v", i, err)
+		}
+	}
+
+	versions, total, err := integDocManager.GetVersions(dctx, "IntegVersionedDoc", doc.Name(), 20, 0)
+	if err != nil {
+		t.Fatalf("GetVersions: %v", err)
+	}
+	if total != 3 {
+		t.Fatalf("total = %d, want 3", total)
+	}
+	if len(versions) != 3 {
+		t.Fatalf("len(versions) = %d, want 3", len(versions))
+	}
+
+	// Verify ordering: newest first.
+	for i := 1; i < len(versions); i++ {
+		if !versions[i-1].Creation.After(versions[i].Creation) && !versions[i-1].Creation.Equal(versions[i].Creation) {
+			t.Errorf("versions not ordered DESC: [%d].creation=%v >= [%d].creation=%v",
+				i-1, versions[i-1].Creation, i, versions[i].Creation)
+		}
+	}
+}

@@ -776,6 +776,11 @@ func (m *DocManager) Insert(ctx *DocContext, doctype string, values map[string]a
 		if txErr != nil {
 			return txErr
 		}
+		if mt.TrackChanges {
+			if txErr = insertVersion(txCtx, tx, doctype, name, uid, nil, doc.AsMap()); txErr != nil {
+				return txErr
+			}
+		}
 		return insertAuditLog(txCtx, tx, doctype, name, "Create", uid, nil)
 	})
 	if txErr != nil {
@@ -938,6 +943,12 @@ func (m *DocManager) Update(ctx *DocContext, doctype, name string, values map[st
 		}
 		if err := insertOutbox(txCtx, tx, outboxEvent); err != nil {
 			return err
+		}
+		if doc.Meta().TrackChanges {
+			versionDiff := buildVersionDiff(doc, modifiedBeforeHooks)
+			if err := insertVersion(txCtx, tx, doctype, name, uid, versionDiff, doc.AsMap()); err != nil {
+				return err
+			}
 		}
 		return insertAuditLog(txCtx, tx, doctype, name, "Update", uid, changesJSON)
 	})

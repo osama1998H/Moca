@@ -28,6 +28,7 @@ type CRUDService interface {
 	Get(ctx *document.DocContext, doctype, name string) (*document.DynamicDoc, error)
 	GetList(ctx *document.DocContext, doctype string, opts document.ListOptions) ([]*document.DynamicDoc, int, error)
 	GetSingle(ctx *document.DocContext, doctype string) (*document.DynamicDoc, error)
+	GetVersions(ctx *document.DocContext, doctype, docname string, limit, offset int) ([]document.VersionRecord, int, error)
 }
 
 // MetaResolver looks up a MetaType by site and doctype name.
@@ -75,6 +76,7 @@ func (h *ResourceHandler) RegisterRoutes(mux *http.ServeMux, version string) {
 	mux.HandleFunc("GET "+p+"/resource/{doctype}/{name}", h.handleGet)
 	mux.HandleFunc("PUT "+p+"/resource/{doctype}/{name}", h.handleUpdate)
 	mux.HandleFunc("DELETE "+p+"/resource/{doctype}/{name}", h.handleDelete)
+	mux.HandleFunc("GET "+p+"/resource/{doctype}/{name}/versions", h.handleVersions)
 	mux.HandleFunc("GET "+p+"/meta/{doctype}", h.handleMeta)
 }
 

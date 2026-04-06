@@ -198,6 +198,7 @@ func TestMain(m *testing.M) {
 		integValidationJSON,
 		integSingleJSON,
 		integConcurrentOrderJSON,
+		integVersionedDocJSON,
 	}
 	for _, js := range fixtureJSONs {
 		if _, err := integRegistry.Register(ctx, integSiteName, []byte(js)); err != nil {
@@ -419,6 +420,17 @@ const integConcurrentOrderJSON = `{
 	"naming_rule": {"rule": "pattern", "pattern": "CO-.####"},
 	"fields": [
 		{"name": "title", "field_type": "Data", "label": "Title"}
+	]
+}`
+
+const integVersionedDocJSON = `{
+	"name": "IntegVersionedDoc",
+	"module": "test",
+	"track_changes": true,
+	"naming_rule": {"rule": "uuid"},
+	"fields": [
+		{"name": "customer", "field_type": "Data",  "label": "Customer"},
+		{"name": "amount",   "field_type": "Float", "label": "Amount"}
 	]
 }`
 
