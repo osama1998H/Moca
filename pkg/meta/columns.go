@@ -46,8 +46,16 @@ func ColumnType(ft FieldType) string {
 	case FieldTypeTable, FieldTypeTableMultiSelect:
 		return ""
 
-	// Layout-only types and unknowns produce no column.
+	// Layout-only types produce no column.
+	case FieldTypeSectionBreak, FieldTypeColumnBreak, FieldTypeTabBreak,
+		FieldTypeHTML, FieldTypeButton, FieldTypeHeading:
+		return ""
+
 	default:
+		// Custom field types are stored as TEXT columns.
+		if ft.IsCustom() {
+			return "TEXT"
+		}
 		return ""
 	}
 }

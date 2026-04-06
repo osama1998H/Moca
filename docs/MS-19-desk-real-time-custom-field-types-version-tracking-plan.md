@@ -196,7 +196,7 @@ No external web research was needed. Key implementation decisions derived from c
 
 - **Task ID:** MS-19-T3
 - **Title:** Custom Field Type Registry & @moca/desk Package Structure
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Enable apps to register custom field types that the Desk renders, and restructure the desk exports as a workspace-local `@moca/desk` npm package.
 

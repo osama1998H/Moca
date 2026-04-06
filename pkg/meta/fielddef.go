@@ -1,8 +1,11 @@
 package meta
 
+import "sync"
+
 // FieldType identifies the data type and rendering behavior of a field.
 // There are 29 storage types (persisted as database columns) and 6 layout-only
 // types (used for UI form layout only, never stored in the database).
+// Apps can register additional custom field types via RegisterCustomFieldType.
 type FieldType string
 
 // Storage field types. Each maps to a specific PostgreSQL column type.
@@ -88,6 +91,39 @@ var ValidFieldTypes = map[FieldType]bool{
 	FieldTypeHeading:          true,
 }
 
+// Custom field type registry — thread-safe, separate from built-in types.
+// Apps register custom types at startup via hooks; the Desk renders them
+// using the frontend registerFieldType() counterpart.
+var (
+	customFieldTypesMu sync.RWMutex
+	customFieldTypes   = make(map[FieldType]struct{})
+)
+
+// RegisterCustomFieldType registers a custom field type that apps define.
+// Custom types pass IsValid(), are storable (get TEXT columns), and can be
+// used in MetaType definitions. Thread-safe for concurrent app initialization.
+func RegisterCustomFieldType(ft FieldType) {
+	customFieldTypesMu.Lock()
+	customFieldTypes[ft] = struct{}{}
+	customFieldTypesMu.Unlock()
+}
+
+// ResetCustomFieldTypes clears the custom field type registry.
+// Intended for use in tests to prevent cross-test pollution.
+func ResetCustomFieldTypes() {
+	customFieldTypesMu.Lock()
+	customFieldTypes = make(map[FieldType]struct{})
+	customFieldTypesMu.Unlock()
+}
+
+// isCustomFieldType reports whether ft is in the custom registry (read-locked).
+func isCustomFieldType(ft FieldType) bool {
+	customFieldTypesMu.RLock()
+	_, ok := customFieldTypes[ft]
+	customFieldTypesMu.RUnlock()
+	return ok
+}
+
 // layoutTypes is the unexported set of layout-only FieldTypes.
 // Used by IsStorable to decide whether a field produces a database column.
 var layoutTypes = map[FieldType]struct{}{
@@ -99,9 +135,17 @@ var layoutTypes = map[FieldType]struct{}{
 	FieldTypeHeading:      {},
 }
 
-// IsValid reports whether ft is one of the 35 recognized FieldType values.
+// IsValid reports whether ft is a recognized FieldType — either one of the
+// 35 built-in types or a registered custom field type.
 func (ft FieldType) IsValid() bool {
-	return ValidFieldTypes[ft]
+	return ValidFieldTypes[ft] || isCustomFieldType(ft)
+}
+
+// IsCustom reports whether ft is a registered custom field type (not built-in).
+// Returns false for built-in types even if redundantly registered via
+// RegisterCustomFieldType.
+func (ft FieldType) IsCustom() bool {
+	return !ValidFieldTypes[ft] && isCustomFieldType(ft)
 }
 
 // IsStorable reports whether ft represents a type that is persisted as a

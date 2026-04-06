@@ -44,6 +44,10 @@ Thumbs.db
 .env.*.local
 moca.yaml
 
+# Node (root workspace)
+/node_modules/
+/package-lock.json
+
 # Build and dist artifacts
 /dist/
 /tmp/
