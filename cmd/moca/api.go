@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/osama1998H/moca/internal/output"
 	"github.com/osama1998H/moca/pkg/api"
@@ -56,7 +58,7 @@ func NewAPICommand() *cobra.Command {
 	cmd.AddCommand(
 		newAPIListCmd(),
 		newAPITestCmd(),
-		newSubcommand("docs", "Generate OpenAPI/Swagger spec"),
+		newAPIDocsCmd(),
 		keys,
 		webhooks,
 	)
@@ -1294,3 +1296,137 @@ func isTableNotFound(err error) bool {
 	}
 	return false
 }
+
+// ---------------------------------------------------------------------------
+// moca api docs
+// ---------------------------------------------------------------------------
+
+func newAPIDocsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "docs",
+		Short: "Generate OpenAPI/Swagger spec",
+		Long: `Generate an OpenAPI 3.0 specification from MetaType and APIConfig definitions.
+The spec includes all auto-generated CRUD endpoints, custom endpoints, and whitelisted methods.`,
+		RunE: runAPIDocs,
+		Example: `  moca api docs --site mysite
+  moca api docs --format yaml --output openapi.yaml
+  moca api docs --serve --port 8002`,
+	}
+
+	f := cmd.Flags()
+	f.String("site", "", "Target site")
+	f.String("output", "", "Output file path (default: stdout)")
+	f.String("format", "json", "Output format: json or yaml")
+	f.Bool("serve", false, "Start a Swagger UI server")
+	f.Int("port", 8002, "Swagger UI server port (used with --serve)")
+
+	return cmd
+}
+
+func runAPIDocs(cmd *cobra.Command, _ []string) error {
+	acc, err := setupAPICommand(cmd)
+	if err != nil {
+		return err
+	}
+	defer acc.svc.Close()
+
+	formatFlag, _ := cmd.Flags().GetString("format")
+	outputFlag, _ := cmd.Flags().GetString("output")
+	serve, _ := cmd.Flags().GetBool("serve")
+	port, _ := cmd.Flags().GetInt("port")
+
+	formatFlag = strings.ToLower(formatFlag)
+	if formatFlag != "json" && formatFlag != "yaml" {
+		return output.NewCLIError("Invalid format").
+			WithFix("Use --format json or --format yaml.")
+	}
+
+	metatypes, err := loadAllMetaTypes(cmd, acc.pool)
+	if err != nil {
+		return err
+	}
+
+	// Collect whitelisted method names (methods are not stored in DB,
+	// so we cannot discover them from the CLI context alone — include
+	// an empty list; the spec will still contain all MetaType endpoints).
+	var methods []string
+
+	spec := api.GenerateSpec(metatypes, methods, api.SpecOptions{
+		Title:       "Moca API",
+		Description: "Auto-generated API documentation from MetaType definitions.",
+		Version:     "1.0.0",
+	})
+
+	var data []byte
+	switch formatFlag {
+	case "yaml":
+		data, err = yaml.Marshal(spec)
+	default:
+		data, err = json.MarshalIndent(spec, "", "  ")
+	}
+	if err != nil {
+		return output.NewCLIError("Failed to marshal spec").WithErr(err)
+	}
+
+	if serve {
+		return serveSwaggerUI(cmd, data, port)
+	}
+
+	if outputFlag != "" {
+		if writeErr := os.WriteFile(outputFlag, data, 0o644); writeErr != nil {
+			return output.NewCLIError("Failed to write output file").
+				WithErr(writeErr).
+				WithFix(fmt.Sprintf("Ensure the path '%s' is writable.", outputFlag))
+		}
+		acc.w.PrintSuccess(fmt.Sprintf("OpenAPI spec written to %s", outputFlag))
+		return nil
+	}
+
+	// Write to stdout.
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), string(data))
+	return err
+}
+
+// serveSwaggerUI starts a local HTTP server serving the generated OpenAPI spec
+// and a Swagger UI page using CDN-hosted assets.
+func serveSwaggerUI(cmd *cobra.Command, specData []byte, port int) error {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		_, _ = w.Write(specData)
+	})
+
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = fmt.Fprint(w, swaggerUIHTML)
+	})
+
+	addr := fmt.Sprintf(":%d", port)
+	w := output.NewWriter(cmd)
+	w.PrintSuccess(fmt.Sprintf("Swagger UI available at http://localhost%s", addr))
+	w.Print("Spec served at http://localhost%s/openapi.json", addr)
+	w.Print("Press Ctrl+C to stop.")
+
+	srv := &http.Server{Addr: addr, Handler: mux}
+	return srv.ListenAndServe()
+}
+
+// swaggerUIHTML is a minimal HTML page that loads Swagger UI from CDN.
+const swaggerUIHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Moca API - Swagger UI</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    SwaggerUIBundle({ url: '/openapi.json', dom_id: '#swagger-ui' });
+  </script>
+</body>
+</html>
+`

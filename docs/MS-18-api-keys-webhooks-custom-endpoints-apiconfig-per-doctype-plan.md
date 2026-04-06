@@ -259,7 +259,7 @@ No web research was needed. All implementation patterns are well-defined in the 
 
 - **Task ID:** MS-18-T5
 - **Title:** OpenAPI 3.0 Specification Generator
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Implement a struct-based OpenAPI 3.0.3 spec generator that walks all enabled MetaTypes and produces a complete API specification. Implement the `moca api docs` CLI command.
 

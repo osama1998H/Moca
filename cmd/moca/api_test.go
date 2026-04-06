@@ -119,18 +119,22 @@ func TestAPICommandFlags(t *testing.T) {
 	}
 }
 
-func TestAPIDocsIsPlaceholder(t *testing.T) {
+func TestAPIDocsHasFlags(t *testing.T) {
 	cmd := NewAPICommand()
 	docsCmd := findSubcommand(cmd, "docs")
 	if docsCmd == nil {
 		t.Fatal("api docs: subcommand not found")
 	}
-	err := docsCmd.RunE(docsCmd, nil)
-	if err == nil {
-		t.Fatal("api docs: expected placeholder error, got nil")
+
+	expectedFlags := []string{"site", "output", "format", "serve", "port"}
+	for _, flag := range expectedFlags {
+		if docsCmd.Flags().Lookup(flag) == nil {
+			t.Errorf("flag --%s missing on docs command", flag)
+		}
 	}
-	if !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("api docs: expected 'not implemented' error, got %q", err.Error())
+
+	if docsCmd.RunE == nil {
+		t.Error("api docs: RunE should be set (no longer placeholder)")
 	}
 }
 
@@ -138,7 +142,7 @@ func TestAPIImplementedCommandsHaveRunE(t *testing.T) {
 	cmd := NewAPICommand()
 
 	implemented := [][]string{
-		{"list"}, {"test"},
+		{"list"}, {"test"}, {"docs"},
 		{"keys", "create"}, {"keys", "revoke"}, {"keys", "list"}, {"keys", "rotate"},
 		{"webhooks", "list"}, {"webhooks", "test"}, {"webhooks", "logs"},
 	}
