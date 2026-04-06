@@ -147,17 +147,20 @@ func GenerateTableDDL(mt *MetaType) []DDLStatement {
 	return stmts
 }
 
-// GenerateSystemTablesDDL generates DDL for the 5 per-tenant system tables:
+// GenerateSystemTablesDDL generates DDL for the per-tenant system tables:
 //   - tab_doctype: stores MetaType definitions as JSONB
 //   - tab_singles: key-value store for Single DocTypes
 //   - tab_version: change history for tracked documents
 //   - tab_audit_log: immutable append-only audit trail (partitioned by timestamp)
 //   - tab_migration_log: tracks applied SQL migrations per app with batch grouping
+//   - tab_webhook_log: webhook execution history
+//   - tab_file: file attachment metadata (S3/local storage)
 //
 // Also generates:
 //   - idx_version_ref: index on tab_version(ref_doctype, docname)
 //   - tab_audit_log_default: default partition for tab_audit_log so inserts work immediately
 //   - idx_migration_log_batch: index on tab_migration_log(batch) for rollback queries
+//   - idx_file_attached: index on tab_file(attached_to_doctype, attached_to_name)
 //
 // All statements use CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS for idempotency.
 //
@@ -325,6 +328,25 @@ WHERE "status" IS NULL OR ("status" = 'pending' AND COALESCE("processed", false)
 		{
 			SQL:     `CREATE INDEX IF NOT EXISTS idx_webhook_log_event ON tab_webhook_log ("webhook_event")`,
 			Comment: "create index idx_webhook_log_event on tab_webhook_log",
+		},
+		{
+			SQL: `CREATE TABLE IF NOT EXISTS tab_file (
+	"name"                TEXT PRIMARY KEY,
+	"file_name"           TEXT NOT NULL,
+	"file_url"            TEXT NOT NULL,
+	"file_size"           BIGINT,
+	"content_type"        TEXT,
+	"attached_to_doctype" TEXT,
+	"attached_to_name"    TEXT,
+	"is_private"          BOOLEAN DEFAULT true,
+	"owner"               TEXT NOT NULL,
+	"creation"            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
+			Comment: "create system table tab_file",
+		},
+		{
+			SQL:     `CREATE INDEX IF NOT EXISTS idx_file_attached ON tab_file ("attached_to_doctype", "attached_to_name")`,
+			Comment: "create index idx_file_attached on tab_file",
 		},
 	}
 }

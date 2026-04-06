@@ -20,6 +20,7 @@ import (
 	"github.com/osama1998H/moca/pkg/orm"
 	"github.com/osama1998H/moca/pkg/queue"
 	"github.com/osama1998H/moca/pkg/search"
+	"github.com/osama1998H/moca/pkg/storage"
 )
 
 // shutdownTimeout is the maximum time to wait for in-flight requests to finish.
@@ -45,6 +46,7 @@ type Server struct {
 	redisClients *drivers.RedisClients
 	docManager   *document.DocManager
 	hookRegistry *hooks.HookRegistry
+	fileStorage  storage.Storage
 	searchClient *search.Client
 	hub          *Hub
 	config       *config.ProjectConfig
@@ -67,10 +69,23 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	}
 
 	redisClients := drivers.NewRedisClients(cfg.Config.Infrastructure.Redis, logger)
-	if err := redisClients.Ping(ctx); err != nil {
+	if pingErr := redisClients.Ping(ctx); pingErr != nil {
 		logger.Warn("Redis not reachable at startup — rate limiting and caching will be degraded",
-			slog.String("error", err.Error()),
+			slog.String("error", pingErr.Error()),
 		)
+	}
+
+	// ── File storage ────────────────────────────────────────────────────
+	stor, err := storage.NewStorage(cfg.Config.Infrastructure.Storage)
+	if err != nil {
+		return nil, fmt.Errorf("init storage: %w", err)
+	}
+	if s3stor, ok := stor.(*storage.S3Storage); ok {
+		if bucketErr := s3stor.EnsureBucket(ctx); bucketErr != nil {
+			logger.Warn("S3 bucket ensure failed — file uploads may not work",
+				slog.String("error", bucketErr.Error()),
+			)
+		}
 	}
 
 	// ── Application layer ───────────────────────────────────────────────
@@ -151,6 +166,11 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	authHandler := api.NewAuthHandler(jwtCfg, sessionMgr, userLoader, logger)
 	authHandler.RegisterRoutes(gw.Mux(), "v1")
 
+	// File upload/download handler.
+	fileManager := storage.NewFileManager(stor, dbManager, logger, 0)
+	uploadHandler := api.NewUploadHandler(fileManager, scopeEnforcer, logger)
+	uploadHandler.RegisterRoutes(gw.Mux(), "v1")
+
 	// Custom endpoint router for per-DocType custom endpoints.
 	customRouter := api.NewCustomEndpointRouter(registry, handlerRegistry, mwRegistry, scopeEnforcer, rateLimiter, logger)
 	customRouter.RegisterRoutes(gw.Mux(), "v1")
@@ -207,6 +227,7 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		redisClients: redisClients,
 		docManager:   docManager,
 		hookRegistry: hookRegistry,
+		fileStorage:  stor,
 		searchClient: searchClient,
 		hub:          hub,
 		config:       cfg.Config,

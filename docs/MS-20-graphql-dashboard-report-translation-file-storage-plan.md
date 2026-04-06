@@ -51,7 +51,7 @@ No external web research was needed. All implementation details are well-specifi
 
 - **Task ID:** MS-20-T1
 - **Title:** S3 File Storage Backend + Upload API
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Implement the file storage subsystem from scratch. `pkg/storage/` currently contains only `doc.go` (stub). Create:
   1. **`pkg/storage/storage.go`** — `Storage` interface with Upload, Download, Delete, PresignedGetURL, PresignedPutURL methods. Factory function `NewStorage(cfg)` dispatching on `cfg.Driver` ("s3" vs "local").

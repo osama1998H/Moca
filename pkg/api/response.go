@@ -8,6 +8,7 @@ import (
 	"github.com/osama1998H/moca/pkg/auth"
 	"github.com/osama1998H/moca/pkg/document"
 	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/storage"
 )
 
 // successEnvelope wraps a single value in the standard {"data": ...} envelope.
@@ -125,6 +126,24 @@ func mapErrorResponse(w http.ResponseWriter, err error) bool {
 
 	if errors.Is(err, meta.ErrMetaTypeNotFound) {
 		writeError(w, http.StatusNotFound, "DOCTYPE_NOT_FOUND", "doctype not found")
+		return true
+	}
+
+	var fileNotFound *storage.FileNotFoundError
+	if errors.As(err, &fileNotFound) {
+		writeError(w, http.StatusNotFound, "FILE_NOT_FOUND", fileNotFound.Error())
+		return true
+	}
+
+	var fileTooLarge *storage.FileTooLargeError
+	if errors.As(err, &fileTooLarge) {
+		writeError(w, http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", fileTooLarge.Error())
+		return true
+	}
+
+	var invalidCT *storage.InvalidContentTypeError
+	if errors.As(err, &invalidCT) {
+		writeError(w, http.StatusUnsupportedMediaType, "INVALID_CONTENT_TYPE", invalidCT.Error())
 		return true
 	}
 

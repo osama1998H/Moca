@@ -178,8 +178,9 @@ func (m *SiteManager) CreateSite(ctx context.Context, cfg SiteCreateConfig) (ret
 	// Step 6: Stub — Meilisearch index.
 	m.logger.WarnContext(ctx, "step 6/9: meilisearch index creation not yet implemented", slog.String("site", siteName))
 
-	// Step 7: Stub — S3 storage prefix.
-	m.logger.WarnContext(ctx, "step 7/9: S3 storage prefix creation not yet implemented", slog.String("site", siteName))
+	// Step 7: Storage uses shared bucket with site-scoped key prefix ({site}/private/..., {site}/public/...).
+	// No per-site bucket creation needed — prefix is created implicitly on first upload.
+	m.logger.InfoContext(ctx, "step 7/9: storage uses shared bucket with site-scoped key prefix", slog.String("site", siteName))
 
 	// Step 8: Register site in moca_system.
 	m.logger.InfoContext(ctx, "step 8/9: registering site", slog.String("site", siteName))
