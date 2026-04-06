@@ -96,7 +96,7 @@ No external web research was needed. All implementation details are well-specifi
 
 - **Task ID:** MS-20-T2
 - **Title:** GraphQL Schema Auto-Generation + Playground
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Auto-generate a GraphQL schema from the MetaType registry and expose it with a playground. Create:
   1. **`pkg/api/graphql.go`** — `GraphQLHandler` struct wrapping `CRUDService`, `MetaResolver`, `PermissionChecker`. Routes: `POST /api/graphql` (query/mutation endpoint), `GET /api/graphql/playground` (GraphiQL). Schema builder: `buildSchema(ctx, site, registry)` iterates all API-enabled DocTypes, generates Object types from MetaType fields, Query types (`{doctype}(name)` and `all{DocType}s(limit, offset, filters)`), Mutation types (`create/update/delete{DocType}`).

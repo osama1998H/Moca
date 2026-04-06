@@ -305,6 +305,69 @@ func (r *Registry) SchemaVersion(ctx context.Context, site string) (int64, error
 	return val, nil
 }
 
+// ListAll returns every MetaType for the given site from L3 (PostgreSQL).
+// Results are promoted into L1 and L2 caches. Rows that fail to unmarshal
+// are logged and skipped rather than failing the entire call.
+//
+// Returns an empty (non-nil) slice if the database is unavailable or the
+// site has no registered MetaTypes.
+func (r *Registry) ListAll(ctx context.Context, site string) ([]*MetaType, error) {
+	if r.db == nil {
+		return []*MetaType{}, nil
+	}
+
+	pool, err := r.db.ForSite(ctx, site)
+	if err != nil {
+		return nil, fmt.Errorf("registry listall %s: get pool: %w", site, err)
+	}
+
+	rows, err := pool.Query(ctx, `SELECT name, definition FROM tab_doctype`)
+	if err != nil {
+		return nil, fmt.Errorf("registry listall %s: query: %w", site, err)
+	}
+	defer rows.Close()
+
+	var results []*MetaType
+	for rows.Next() {
+		var name string
+		var defJSON []byte
+		if err := rows.Scan(&name, &defJSON); err != nil {
+			return nil, fmt.Errorf("registry listall %s: scan: %w", site, err)
+		}
+
+		mt, merr := unmarshalMetaType(defJSON)
+		if merr != nil {
+			r.logger.WarnContext(ctx, "registry: unmarshal failed during listall",
+				slog.String("site", site), slog.String("doctype", name),
+				slog.Any("error", merr))
+			continue
+		}
+
+		// Promote to L1.
+		r.l1.Store(l1Key(site, name), mt)
+
+		// Promote to L2 (best-effort).
+		if r.redis != nil {
+			rkey := metaRedisKey(site, name)
+			if serr := r.redis.Set(ctx, rkey, defJSON, 0).Err(); serr != nil {
+				r.logger.WarnContext(ctx, "registry: L2 set failed during listall",
+					slog.String("site", site), slog.String("doctype", name),
+					slog.Any("error", serr))
+			}
+		}
+
+		results = append(results, mt)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("registry listall %s: rows: %w", site, err)
+	}
+
+	if results == nil {
+		results = []*MetaType{}
+	}
+	return results, nil
+}
+
 // SeedL1ForTest stores a MetaType directly into the L1 cache.
 // Intended for unit tests that verify L1 behavior without Redis or PostgreSQL.
 // Not for use in production code.

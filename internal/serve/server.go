@@ -179,6 +179,10 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	methodHandler := api.NewMethodHandler(methodRegistry, logger)
 	methodHandler.RegisterRoutes(gw.Mux(), "v1")
 
+	// GraphQL handler — auto-generated schema from MetaType definitions.
+	graphqlHandler := api.NewGraphQLHandler(gw)
+	graphqlHandler.RegisterRoutes(gw.Mux())
+
 	vr := api.NewVersionRouter(handler, logger)
 	gw.SetVersionRouter(vr)
 

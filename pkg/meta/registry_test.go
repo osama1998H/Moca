@@ -178,6 +178,23 @@ func TestInvalidateAll_ClearsL1ForSite(t *testing.T) {
 	}
 }
 
+// ── ListAll ──────────────────────────────────────────────────────────────────
+
+// TestListAll_NoDB returns an empty slice (not an error) when DB is nil.
+func TestListAll_NoDB(t *testing.T) {
+	r := meta.NewRegistry(nil, nil, nullLogger())
+	got, err := r.ListAll(context.Background(), "any_site")
+	if err != nil {
+		t.Fatalf("ListAll with nil db: unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("ListAll should return non-nil empty slice, got nil")
+	}
+	if len(got) != 0 {
+		t.Errorf("ListAll with nil db: len = %d, want 0", len(got))
+	}
+}
+
 // TestSchemaVersion_NilRedis returns 0 without error when Redis is nil.
 func TestSchemaVersion_NilRedis(t *testing.T) {
 	r := meta.NewRegistry(nil, nil, nullLogger())
