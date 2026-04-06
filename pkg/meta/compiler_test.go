@@ -129,6 +129,51 @@ func TestCompile_EmptyOptionalFields(t *testing.T) {
 	t.Logf("minimal MetaType %q compiled without errors", mt.Name)
 }
 
+func TestCompile_FieldInAPIDefaultsToTrueWhenOmitted(t *testing.T) {
+	data := []byte(`{
+		"name": "Customer",
+		"module": "crm",
+		"fields": [{"name": "title", "field_type": "Data", "label": "Title"}]
+	}`)
+
+	mt, err := meta.Compile(data)
+	assertNoError(t, err)
+
+	if !mt.Fields[0].InAPI {
+		t.Fatal("expected omitted in_api to default to true for storable fields")
+	}
+}
+
+func TestCompile_FieldInAPIExplicitTruePreserved(t *testing.T) {
+	data := []byte(`{
+		"name": "Customer",
+		"module": "crm",
+		"fields": [{"name": "title", "field_type": "Data", "label": "Title", "in_api": true}]
+	}`)
+
+	mt, err := meta.Compile(data)
+	assertNoError(t, err)
+
+	if !mt.Fields[0].InAPI {
+		t.Fatal("expected explicit in_api=true to remain true")
+	}
+}
+
+func TestCompile_FieldInAPIExplicitFalsePreserved(t *testing.T) {
+	data := []byte(`{
+		"name": "Customer",
+		"module": "crm",
+		"fields": [{"name": "internal_code", "field_type": "Data", "label": "Internal Code", "in_api": false}]
+	}`)
+
+	mt, err := meta.Compile(data)
+	assertNoError(t, err)
+
+	if mt.Fields[0].InAPI {
+		t.Fatal("expected explicit in_api=false to remain false")
+	}
+}
+
 // ── rule-1 ────────────────────────────────────────────────────────────────────
 
 func TestCompile_MissingName(t *testing.T) {

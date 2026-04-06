@@ -587,3 +587,40 @@ func TestFilterMetaFields_FiltersAndAliases(t *testing.T) {
 		t.Error("expected customer alias in filtered meta fields")
 	}
 }
+
+func TestCompiledMetaRespectsExplicitFalseInAPI(t *testing.T) {
+	data := []byte(`{
+		"name": "CompiledItem",
+		"module": "test",
+		"api_config": {"enabled": true},
+		"fields": [
+			{"name": "title", "field_type": "Data", "label": "Title"},
+			{"name": "internal_code", "field_type": "Data", "label": "Internal Code", "in_api": false}
+		]
+	}`)
+
+	mt, err := meta.Compile(data)
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+
+	filter := NewFieldFilter(mt, nil)
+	body := map[string]any{
+		"title":         "Visible",
+		"internal_code": "SECRET-123",
+	}
+	got, err := filter.TransformResponse(WithOperationType(context.Background(), OpGet), mt, body)
+	if err != nil {
+		t.Fatalf("TransformResponse: %v", err)
+	}
+	if _, ok := got["internal_code"]; ok {
+		t.Fatal("internal_code should be filtered from compiled API response")
+	}
+
+	metaResp := filterMetaFields(buildMetaResponse(mt), mt, context.Background())
+	for _, field := range metaResp.Fields {
+		if field.Name == "internal_code" {
+			t.Fatal("internal_code should be filtered from compiled meta response")
+		}
+	}
+}

@@ -91,12 +91,10 @@ func Compile(jsonBytes []byte) (*MetaType, error) {
 		add("module", "required")
 	}
 
-	// Default InAPI to true for storage (non-layout) fields. JSON cannot
-	// distinguish "not set" from "set to false" for booleans, so we apply
-	// the default unconditionally. Layout-only fields are never part of the
-	// API response, so they stay false.
+	// Default InAPI to true for storage (non-layout) fields only when the
+	// input JSON omitted in_api. An explicit false must be preserved.
 	for i := range mt.Fields {
-		if mt.Fields[i].FieldType.IsStorable() {
+		if mt.Fields[i].FieldType.IsStorable() && !mt.Fields[i].inAPIPresent {
 			mt.Fields[i].InAPI = true
 		}
 	}

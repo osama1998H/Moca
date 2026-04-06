@@ -17,6 +17,7 @@ import (
 	"github.com/osama1998H/moca/internal/config"
 	"github.com/osama1998H/moca/pkg/observe"
 	"github.com/osama1998H/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 // Default connection parameters matching docker-compose.yml at repo root.
@@ -75,8 +76,8 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-// setupFixtures creates moca_system and 10 tenant schemas, each with a tab_test
-// table.
+// setupFixtures creates moca_system and 10 tenant schemas, each with a
+// tab_test table.
 func setupFixtures(ctx context.Context) error {
 	if _, err := adminPool.Exec(ctx, `
 		CREATE SCHEMA IF NOT EXISTS moca_system;
@@ -125,19 +126,19 @@ func teardownFixtures(ctx context.Context) error {
 			errs = append(errs, fmt.Errorf("drop %s: %w", schema, err))
 		}
 	}
-	if _, err := adminPool.Exec(ctx, "TRUNCATE TABLE IF EXISTS moca_system.tx_test RESTART IDENTITY"); err != nil {
+	if _, err := adminPool.Exec(ctx, "TRUNCATE TABLE moca_system.tx_test RESTART IDENTITY"); err != nil {
 		errs = append(errs, fmt.Errorf("truncate moca_system.tx_test: %w", err))
 	}
 	return errors.Join(errs...)
 }
 
-// tenantSchema returns the schema name for tenant i (e.g. "tenant_01").
+// tenantSchema returns the schema name for tenant i using the same sanitizing
+// contract as production tenancy code.
 func tenantSchema(i int) string {
-	return fmt.Sprintf("tenant_%02d", i)
+	return tenancy.SchemaNameForSite(tenantSiteName(i))
 }
 
 // tenantSiteName returns the site name used in ForSite for tenant i (e.g. "01").
-// ForSite prepends "tenant_" to yield "tenant_01".
 func tenantSiteName(i int) string {
 	return fmt.Sprintf("%02d", i)
 }
@@ -287,19 +288,19 @@ func TestAssertSchema(t *testing.T) {
 	ctx := context.Background()
 	mgr := newTestManager(t)
 
-	pool1, err := mgr.ForSite(ctx, "01")
+	pool1, err := mgr.ForSite(ctx, tenantSiteName(1))
 	if err != nil {
-		t.Fatalf("ForSite(01): %v", err)
+		t.Fatalf("ForSite(%s): %v", tenantSiteName(1), err)
 	}
 
 	// Correct assertion must succeed.
-	if err := mgr.AssertSchema(ctx, pool1, "tenant_01"); err != nil {
-		t.Errorf("AssertSchema(tenant_01 pool, want tenant_01): unexpected error: %v", err)
+	if err := mgr.AssertSchema(ctx, pool1, tenantSchema(1)); err != nil {
+		t.Errorf("AssertSchema(%s pool, want %s): unexpected error: %v", tenantSchema(1), tenantSchema(1), err)
 	}
 
 	// Wrong expectation must fail.
-	if err := mgr.AssertSchema(ctx, pool1, "tenant_02"); err == nil {
-		t.Error("AssertSchema(tenant_01 pool, want tenant_02): expected error, got nil")
+	if err := mgr.AssertSchema(ctx, pool1, tenantSchema(2)); err == nil {
+		t.Errorf("AssertSchema(%s pool, want %s): expected error, got nil", tenantSchema(1), tenantSchema(2))
 	} else {
 		t.Logf("AssertSchema correctly returned error: %v", err)
 	}
@@ -323,9 +324,9 @@ func TestEvictIdlePools(t *testing.T) {
 	}
 
 	// Phase 1: Create a pool lazily.
-	pool1, err := mgr.ForSite(ctx, "06")
+	pool1, err := mgr.ForSite(ctx, tenantSiteName(6))
 	if err != nil {
-		t.Fatalf("ForSite(06): %v", err)
+		t.Fatalf("ForSite(%s): %v", tenantSiteName(6), err)
 	}
 	if n := mgr.SitePoolCount(); n != 1 {
 		t.Fatalf("expected 1 pool after ForSite, got %d", n)
@@ -334,13 +335,13 @@ func TestEvictIdlePools(t *testing.T) {
 	// Insert data to verify re-created pool can still read it.
 	if _, err := pool1.Exec(ctx,
 		"INSERT INTO tab_test (name, value) VALUES ($1, $2)",
-		"evict_test", "tenant_06",
+		"evict_test", tenantSchema(6),
 	); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
 
 	// Phase 2: Artificially age the pool then evict.
-	mgr.SetLastUsed("tenant_06", time.Now().Add(-2*time.Hour))
+	mgr.SetLastUsed(tenantSchema(6), time.Now().Add(-2*time.Hour))
 	evicted := mgr.EvictIdlePools(1 * time.Hour)
 	if evicted != 1 {
 		t.Fatalf("expected 1 eviction, got %d", evicted)
@@ -350,7 +351,7 @@ func TestEvictIdlePools(t *testing.T) {
 	}
 
 	// Phase 3: Re-creation on next ForSite.
-	pool2, err := mgr.ForSite(ctx, "06")
+	pool2, err := mgr.ForSite(ctx, tenantSiteName(6))
 	if err != nil {
 		t.Fatalf("ForSite after eviction: %v", err)
 	}
@@ -365,12 +366,12 @@ func TestEvictIdlePools(t *testing.T) {
 	).Scan(&val); err != nil {
 		t.Fatalf("read after re-creation: %v", err)
 	}
-	if val != "tenant_06" {
-		t.Errorf("re-created pool in wrong schema: expected tenant_06, got %q", val)
+	if val != tenantSchema(6) {
+		t.Errorf("re-created pool in wrong schema: expected %s, got %q", tenantSchema(6), val)
 	}
 
 	// New pool has correct search_path.
-	if err := mgr.AssertSchema(ctx, pool2, "tenant_06"); err != nil {
+	if err := mgr.AssertSchema(ctx, pool2, tenantSchema(6)); err != nil {
 		t.Errorf("AssertSchema after re-creation: %v", err)
 	}
 	t.Log("Idle pool eviction and transparent re-creation — correct")

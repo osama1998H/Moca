@@ -1,6 +1,9 @@
 package meta
 
-import "sync"
+import (
+	"encoding/json"
+	"sync"
+)
 
 // FieldType identifies the data type and rendering behavior of a field.
 // There are 29 storage types (persisted as database columns) and 6 layout-only
@@ -191,4 +194,26 @@ type FieldDef struct {
 	Required           bool       `json:"required"`
 	DBIndex            bool       `json:"db_index"`
 	FullTextIndex      bool       `json:"full_text_index"`
+	inAPIPresent       bool       `json:"-"`
+}
+
+// UnmarshalJSON tracks whether in_api was explicitly present so Compile can
+// default omitted fields without overwriting an explicit false.
+func (f *FieldDef) UnmarshalJSON(data []byte) error {
+	type fieldDefAlias FieldDef
+
+	var alias fieldDefAlias
+	if err := json.Unmarshal(data, &alias); err != nil {
+		return err
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*f = FieldDef(alias)
+	_, f.inAPIPresent = raw["in_api"]
+
+	return nil
 }

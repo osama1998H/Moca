@@ -12,7 +12,9 @@ import (
 
 // ── Query integration test schema ───────────────────────────────────────────
 
-const queryTestSchema = "tenant_01"
+func queryTestSchema() string {
+	return tenantSchema(1)
+}
 
 // queryStubProvider implements orm.MetaProvider with hardcoded QueryMeta
 // matching the fixture tables created below.
@@ -61,10 +63,12 @@ func (p *queryStubProvider) QueryMeta(_ context.Context, _, doctype string) (*or
 	}
 }
 
-// setupQueryFixtures creates test tables and seed data in tenant_01 schema.
+// setupQueryFixtures creates test tables and seed data in the tenant schema for
+// site "01", using the same schema naming logic as production code.
 func setupQueryFixtures(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
+	schema := queryTestSchema()
 
 	// Create tables.
 	if _, err := adminPool.Exec(ctx, fmt.Sprintf(`
@@ -102,7 +106,7 @@ func setupQueryFixtures(t *testing.T) {
 			_assign        TEXT NOT NULL DEFAULT '',
 			_liked_by      TEXT NOT NULL DEFAULT ''
 		);
-	`, queryTestSchema)); err != nil {
+	`, schema)); err != nil {
 		t.Fatalf("create query test tables: %v", err)
 	}
 
@@ -127,7 +131,7 @@ func setupQueryFixtures(t *testing.T) {
 			('ORD-008', 'CUST-002', 'Submitted',  500.00, '{"custom_color": "blue"}'),
 			('ORD-009', 'CUST-003', 'Cancelled',  999.99, '{}'),
 			('ORD-010', 'CUST-001', 'Draft',       25.00, '{"custom_color": "red"}');
-	`, queryTestSchema)); err != nil {
+	`, schema)); err != nil {
 		t.Fatalf("seed query test data: %v", err)
 	}
 
@@ -135,11 +139,11 @@ func setupQueryFixtures(t *testing.T) {
 		_, _ = adminPool.Exec(context.Background(), fmt.Sprintf(`
 			DROP TABLE IF EXISTS %[1]s.tab_query_order CASCADE;
 			DROP TABLE IF EXISTS %[1]s.tab_query_customer CASCADE;
-		`, queryTestSchema))
+		`, schema))
 	})
 }
 
-// tenantPool returns a pool for the tenant_01 schema via DBManager.
+// tenantPool returns a DBManager whose tenant pools follow tenancy schema naming.
 func tenantPool(t *testing.T) *orm.DBManager {
 	t.Helper()
 	return newTestManager(t)
