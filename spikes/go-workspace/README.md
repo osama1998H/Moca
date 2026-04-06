@@ -1,5 +1,7 @@
 # Spike 3: Go Workspace Multi-Module Composition
 
+[![CI](https://github.com/osama1998H/Moca/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/osama1998H/Moca/actions/workflows/ci.yml)
+
 **Status:** Completed
 **Task:** MS-00-T4
 **Design Reference:** `docs/blocker-resolution-strategies.md` (Blocker 1, lines 7-63)

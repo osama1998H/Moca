@@ -34,17 +34,17 @@ type Storage interface {
 
 // FileMeta holds metadata about an uploaded file, matching the tab_file schema.
 type FileMeta struct {
+	Creation          time.Time `json:"creation"`
 	Name              string    `json:"name"`
 	FileName          string    `json:"file_name"`
 	FileURL           string    `json:"file_url"`
-	FileSize          int64     `json:"file_size"`
 	ContentType       string    `json:"content_type"`
 	AttachedToDocType string    `json:"attached_to_doctype,omitempty"`
 	AttachedToName    string    `json:"attached_to_name,omitempty"`
-	IsPrivate         bool      `json:"is_private"`
 	Owner             string    `json:"owner"`
-	Creation          time.Time `json:"creation"`
 	ThumbnailURL      string    `json:"thumbnail_url,omitempty"`
+	FileSize          int64     `json:"file_size"`
+	IsPrivate         bool      `json:"is_private"`
 }
 
 // AttachmentRef identifies the document a file is attached to.

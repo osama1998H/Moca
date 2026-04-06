@@ -1,5 +1,7 @@
 # Spike 4: Meilisearch Multi-Index Tenant Isolation
 
+[![CI](https://github.com/osama1998H/Moca/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/osama1998H/Moca/actions/workflows/ci.yml)
+
 **Status:** Completed
 **Task:** MS-00-T5
 **Design Reference:** `MOCA_SYSTEM_DESIGN.md` §8.2 (line 1431), ADR-006 (lines 2093-2097)

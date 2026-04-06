@@ -1,5 +1,7 @@
 # Spike 5: Cobra CLI Extension Discovery
 
+[![CI](https://github.com/osama1998H/Moca/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/osama1998H/Moca/actions/workflows/ci.yml)
+
 **Status:** Complete
 **Task:** MS-00-T4
 **Design Reference:** `MOCA_CLI_SYSTEM_DESIGN.md` §8 (lines 3363-3406)
