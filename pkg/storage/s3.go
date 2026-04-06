@@ -63,7 +63,9 @@ func (s *S3Storage) Download(ctx context.Context, key string) (io.ReadCloser, er
 	// Verify the object exists by stat-ing it. GetObject doesn't error on missing keys
 	// until the first Read; StatObject gives us an immediate error.
 	if _, err := obj.Stat(); err != nil {
-		obj.Close()
+		if closeErr := obj.Close(); closeErr != nil {
+			return nil, fmt.Errorf("storage/s3: download %q: %w; close: %v", key, err, closeErr)
+		}
 		return nil, fmt.Errorf("storage/s3: download %q: %w", key, err)
 	}
 	return obj, nil
