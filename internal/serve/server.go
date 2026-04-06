@@ -16,6 +16,7 @@ import (
 	"github.com/osama1998H/moca/pkg/document"
 	"github.com/osama1998H/moca/pkg/hooks"
 	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/i18n"
 	"github.com/osama1998H/moca/pkg/observe"
 	"github.com/osama1998H/moca/pkg/orm"
 	"github.com/osama1998H/moca/pkg/queue"
@@ -155,6 +156,7 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		api.WithMiddlewareRegistry(mwRegistry),
 		api.WithHandlerRegistry(handlerRegistry),
 		api.WithMethodRegistry(methodRegistry),
+		api.WithI18nMiddleware(i18n.I18nMiddleware()),
 	)
 
 	handler := api.NewResourceHandler(gw)
@@ -182,6 +184,11 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	// GraphQL handler — auto-generated schema from MetaType definitions.
 	graphqlHandler := api.NewGraphQLHandler(gw)
 	graphqlHandler.RegisterRoutes(gw.Mux())
+
+	// Translation/i18n handler — serves translation bundles for the Desk UI.
+	translator := i18n.NewTranslator(redisClients.Cache, dbManager.ForSite, logger)
+	translationHandler := i18n.NewTranslationHandler(translator, logger)
+	translationHandler.RegisterRoutes(gw.Mux(), "v1")
 
 	vr := api.NewVersionRouter(handler, logger)
 	gw.SetVersionRouter(vr)

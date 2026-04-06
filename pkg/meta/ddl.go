@@ -348,5 +348,24 @@ WHERE "status" IS NULL OR ("status" = 'pending' AND COALESCE("processed", false)
 			SQL:     `CREATE INDEX IF NOT EXISTS idx_file_attached ON tab_file ("attached_to_doctype", "attached_to_name")`,
 			Comment: "create index idx_file_attached on tab_file",
 		},
+		{
+			SQL: `CREATE TABLE IF NOT EXISTS tab_translation (
+	"source_text"     TEXT NOT NULL,
+	"language"        TEXT NOT NULL,
+	"translated_text" TEXT NOT NULL,
+	"context"         TEXT NOT NULL DEFAULT '',
+	"app"             TEXT,
+	PRIMARY KEY ("source_text", "language", "context")
+)`,
+			Comment: "create system table tab_translation",
+		},
+		{
+			SQL:     `CREATE INDEX IF NOT EXISTS idx_translation_app ON tab_translation ("app")`,
+			Comment: "create index idx_translation_app on tab_translation",
+		},
+		{
+			SQL:     `CREATE INDEX IF NOT EXISTS idx_translation_lang ON tab_translation ("language")`,
+			Comment: "create index idx_translation_lang on tab_translation",
+		},
 	}
 }

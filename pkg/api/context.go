@@ -21,6 +21,7 @@ const (
 	apiKeyIDKey                        // string (API key ID)
 	apiScopesKey                       // []meta.APIScopePerm
 	apiRateLimitKey                    // *meta.RateLimitConfig
+	languageKey                        // string (e.g. "ar", "fr", "de")
 )
 
 // WithUser stores the authenticated user in ctx.
@@ -117,4 +118,16 @@ func WithAPIRateLimit(ctx context.Context, cfg *meta.RateLimitConfig) context.Co
 func APIRateLimitFromContext(ctx context.Context) *meta.RateLimitConfig {
 	c, _ := ctx.Value(apiRateLimitKey).(*meta.RateLimitConfig)
 	return c
+}
+
+// WithLanguage stores the negotiated language code in ctx.
+func WithLanguage(ctx context.Context, lang string) context.Context {
+	return context.WithValue(ctx, languageKey, lang)
+}
+
+// LanguageFromContext retrieves the language code stored by WithLanguage.
+// Returns an empty string if no language is present.
+func LanguageFromContext(ctx context.Context) string {
+	l, _ := ctx.Value(languageKey).(string)
+	return l
 }

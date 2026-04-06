@@ -33,6 +33,7 @@ type Gateway struct {
 	middlewareRegistry *MiddlewareRegistry
 	handlerRegistry    *HandlerRegistry
 	methodRegistry     *MethodRegistry
+	i18nMiddleware     Middleware
 	cors               CORSConfig
 }
 
@@ -70,6 +71,9 @@ func (g *Gateway) Handler() http.Handler {
 		h = g.versionRouter.Middleware()(h)
 	}
 	h = rateLimitMiddleware(g.rateLimiter, g.defaultRate)(h)
+	if g.i18nMiddleware != nil {
+		h = g.i18nMiddleware(h)
+	}
 	h = authMiddleware(g.auth, g.apiKeyStore)(h)
 	h = tenantMiddleware(g.siteResolver)(h)
 	h = corsMiddleware(g.cors)(h)
@@ -203,6 +207,11 @@ func WithHandlerRegistry(r *HandlerRegistry) GatewayOption {
 // WithMethodRegistry sets the whitelisted method registry.
 func WithMethodRegistry(r *MethodRegistry) GatewayOption {
 	return func(g *Gateway) { g.methodRegistry = r }
+}
+
+// WithI18nMiddleware sets the i18n language negotiation middleware.
+func WithI18nMiddleware(mw Middleware) GatewayOption {
+	return func(g *Gateway) { g.i18nMiddleware = mw }
 }
 
 // RateLimiter returns the gateway's rate limiter.

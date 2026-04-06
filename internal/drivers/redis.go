@@ -21,6 +21,7 @@ const (
 	KeySession = "session:%s"        // session:{token}             — user session data
 	KeyConfig  = "config:%s"         // config:{site}               — site configuration
 	KeySchema  = "schema:%s:version" // schema:{site}:version       — schema version counter
+	KeyI18n    = "i18n:%s:%s"        // i18n:{site}:{language}      — translation hash map
 )
 
 // RedisClients holds four Redis client instances, each targeting a distinct
