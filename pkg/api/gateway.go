@@ -33,6 +33,8 @@ type Gateway struct {
 	middlewareRegistry *MiddlewareRegistry
 	handlerRegistry    *HandlerRegistry
 	methodRegistry     *MethodRegistry
+	reportRegistry     *ReportRegistry
+	dashboardRegistry  *DashboardRegistry
 	i18nMiddleware     Middleware
 	cors               CORSConfig
 }
@@ -225,6 +227,22 @@ func (g *Gateway) HandlerRegistry() *HandlerRegistry { return g.handlerRegistry 
 
 // MethodRegistry returns the gateway's whitelisted method registry.
 func (g *Gateway) MethodRegistry() *MethodRegistry { return g.methodRegistry }
+
+// WithReportRegistry sets the report definition registry.
+func WithReportRegistry(r *ReportRegistry) GatewayOption {
+	return func(g *Gateway) { g.reportRegistry = r }
+}
+
+// WithDashboardRegistry sets the dashboard definition registry.
+func WithDashboardRegistry(r *DashboardRegistry) GatewayOption {
+	return func(g *Gateway) { g.dashboardRegistry = r }
+}
+
+// ReportRegistry returns the gateway's report definition registry.
+func (g *Gateway) ReportRegistry() *ReportRegistry { return g.reportRegistry }
+
+// DashboardRegistry returns the gateway's dashboard definition registry.
+func (g *Gateway) DashboardRegistry() *DashboardRegistry { return g.dashboardRegistry }
 
 // SetVersionRouter sets the version router after gateway construction.
 // This resolves the circular construction dependency: ResourceHandler needs

@@ -140,6 +140,8 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	mwRegistry := api.NewMiddlewareRegistry()
 	handlerRegistry := api.NewHandlerRegistry()
 	methodRegistry := api.NewMethodRegistry()
+	reportRegistry := api.NewReportRegistry()
+	dashboardRegistry := api.NewDashboardRegistry()
 
 	gw := api.NewGateway(
 		api.WithDocManager(docManager),
@@ -156,6 +158,8 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		api.WithMiddlewareRegistry(mwRegistry),
 		api.WithHandlerRegistry(handlerRegistry),
 		api.WithMethodRegistry(methodRegistry),
+		api.WithReportRegistry(reportRegistry),
+		api.WithDashboardRegistry(dashboardRegistry),
 		api.WithI18nMiddleware(i18n.I18nMiddleware()),
 	)
 
@@ -189,6 +193,14 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	translator := i18n.NewTranslator(redisClients.Cache, dbManager.ForSite, logger)
 	translationHandler := i18n.NewTranslationHandler(translator, logger)
 	translationHandler.RegisterRoutes(gw.Mux(), "v1")
+
+	// Report and Dashboard handlers.
+	reportHandler := api.NewReportHandler(reportRegistry, dbManager, registry, scopeEnforcer, logger)
+	reportHandler.RegisterRoutes(gw.Mux(), "v1")
+	dashboardHandler := api.NewDashboardHandler(gw)
+	dashboardHandler.SetDBManager(dbManager)
+	dashboardHandler.RegisterRoutes(gw.Mux(), "v1")
+
 
 	vr := api.NewVersionRouter(handler, logger)
 	gw.SetVersionRouter(vr)

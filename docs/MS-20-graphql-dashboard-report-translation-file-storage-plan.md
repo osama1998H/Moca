@@ -199,7 +199,7 @@ No external web research was needed. All implementation details are well-specifi
 
 - **Task ID:** MS-20-T4
 - **Title:** Dashboard & Report Frontend Views + Backend Handlers
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:**
   Build Dashboard and Report pages for Desk, plus their backend API handlers. The report backend engine exists (`pkg/orm/report.go`) but has no HTTP endpoint or frontend.
 
