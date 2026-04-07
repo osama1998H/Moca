@@ -51,3 +51,6 @@ moca.yaml
 # Build and dist artifacts
 /dist/
 /tmp/
+
+# Demo project for manual testing
+/demo/
