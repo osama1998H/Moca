@@ -62,6 +62,7 @@ func newAppNewCmd() *cobra.Command {
 	f.String("license", "MIT", "License identifier")
 	f.String("doctype", "", "Create an initial DocType with the app")
 	f.String("template", "standard", `App template: "standard", "minimal", "api-only"`)
+	f.Bool("desk", false, "Include desk/ directory with desk-manifest.json for UI extensions")
 
 	return cmd
 }
@@ -88,6 +89,7 @@ func runAppNew(cmd *cobra.Command, args []string) error {
 	license, _ := cmd.Flags().GetString("license")
 	doctype, _ := cmd.Flags().GetString("doctype")
 	tmpl, _ := cmd.Flags().GetString("template")
+	includeDesk, _ := cmd.Flags().GetBool("desk")
 
 	// Normalize and validate template flag.
 	tmpl = strings.ToLower(tmpl)
@@ -111,6 +113,7 @@ func runAppNew(cmd *cobra.Command, args []string) error {
 		License:     license,
 		DocType:     doctype,
 		Template:    scaffold.Template(tmpl),
+		IncludeDesk: includeDesk,
 	}
 
 	s := w.NewSpinner(fmt.Sprintf("Scaffolding app %q...", appName))

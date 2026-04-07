@@ -31,6 +31,7 @@ func allCommands() []*cobra.Command {
 		NewDevCommand(),
 		NewTestCommand(),
 		NewBuildCommand(),
+		NewDeskCommand(),
 		NewUserCommand(),
 		NewAPICommand(),
 		NewSearchCommand(),

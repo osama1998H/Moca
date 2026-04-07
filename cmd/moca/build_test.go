@@ -1,8 +1,10 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/osama1998H/moca/pkg/apps"
 	"github.com/spf13/cobra"
 )
 
@@ -172,6 +174,198 @@ func TestJoinArgs(t *testing.T) {
 		got := joinArgs(tt.args)
 		if got != tt.want {
 			t.Errorf("joinArgs(%v) = %q, want %q", tt.args, got, tt.want)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// desk extension codegen tests
+// ---------------------------------------------------------------------------
+
+func TestBuildExtensionContent_NoSources(t *testing.T) {
+	content := buildExtensionContent(nil, "/project/desk")
+	if !strings.Contains(content, "No app desk extensions discovered") {
+		t.Error("expected empty comment for no sources")
+	}
+}
+
+func TestBuildExtensionContent_ManifestAllTypes(t *testing.T) {
+	sources := []extensionSource{
+		{
+			appName: "crm",
+			manifest: &apps.DeskManifest{
+				App:     "crm",
+				Version: "1.0.0",
+				Extensions: apps.DeskExtensions{
+					FieldTypes: map[string]string{
+						"Phone": "./fields/PhoneField.tsx",
+					},
+					Pages: []apps.DeskPageDef{
+						{Path: "/desk/app/crm-dash", Component: "./pages/Dash.tsx", Label: "CRM Dash", Icon: "Phone"},
+					},
+					SidebarItems: []apps.DeskSidebarDef{
+						{Label: "CRM", Icon: "Phone", Children: []apps.DeskSidebarChild{
+							{Label: "Dashboard", Path: "/desk/app/crm-dash"},
+						}},
+					},
+					DashboardWidgets: []apps.DeskWidgetDef{
+						{Name: "pipeline", Component: "./widgets/Pipeline.tsx", Label: "Pipeline"},
+					},
+				},
+			},
+		},
+	}
+
+	content := buildExtensionContent(sources, "/project/desk")
+
+	// Should have the @moca/desk import with all 4 registration functions.
+	if !strings.Contains(content, `import { registerFieldType, registerPage, registerSidebarItem, registerDashboardWidget } from "@moca/desk"`) {
+		t.Error("missing @moca/desk import header")
+	}
+
+	// Field type registration.
+	if !strings.Contains(content, `registerFieldType("Phone", CrmFieldPhoneField)`) {
+		t.Error("missing field type registration")
+	}
+
+	// Page registration with options.
+	if !strings.Contains(content, `registerPage("/desk/app/crm-dash", CrmPageDash, { label: "CRM Dash", icon: "Phone" })`) {
+		t.Error("missing page registration")
+	}
+
+	// Sidebar item.
+	if !strings.Contains(content, `registerSidebarItem({ label: "CRM"`) {
+		t.Error("missing sidebar registration")
+	}
+	if !strings.Contains(content, `children: [{ label: "Dashboard", path: "/desk/app/crm-dash" }]`) {
+		t.Error("missing sidebar children")
+	}
+
+	// Widget registration with label.
+	if !strings.Contains(content, `registerDashboardWidget("pipeline", CrmWidgetPipeline, { label: "Pipeline" })`) {
+		t.Error("missing widget registration")
+	}
+}
+
+func TestBuildExtensionContent_LegacyFallback(t *testing.T) {
+	sources := []extensionSource{
+		{
+			appName:      "legacy_app",
+			legacyImport: "../apps/legacy_app/desk/setup",
+		},
+	}
+
+	content := buildExtensionContent(sources, "/project/desk")
+
+	if !strings.Contains(content, `import "../apps/legacy_app/desk/setup"`) {
+		t.Error("missing legacy bare import")
+	}
+	// Should NOT have @moca/desk import header for legacy-only.
+	if strings.Contains(content, `from "@moca/desk"`) {
+		t.Error("unexpected @moca/desk import for legacy-only sources")
+	}
+}
+
+func TestBuildExtensionContent_ManifestWinsOverLegacy(t *testing.T) {
+	// When a manifest source is present, it should generate structured calls,
+	// not a bare import.
+	sources := []extensionSource{
+		{
+			appName: "myapp",
+			manifest: &apps.DeskManifest{
+				App:     "myapp",
+				Version: "1.0.0",
+				Extensions: apps.DeskExtensions{
+					FieldTypes: map[string]string{"Custom": "./fields/Custom.tsx"},
+				},
+			},
+		},
+	}
+
+	content := buildExtensionContent(sources, "/project/desk")
+
+	if !strings.Contains(content, "registerFieldType") {
+		t.Error("expected structured registration, not bare import")
+	}
+}
+
+func TestBuildExtensionContent_MultipleSources(t *testing.T) {
+	sources := []extensionSource{
+		{
+			appName: "crm",
+			manifest: &apps.DeskManifest{
+				App:     "crm",
+				Version: "1.0.0",
+				Extensions: apps.DeskExtensions{
+					FieldTypes: map[string]string{"Phone": "./fields/Phone.tsx"},
+				},
+			},
+		},
+		{
+			appName:      "legacy",
+			legacyImport: "../apps/legacy/desk/setup",
+		},
+	}
+
+	content := buildExtensionContent(sources, "/project/desk")
+
+	if !strings.Contains(content, "// === crm ===") {
+		t.Error("missing crm section header")
+	}
+	if !strings.Contains(content, "// === legacy ===") {
+		t.Error("missing legacy section header")
+	}
+}
+
+func TestGenerateImportName(t *testing.T) {
+	tests := []struct {
+		appName, category, path, want string
+	}{
+		{"crm", "Field", "./fields/PhoneField.tsx", "CrmFieldPhoneField"},
+		{"my_app", "Page", "./pages/Dashboard.tsx", "MyAppPageDashboard"},
+		{"hr", "Widget", "./widgets/PipelineWidget.tsx", "HrWidgetPipelineWidget"},
+	}
+
+	for _, tt := range tests {
+		got := generateImportName(tt.appName, tt.category, tt.path)
+		if got != tt.want {
+			t.Errorf("generateImportName(%q, %q, %q) = %q, want %q", tt.appName, tt.category, tt.path, got, tt.want)
+		}
+	}
+}
+
+func TestTitleCase(t *testing.T) {
+	tests := []struct {
+		input, want string
+	}{
+		{"crm", "Crm"},
+		{"my_app", "MyApp"},
+		{"hr", "Hr"},
+		{"phone_field", "PhoneField"},
+	}
+
+	for _, tt := range tests {
+		got := titleCase(tt.input)
+		if got != tt.want {
+			t.Errorf("titleCase(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestBuildOptionsLiteral(t *testing.T) {
+	tests := []struct {
+		label, icon, want string
+	}{
+		{"", "", ""},
+		{"Hello", "", `{ label: "Hello" }`},
+		{"", "Phone", `{ icon: "Phone" }`},
+		{"Hello", "Phone", `{ label: "Hello", icon: "Phone" }`},
+	}
+
+	for _, tt := range tests {
+		got := buildOptionsLiteral(tt.label, tt.icon)
+		if got != tt.want {
+			t.Errorf("buildOptionsLiteral(%q, %q) = %q, want %q", tt.label, tt.icon, got, tt.want)
 		}
 	}
 }

@@ -33,7 +33,7 @@ func TestAllCommandGroupsRegistered(t *testing.T) {
 		"site", "app", "worker", "scheduler",
 		"db", "backup", "config", "deploy",
 		"generate", "dev", "test", "build",
-		"user", "api", "search", "cache",
+		"desk", "user", "api", "search", "cache",
 		"queue", "events", "translate", "log",
 		"monitor",
 		// Top-level commands

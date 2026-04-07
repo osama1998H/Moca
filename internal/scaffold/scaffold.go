@@ -63,6 +63,10 @@ type ScaffoldOptions struct {
 
 	// SkipGoWorkUpdate skips running "go work use" to update go.work.
 	SkipGoWorkUpdate bool
+
+	// IncludeDesk scaffolds a desk/ directory with desk-manifest.json template
+	// for desk UI extensions (custom field types, pages, widgets).
+	IncludeDesk bool
 }
 
 // ScaffoldApp creates a new Moca app directory structure at AppsDir/AppName.
@@ -92,9 +96,10 @@ func ScaffoldApp(opts ScaffoldOptions) error {
 		GoModulePath: goModPath + "/apps/" + opts.AppName,
 		DocType:      opts.DocType,
 		DocTypeSnake: toSnakeCase(opts.DocType),
+		IncludeDesk:  opts.IncludeDesk,
 	}
 
-	if err := createDirectories(appDir, opts.Template, moduleSnake); err != nil {
+	if err := createDirectories(appDir, opts.Template, moduleSnake, opts.IncludeDesk); err != nil {
 		return fmt.Errorf("create directories: %w", err)
 	}
 
@@ -216,7 +221,7 @@ func toSnakeCase(s string) string {
 	return result.String()
 }
 
-func createDirectories(appDir string, tmpl Template, moduleSnake string) error {
+func createDirectories(appDir string, tmpl Template, moduleSnake string, includeDesk bool) error {
 	// Common directories for all templates.
 	dirs := []string{
 		filepath.Join("modules", moduleSnake, "doctypes"),
@@ -237,6 +242,13 @@ func createDirectories(appDir string, tmpl Template, moduleSnake string) error {
 		// api-only has the module dir but no pages/reports.
 	case TemplateMinimal:
 		// minimal has just the module/doctypes dir.
+	}
+
+	if includeDesk {
+		dirs = append(dirs,
+			"desk",
+			filepath.Join("desk", "fields"),
+		)
 	}
 
 	for _, d := range dirs {
@@ -301,6 +313,20 @@ func renderTemplates(appDir string, tmpl Template, data templateData) error {
 		}{filepath.Join("modules", data.ModuleSnake, "api.go"), apiControllerTmpl})
 	}
 
+	// Desk extension files.
+	if data.IncludeDesk {
+		files = append(files,
+			struct {
+				path     string
+				template string
+			}{filepath.Join("desk", "desk-manifest.json"), deskManifestTmpl},
+			struct {
+				path     string
+				template string
+			}{filepath.Join("desk", "fields", "example.ts"), deskExampleFieldTmpl},
+		)
+	}
+
 	for _, f := range files {
 		if err := renderToFile(filepath.Join(appDir, f.path), f.template, data); err != nil {
 			return fmt.Errorf("render %s: %w", f.path, err)
@@ -324,7 +350,7 @@ func scaffoldDocType(appDir, moduleSnake string, data templateData) error {
 	return renderToFile(jsonPath, docTypeTmpl, data)
 }
 
-func renderToFile(path, tmplText string, data templateData) error {
+func renderToFile(path, tmplText string, data any) error {
 	t, err := template.New(filepath.Base(path)).Parse(tmplText)
 	if err != nil {
 		return fmt.Errorf("parse template: %w", err)

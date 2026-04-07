@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moca.dev/schemas/desk-manifest.schema.json",
+  "title": "Moca Desk Manifest",
+  "description": "Declares desk UI extensions for a Moca app. Place at apps/{app}/desk/desk-manifest.json.",
+  "type": "object",
+  "required": ["app", "version"],
+  "properties": {
+    "app": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "App identifier (must match the app directory name)."
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version of the desk extensions."
+    },
+    "extensions": {
+      "type": "object",
+      "description": "Extension declarations grouped by type.",
+      "properties": {
+        "field_types": {
+          "type": "object",
+          "description": "Custom field type components. Keys are type names, values are relative component paths.",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^\\./"
+          }
+        },
+        "pages": {
+          "type": "array",
+          "description": "Custom page routes added to the desk.",
+          "items": {
+            "type": "object",
+            "required": ["path", "component"],
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^/desk/app/",
+                "description": "Route path (must start with /desk/app/)."
+              },
+              "component": {
+                "type": "string",
+                "pattern": "^\\./",
+                "description": "Relative path to the React component."
+              },
+              "label": {
+                "type": "string",
+                "description": "Human-readable page title."
+              },
+              "icon": {
+                "type": "string",
+                "description": "Lucide icon name for navigation."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "sidebar_items": {
+          "type": "array",
+          "description": "Custom sidebar navigation entries.",
+          "items": {
+            "type": "object",
+            "required": ["label"],
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "Display label for the sidebar item."
+              },
+              "icon": {
+                "type": "string",
+                "description": "Lucide icon name."
+              },
+              "path": {
+                "type": "string",
+                "description": "Direct link path (for leaf items without children)."
+              },
+              "order": {
+                "type": "integer",
+                "description": "Sort order among custom items. Lower = higher in sidebar. Default: 999."
+              },
+              "children": {
+                "type": "array",
+                "description": "Child navigation items.",
+                "items": {
+                  "type": "object",
+                  "required": ["label", "path"],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "dashboard_widgets": {
+          "type": "array",
+          "description": "Custom dashboard widget components.",
+          "items": {
+            "type": "object",
+            "required": ["name", "component"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Unique widget identifier."
+              },
+              "component": {
+                "type": "string",
+                "pattern": "^\\./",
+                "description": "Relative path to the React component."
+              },
+              "label": {
+                "type": "string",
+                "description": "Human-readable widget title."
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

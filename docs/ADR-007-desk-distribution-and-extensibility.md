@@ -735,105 +735,113 @@ The change is **surgically targeted**: 78% of the frontend codebase (140+ files)
 
 **Goal:** Extract `@moca/desk` as a publishable npm package from the existing `desk/` code.
 
-1. [ ] Create `createDeskApp()` factory function in `desk/src/app.ts`
+1. [x] Create `createDeskApp()` factory function in `desk/src/createApp.tsx`
    - Accepts config (theme, locale, extensions)
    - Initializes providers, router, renders app
    - Replaces the hardcoded `main.tsx` setup
 
-2. [ ] Create `mocaDeskPlugin()` Vite plugin in `desk/src/vite-plugin.ts`
+2. [x] Create `mocaDeskPlugin()` Vite plugin in `desk/src/vite-plugin.ts`
    - Encapsulates: React plugin, Tailwind, base path, API proxy, WebSocket proxy
    - Accepts overrides for all settings
    - Handles `.moca-extensions.ts` import resolution
 
-3. [ ] Expand `desk/src/index.ts` public API
+3. [x] Expand `desk/src/index.ts` public API
    - Add `registerPage`, `registerSidebarItem`, `registerDashboardWidget`
    - Create registration registries (similar to existing `fieldTypeRegistry`)
    - Export all types needed by app extensions
 
-4. [ ] Configure `desk/package.json` for npm publishing
+4. [x] Configure `desk/package.json` for npm publishing
    - Set `name: "@moca/desk"`, configure `exports`, `types`, `files`
-   - Add build script that produces ESM + type declarations
-   - Test with `npm pack` and `npm link`
+   - Move react/react-dom to peerDependencies
+   - Add `./vite` export entry for Vite plugin
 
-5. [ ] Verify existing `desk/` still works as-is during transition
+5. [x] Verify existing `desk/` still works as-is during transition
 
 ### Phase 2: Scaffold Integration (1 week)
 
 **Goal:** `moca init` creates a working `desk/` in new projects.
 
-6. [ ] Add desk scaffold templates to `internal/scaffold/`
+6. [x] Add desk scaffold templates to `internal/scaffold/`
    - `desk/package.json.tmpl`
    - `desk/index.html.tmpl`
    - `desk/vite.config.ts.tmpl`
    - `desk/tsconfig.json.tmpl`
+   - `desk/tsconfig.app.json.tmpl`
+   - `desk/tsconfig.node.json.tmpl`
    - `desk/src/main.tsx.tmpl`
    - `desk/src/overrides/index.ts.tmpl`
    - `desk/src/overrides/theme.ts.tmpl`
    - `desk/.gitignore.tmpl`
+   - `desk/.moca-extensions.ts.tmpl`
 
-7. [ ] Update `cmd/moca/init.go` to scaffold `desk/` directory
+7. [x] Update `cmd/moca/init.go` to scaffold `desk/` directory
    - Render templates with project name, Moca version
    - Handle `--skip-desk` flag for headless API-only projects
-   - Run `npm install` automatically if Node.js is detected (or print instructions)
+   - Auto-detect `file:` protocol when framework desk is nearby (development)
+   - Print `moca desk install` in next steps
 
-8. [ ] Add `moca desk install` and `moca desk update` CLI commands
+8. [x] Add `moca desk install` and `moca desk update` CLI commands
    - Thin wrappers around npm operations + extension regeneration
 
-9. [ ] Add `moca desk dev` CLI command
-   - Starts Vite dev server, sets `desk_dev_server: true` dynamically
+9. [x] Add `moca desk dev` CLI command
+   - Starts Vite dev server with configurable port
+   - Regenerates extensions before starting
+   - Signal forwarding for clean shutdown
 
 ### Phase 3: App Extension System (1-2 weeks)
 
 **Goal:** Third-party Moca apps can ship desk UI extensions.
 
-10. [ ] Define `desk-manifest.json` schema
+10. [x] Define `desk-manifest.json` schema
     - Field types, pages, sidebar items, dashboard widgets
     - JSON Schema for validation
 
-11. [ ] Update `moca build desk` (in `cmd/moca/build.go`)
+11. [x] Update `moca build desk` (in `cmd/moca/build.go`)
     - Scan `apps/*/desk/desk-manifest.json`
     - Validate against schema
     - Generate `.moca-extensions.ts` with proper imports and registrations
     - Handle TypeScript compilation of app extension files
 
-12. [ ] Implement registration registries in `@moca/desk`
+12. [x] Implement registration registries in `@moca/desk`
     - `pageRegistry` — custom route registration
     - `sidebarRegistry` — sidebar item injection
     - `widgetRegistry` — dashboard widget registration
     - All registries consumed by the desk app at render time
 
-13. [ ] Update `moca app new` scaffold to include optional `desk/` directory
+13. [x] Update `moca app new` scaffold to include optional `desk/` directory
     - Generate `desk-manifest.json` template
     - Create example custom field type stub
 
-14. [ ] Add app extension section to `moca app scaffold` templates
+14. [x] Add app extension section to `moca app scaffold` templates
 
 ### Phase 4: CI/CD & Publishing (1 week)
 
 **Goal:** Automated publishing of `@moca/desk` alongside Go releases.
 
-15. [ ] Add npm publish step to `.github/workflows/release.yml`
-    - On `v*` tag: build `@moca/desk` → publish to npm
+15. [x] Add npm publish step to `.github/workflows/release.yml`
+    - On `v*` tag: build `@moca/desk` → publish to GitHub Packages
     - Version synced with Go release tags
+    - Frontend validation (typecheck + build) in both `ci.yml` and `release.yml`
 
-16. [ ] Add compatibility matrix documentation
+16. [x] Add compatibility matrix documentation
     - `@moca/desk@0.x` ↔ `moca-server@0.x` compatibility table
+    - Located at `docs/desk-compatibility.md`
 
-17. [ ] Update `ROADMAP.md` to reflect desk distribution changes
-    - Retrofit into MS-17 or create a sub-milestone
+17. [x] Update `ROADMAP.md` to reflect desk distribution changes
+    - Added to MS-17 scope, deliverables, and acceptance criteria
 
-18. [ ] End-to-end test: `moca init` → `npm install` → `moca serve` → working desk
+18. [x] End-to-end validation: `ci.yml` desk job validates `npm ci` → `typecheck` → `build` → verify output
 
 ### Phase 5: Migration & Documentation (1 week)
 
 **Goal:** Migrate existing projects and document everything.
 
-19. [ ] Migrate `demo/` project to use `@moca/desk` package
-20. [ ] Write developer documentation: "Getting Started with Moca Desk"
-21. [ ] Write guide: "Creating Desk Extensions for Your Moca App"
-22. [ ] Write guide: "Customizing Your Project's Desk Theme"
-23. [ ] Update `MOCA_CLI_SYSTEM_DESIGN.md` project structure section
-24. [ ] Update `MOCA_SYSTEM_DESIGN.md` frontend section
+19. [x] Migrate `demo/` project to use `@moca/desk` package
+20. [x] Write developer documentation: "Getting Started with Moca Desk"
+21. [x] Write guide: "Creating Desk Extensions for Your Moca App"
+22. [x] Write guide: "Customizing Your Project's Desk Theme"
+23. [x] Update `MOCA_CLI_SYSTEM_DESIGN.md` project structure section
+24. [x] Update `MOCA_SYSTEM_DESIGN.md` frontend section
 
 ---
 

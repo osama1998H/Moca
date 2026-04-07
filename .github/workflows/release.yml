@@ -34,6 +34,71 @@ jobs:
           version: v2.11.4
           args: --timeout=5m
 
+  desk-validate:
+    name: Desk Validate
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'desk/package-lock.json'
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: desk
+
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: desk
+
+      - name: Build
+        run: npm run build
+        working-directory: desk
+
+      - name: Verify build output
+        run: test -f desk/dist/index.html
+
+  desk-publish:
+    name: Publish @moca/desk
+    needs: desk-validate
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'desk/package-lock.json'
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: desk
+
+      - name: Sync version from Git tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+        working-directory: desk
+
+      - name: Publish to GitHub Packages
+        run: npm publish
+        working-directory: desk
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
     needs: test

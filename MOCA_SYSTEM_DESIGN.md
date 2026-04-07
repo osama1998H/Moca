@@ -2135,11 +2135,11 @@ To avoid ambiguity, the following terms have precise meanings throughout Moca do
 
 The Desk UI is composed from three layers:
 
-1. **Framework Desk** (`moca/desk/`): The base React application — core providers, components, and views. Published as the `@moca/desk` npm package (workspace-local, not published to npm registry).
-2. **App Desk Extensions** (per-DocType `.tsx` files in app directories): Apps contribute form/list view overrides and custom field types via `registerFieldType()` and related APIs.
-3. **Project Desk** (`my-project/desk/`): Optional project-level overrides for theming, custom routes, or site-specific components.
+1. **Framework Desk** (`moca/desk/`): The base React application — core providers, components, and views. Published as the `@moca/desk` npm package to GitHub Packages (`npm.pkg.github.com`). Projects consume it via `package.json`. See [ADR-007](docs/ADR-007-desk-distribution-and-extensibility.md) for the full distribution model.
+2. **App Desk Extensions** (declared in `apps/*/desk/desk-manifest.json`): Apps declare desk extensions — field types, pages, sidebar items, and dashboard widgets. Registration uses `registerFieldType()`, `registerPage()`, `registerSidebarItem()`, and `registerDashboardWidget()` APIs.
+3. **Project Desk** (`my-project/desk/`): Project-level overrides for theming, custom routes, or site-specific components in `desk/src/overrides/`.
 
-**Build process:** `moca build desk` compiles all three layers: framework desk is the base; app extensions are discovered by scanning installed apps for `.tsx` files; project desk overrides are applied last. If two apps register a component for the same DocType view, the app with higher priority in `moca.yaml` wins.
+**Build process:** `moca build desk` compiles all three layers: framework desk is the base; app extensions are discovered by scanning `apps/*/desk/desk-manifest.json` for structured declarations, with a legacy fallback to `desk/setup.ts`; the generated `.moca-extensions.ts` file contains typed imports and registration calls; project desk overrides are applied last. If two apps register a component for the same DocType view, the app with higher priority in `moca.yaml` wins.
 
 ---
 

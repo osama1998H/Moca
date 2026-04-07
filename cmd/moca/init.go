@@ -16,6 +16,7 @@ import (
 	"github.com/osama1998H/moca/internal/config"
 	"github.com/osama1998H/moca/internal/lockfile"
 	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/internal/scaffold"
 	"github.com/osama1998H/moca/pkg/orm"
 	"github.com/spf13/cobra"
 )
@@ -45,6 +46,7 @@ func NewInitCommand() *cobra.Command {
 	f.Bool("minimal", false, "Minimal setup (PostgreSQL + Redis only)")
 	f.String("template", "standard", "Project template: standard, minimal, enterprise")
 	f.Bool("skip-assets", false, "Skip building frontend assets")
+	f.Bool("skip-desk", false, "Skip scaffolding desk/ frontend (headless API-only project)")
 	f.StringSlice("apps", nil, "Apps to pre-install")
 
 	return cmd
@@ -84,6 +86,32 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return output.NewCLIError("Failed to create project directories").WithErr(err)
 	}
 	s.Stop("Project structure created")
+
+	// 4.5. Scaffold desk/ frontend directory.
+	skipDesk, _ := cmd.Flags().GetBool("skip-desk")
+	if !skipDesk {
+		s = w.NewSpinner("Scaffolding desk frontend...")
+		s.Start()
+
+		// Use file: protocol if the framework desk exists nearby (development),
+		// otherwise default to the semver constraint for published packages.
+		deskSpec := "^0.1.0"
+		frameworkDesk := filepath.Join(targetDir, "..", "desk", "package.json")
+		if _, err := os.Stat(frameworkDesk); err == nil {
+			deskSpec = "file:../desk"
+		}
+
+		if err := scaffold.ScaffoldDesk(scaffold.DeskScaffoldOptions{
+			ProjectRoot:     targetDir,
+			ProjectName:     projectName,
+			MocaDeskVersion: "0.1.0",
+			MocaDeskSpec:    deskSpec,
+		}); err != nil {
+			s.Stop("Failed")
+			return output.NewCLIError("Failed to scaffold desk frontend").WithErr(err)
+		}
+		s.Stop("Desk frontend scaffolded")
+	}
 
 	// 5. Write moca.yaml.
 	s = w.NewSpinner("Writing moca.yaml...")
@@ -161,6 +189,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	w.Print("")
 	w.Print("Next steps:")
 	w.Print("  cd %s", targetDir)
+	if !skipDesk {
+		w.Print("  moca desk install          # install desk npm dependencies")
+	}
 	w.Print("  moca site create <site-name> --admin-password <password>")
 	w.Print("")
 

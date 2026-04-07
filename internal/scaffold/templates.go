@@ -14,6 +14,7 @@ type templateData struct {
 	GoModulePath string // full module path: "github.com/osama1998H/moca/apps/my_app"
 	DocType      string // optional: "Task"
 	DocTypeSnake string // optional: "task"
+	IncludeDesk  bool   // scaffold desk/ directory with desk-manifest.json
 }
 
 const manifestTmpl = `name: {{.AppName}}
@@ -72,7 +73,9 @@ This app was scaffolded with ` + "`moca app new {{.AppName}}`" + `.
 - ` + "`hooks.go`" + ` - Hook and controller registration
 - ` + "`modules/`" + ` - Modules containing doctypes, pages, and reports
 - ` + "`go.mod`" + ` - Go module definition
-`
+{{if .IncludeDesk}}- ` + "`desk/`" + ` - Desk UI extensions (custom field types, pages, widgets)
+  - ` + "`desk-manifest.json`" + ` - Declares desk extensions for this app
+{{end}}`
 
 const migrationTmpl = `-- Initial migration for {{.AppName}}
 -- Add your table definitions here.
@@ -138,4 +141,42 @@ const docTypeTmpl = `{
     }
   ]
 }
+`
+
+// ---------------------------------------------------------------------------
+// Desk extension scaffold templates (Task 13/14)
+// ---------------------------------------------------------------------------
+
+const deskManifestTmpl = `{
+  "$schema": "https://moca.dev/schemas/desk-manifest.schema.json",
+  "app": "{{.AppName}}",
+  "version": "0.1.0",
+  "extensions": {
+    "field_types": {},
+    "pages": [],
+    "sidebar_items": [],
+    "dashboard_widgets": []
+  }
+}
+`
+
+const deskExampleFieldTmpl = `// Example custom field type for the {{.Title}} app.
+// Uncomment and rename to create a custom field component.
+//
+// import type { FieldProps } from "@moca/desk";
+//
+// export default function ExampleField({ fieldDef, value, onChange, readOnly }: FieldProps) {
+//   return (
+//     <div>
+//       <label>{fieldDef.label}</label>
+//       <input
+//         value={value ?? ""}
+//         onChange={(e) => onChange?.(e.target.value)}
+//         readOnly={readOnly}
+//       />
+//     </div>
+//   );
+// }
+
+export {};
 `

@@ -461,3 +461,82 @@ func TestReadGoModulePath(t *testing.T) {
 		t.Errorf("readGoModulePath (fallback) = %q, want github.com/osama1998H/moca", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Desk scaffold tests (Task 13)
+// ---------------------------------------------------------------------------
+
+func TestScaffoldApp_WithDesk(t *testing.T) {
+	appsDir, projectRoot := setupTestDir(t)
+	opts := baseOpts(appsDir, projectRoot)
+	opts.IncludeDesk = true
+
+	if err := ScaffoldApp(opts); err != nil {
+		t.Fatalf("ScaffoldApp with desk: %v", err)
+	}
+
+	appDir := filepath.Join(appsDir, "my_app")
+
+	// Verify desk directories exist.
+	for _, d := range []string{"desk", "desk/fields"} {
+		p := filepath.Join(appDir, d)
+		info, err := os.Stat(p)
+		if err != nil {
+			t.Errorf("expected directory %s to exist: %v", d, err)
+			continue
+		}
+		if !info.IsDir() {
+			t.Errorf("expected %s to be a directory", d)
+		}
+	}
+
+	// Verify desk-manifest.json exists and is valid JSON.
+	manifestPath := filepath.Join(appDir, "desk", "desk-manifest.json")
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("desk-manifest.json should exist: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("desk-manifest.json is not valid JSON: %v", err)
+	}
+	if parsed["app"] != "my_app" {
+		t.Errorf("desk-manifest.json app = %v, want my_app", parsed["app"])
+	}
+
+	// Verify example field file exists.
+	examplePath := filepath.Join(appDir, "desk", "fields", "example.ts")
+	if _, err := os.Stat(examplePath); err != nil {
+		t.Errorf("expected desk/fields/example.ts to exist: %v", err)
+	}
+
+	// Verify README mentions desk.
+	readmeData, _ := os.ReadFile(filepath.Join(appDir, "README.md"))
+	if !strings.Contains(string(readmeData), "desk/") {
+		t.Error("README should mention desk/ when IncludeDesk is true")
+	}
+}
+
+func TestScaffoldApp_WithoutDesk(t *testing.T) {
+	appsDir, projectRoot := setupTestDir(t)
+	opts := baseOpts(appsDir, projectRoot)
+	opts.IncludeDesk = false
+
+	if err := ScaffoldApp(opts); err != nil {
+		t.Fatalf("ScaffoldApp: %v", err)
+	}
+
+	appDir := filepath.Join(appsDir, "my_app")
+
+	// Verify desk directory does NOT exist.
+	if _, err := os.Stat(filepath.Join(appDir, "desk")); err == nil {
+		t.Error("desk/ directory should NOT exist when IncludeDesk is false")
+	}
+
+	// Verify README does not mention desk.
+	readmeData, _ := os.ReadFile(filepath.Join(appDir, "README.md"))
+	if strings.Contains(string(readmeData), "desk/") {
+		t.Error("README should NOT mention desk/ when IncludeDesk is false")
+	}
+}
