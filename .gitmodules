@@ -1,3 +1,6 @@
 [submodule "desk"]
 	path = desk
 	url = https://github.com/osama1998H/moca-desk.git
+[submodule "wiki"]
+	path = wiki
+	url = https://github.com/osama1998H/Moca.wiki.git
