@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 
@@ -103,7 +104,7 @@ func NewSiteManager(
 	}
 }
 
-// CreateSite executes the 9-step site creation lifecycle:
+// CreateSite executes the 10-step site creation lifecycle:
 //  1. Create PostgreSQL schema
 //  2. Create per-tenant system tables
 //  3. Bootstrap core MetaType tables
@@ -113,6 +114,7 @@ func NewSiteManager(
 //  7. Stub: S3 storage prefix
 //  8. Register site in moca_system
 //  9. Warm metadata cache
+//  10. Seed DocType document records for core doctypes
 func (m *SiteManager) CreateSite(ctx context.Context, cfg SiteCreateConfig) (retErr error) {
 	if err := validateSiteConfig(cfg); err != nil {
 		return err
@@ -138,19 +140,19 @@ func (m *SiteManager) CreateSite(ctx context.Context, cfg SiteCreateConfig) (ret
 	}()
 
 	// Step 1: Create PostgreSQL schema.
-	m.logger.InfoContext(ctx, "step 1/9: creating schema", slog.String("schema", schemaName))
+	m.logger.InfoContext(ctx, "step 1/10: creating schema", slog.String("schema", schemaName))
 	if schemaErr := m.createSchema(ctx, schemaName); schemaErr != nil {
 		return fmt.Errorf("create site step 1 (schema): %w", schemaErr)
 	}
 
 	// Step 2: Create per-tenant system tables.
-	m.logger.InfoContext(ctx, "step 2/9: creating system tables", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 2/10: creating system tables", slog.String("site", siteName))
 	if metaErr := m.migrator.EnsureMetaTables(ctx, siteName); metaErr != nil {
 		return fmt.Errorf("create site step 2 (meta tables): %w", metaErr)
 	}
 
 	// Step 3: Bootstrap core MetaType document tables.
-	m.logger.InfoContext(ctx, "step 3/9: bootstrapping core tables", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 3/10: bootstrapping core tables", slog.String("site", siteName))
 	coreMetaTypes, err := m.bootstrapFn()
 	if err != nil {
 		return fmt.Errorf("create site step 3 (bootstrap): %w", err)
@@ -164,32 +166,32 @@ func (m *SiteManager) CreateSite(ctx context.Context, cfg SiteCreateConfig) (ret
 	}
 
 	// Step 4: Create Administrator user.
-	m.logger.InfoContext(ctx, "step 4/9: creating admin user", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 4/10: creating admin user", slog.String("site", siteName))
 	if adminErr := m.createAdminUser(ctx, siteName, cfg.AdminEmail, cfg.AdminPassword); adminErr != nil {
 		return fmt.Errorf("create site step 4 (admin user): %w", adminErr)
 	}
 
 	// Step 5: Create Redis config namespace.
-	m.logger.InfoContext(ctx, "step 5/9: setting up Redis config", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 5/10: setting up Redis config", slog.String("site", siteName))
 	if redisErr := m.setupRedisConfig(ctx, siteName, cfg.Config); redisErr != nil {
 		return fmt.Errorf("create site step 5 (redis config): %w", redisErr)
 	}
 
 	// Step 6: Stub — Meilisearch index.
-	m.logger.WarnContext(ctx, "step 6/9: meilisearch index creation not yet implemented", slog.String("site", siteName))
+	m.logger.WarnContext(ctx, "step 6/10: meilisearch index creation not yet implemented", slog.String("site", siteName))
 
 	// Step 7: Storage uses shared bucket with site-scoped key prefix ({site}/private/..., {site}/public/...).
 	// No per-site bucket creation needed — prefix is created implicitly on first upload.
-	m.logger.InfoContext(ctx, "step 7/9: storage uses shared bucket with site-scoped key prefix", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 7/10: storage uses shared bucket with site-scoped key prefix", slog.String("site", siteName))
 
 	// Step 8: Register site in moca_system.
-	m.logger.InfoContext(ctx, "step 8/9: registering site", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 8/10: registering site", slog.String("site", siteName))
 	if regErr := m.registerSiteInSystem(ctx, cfg, schemaName); regErr != nil {
 		return fmt.Errorf("create site step 8 (register): %w", regErr)
 	}
 
 	// Step 9: Warm metadata cache via Registry.Register.
-	m.logger.InfoContext(ctx, "step 9/9: warming metadata cache", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 9/10: warming metadata cache", slog.String("site", siteName))
 	for _, mt := range ordered {
 		jsonBytes, merr := json.Marshal(mt)
 		if merr != nil {
@@ -198,6 +200,18 @@ func (m *SiteManager) CreateSite(ctx context.Context, cfg SiteCreateConfig) (ret
 		if _, rerr := m.registry.Register(ctx, siteName, jsonBytes); rerr != nil {
 			return fmt.Errorf("create site step 9 (register %q): %w", mt.Name, rerr)
 		}
+	}
+
+	// Step 10: Seed DocType document records into tab_doc_type so the resource
+	// API can list them (sidebar, list views, etc.). Also seed DocPerm child
+	// records for each MetaType's permission rules.
+	m.logger.InfoContext(ctx, "step 10/10: seeding DocType document records", slog.String("site", siteName))
+	tenantPool, poolErr := m.db.ForSite(ctx, siteName)
+	if poolErr != nil {
+		return fmt.Errorf("create site step 10 (tenant pool): %w", poolErr)
+	}
+	if seedErr := m.seedDocTypeRecords(ctx, tenantPool, ordered); seedErr != nil {
+		return fmt.Errorf("create site step 10 (seed): %w", seedErr)
 	}
 
 	m.logger.InfoContext(ctx, "site created successfully", slog.String("site", siteName))
@@ -856,6 +870,72 @@ func (m *SiteManager) registerSiteInSystem(ctx context.Context, cfg SiteCreateCo
 			return fmt.Errorf("insert site_apps: %w", execErr)
 		}
 
+		return nil
+	})
+}
+
+// seedDocTypeRecords inserts document records into tab_doc_type for each core
+// MetaType so they are queryable via the resource API (used by the desk sidebar).
+// Also seeds tab_doc_perm child records for each MetaType's permission rules.
+func (m *SiteManager) seedDocTypeRecords(ctx context.Context, pool *pgxpool.Pool, metatypes []*meta.MetaType) error {
+	return orm.WithTransaction(ctx, pool, func(ctx context.Context, tx pgx.Tx) error {
+		permIdx := 0
+		for _, mt := range metatypes {
+			tableName := meta.TableName(mt.Name)
+			// Skip if the document table doesn't exist (child tables like DocField
+			// have their own tables but are not listed standalone).
+			var tableExists bool
+			if err := tx.QueryRow(ctx,
+				"SELECT EXISTS(SELECT 1 FROM pg_tables WHERE tablename = $1)",
+				tableName,
+			).Scan(&tableExists); err != nil {
+				return fmt.Errorf("check table %s: %w", tableName, err)
+			}
+			if !tableExists {
+				continue
+			}
+
+			// Insert the DocType document record.
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO tab_doc_type (
+					name, dt_module, dt_label, dt_description,
+					is_submittable, is_single, is_child_table, is_virtual,
+					dt_track_changes, dt_naming_rule,
+					docstatus, idx, owner, creation, modified, modified_by, _extra
+				) VALUES (
+					$1, $2, $3, $4,
+					$5, $6, $7, $8,
+					$9, $10,
+					0, 0, 'System', NOW(), NOW(), 'System', '{}'
+				) ON CONFLICT (name) DO NOTHING`,
+				mt.Name, mt.Module, mt.Label, mt.Description,
+				mt.IsSubmittable, mt.IsSingle, mt.IsChildTable, mt.IsVirtual,
+				mt.TrackChanges, string(mt.NamingRule.Rule),
+			); err != nil {
+				return fmt.Errorf("seed DocType record %q: %w", mt.Name, err)
+			}
+
+			// Seed DocPerm child records for this MetaType's permission rules.
+			for _, perm := range mt.Permissions {
+				permName := fmt.Sprintf("docperm-%s-%s-%d", mt.Name, perm.Role, permIdx)
+				if _, err := tx.Exec(ctx, `
+					INSERT INTO tab_doc_perm (
+						name, parent, parenttype, parentfield, idx,
+						role, doctype_perm, match_field, match_value,
+						owner, creation, modified, modified_by, _extra
+					) VALUES (
+						$1, $2, 'DocType', 'permissions', $3,
+						$4, $5, $6, $7,
+						'System', NOW(), NOW(), 'System', '{}'
+					) ON CONFLICT (name) DO NOTHING`,
+					permName, mt.Name, permIdx,
+					perm.Role, perm.DocTypePerm, perm.MatchField, perm.MatchValue,
+				); err != nil {
+					return fmt.Errorf("seed DocPerm for %q role %q: %w", mt.Name, perm.Role, err)
+				}
+				permIdx++
+			}
+		}
 		return nil
 	})
 }

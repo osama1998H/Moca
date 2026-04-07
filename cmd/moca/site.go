@@ -137,6 +137,12 @@ func runSiteCreate(cmd *cobra.Command, args []string) error {
 	}
 	s.Stop(fmt.Sprintf("Site %q created", siteName))
 
+	// Create site filesystem directory.
+	siteDir := filepath.Join(ctx.ProjectRoot, "sites", siteName)
+	if mkErr := os.MkdirAll(siteDir, 0o755); mkErr != nil {
+		w.PrintWarning(fmt.Sprintf("Could not create site directory: %v", mkErr))
+	}
+
 	// Optionally install additional apps.
 	installApps, _ := cmd.Flags().GetStringSlice("install-apps")
 	appsDir := filepath.Join(ctx.ProjectRoot, "apps")
@@ -226,6 +232,12 @@ func runSiteDrop(cmd *cobra.Command, args []string) error {
 			WithContext("site: " + siteName)
 	}
 	s.Stop(fmt.Sprintf("Site %q dropped", siteName))
+
+	// Remove site filesystem directory.
+	siteDir := filepath.Join(ctx.ProjectRoot, "sites", siteName)
+	if rmErr := os.RemoveAll(siteDir); rmErr != nil {
+		w.PrintWarning(fmt.Sprintf("Could not remove site directory: %v", rmErr))
+	}
 
 	if w.Mode() == output.ModeJSON {
 		return w.PrintJSON(map[string]any{
