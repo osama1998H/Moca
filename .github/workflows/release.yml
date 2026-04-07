@@ -66,7 +66,7 @@ jobs:
         run: test -f desk/dist/index.html
 
   desk-publish:
-    name: Publish @moca/desk
+    name: Publish @osama1998h/desk
     needs: desk-validate
     runs-on: ubuntu-latest
     permissions:

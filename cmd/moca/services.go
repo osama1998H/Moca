@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"golang.org/x/term"
 
@@ -263,8 +262,8 @@ func stopProcess(dir, name string) error {
 		return output.NewCLIError(fmt.Sprintf("The %s process (PID %d) is not running", name, pid)).
 			WithFix(fmt.Sprintf("The PID file was stale and has been removed. Start with 'moca %s start --foreground'.", name))
 	}
-	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
-		return fmt.Errorf("send SIGTERM to %s (PID %d): %w", name, pid, err)
+	if err := killProcess(pid); err != nil {
+		return fmt.Errorf("send signal to %s (PID %d): %w", name, pid, err)
 	}
 	_ = removePIDFile(dir, name)
 	return nil

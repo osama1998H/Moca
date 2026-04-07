@@ -163,7 +163,7 @@ const deskManifestTmpl = `{
 const deskExampleFieldTmpl = `// Example custom field type for the {{.Title}} app.
 // Uncomment and rename to create a custom field component.
 //
-// import type { FieldProps } from "@moca/desk";
+// import type { FieldProps } from "@osama1998h/desk";
 //
 // export default function ExampleField({ fieldDef, value, onChange, readOnly }: FieldProps) {
 //   return (

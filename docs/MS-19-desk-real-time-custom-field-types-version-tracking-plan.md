@@ -29,7 +29,7 @@ Version tracking closes the audit loop. While `tab_audit_log` (from MS-15) recor
 | `MOCA_SYSTEM_DESIGN.md` | §9.2 Metadata-Driven Rendering | 1509–1568 | FormView rendering, FieldRenderer, FIELD_TYPE_MAP |
 | `MOCA_SYSTEM_DESIGN.md` | §17.2 Desk Composition Model | 2134–2143 | Three-layer composition, `moca build desk`, app extensions |
 | `docs/moca-cross-doc-mismatch-report.md` | MISMATCH-019 | 663–690 | Redis DB 3 for pub/sub, channel pattern `pubsub:doc:{site}:...` |
-| `docs/moca-cross-doc-mismatch-report.md` | MISMATCH-025 | 874–907 | `@moca/desk` is workspace-local npm package |
+| `docs/moca-cross-doc-mismatch-report.md` | MISMATCH-025 | 874–907 | `@osama1998h/desk` is workspace-local npm package |
 | `docs/moca-cross-doc-mismatch-report.md` | MISMATCH-021 | 737–769 | "Desk Extension" terminology (not "plugin") |
 
 ## Research Notes
@@ -195,10 +195,10 @@ No external web research was needed. Key implementation decisions derived from c
 ### Task 3
 
 - **Task ID:** MS-19-T3
-- **Title:** Custom Field Type Registry & @moca/desk Package Structure
+- **Title:** Custom Field Type Registry & @osama1998h/desk Package Structure
 - **Status:** Completed
 - **Description:**
-  Enable apps to register custom field types that the Desk renders, and restructure the desk exports as a workspace-local `@moca/desk` npm package.
+  Enable apps to register custom field types that the Desk renders, and restructure the desk exports as a workspace-local `@osama1998h/desk` npm package.
 
   **1. Backend: Custom Field Type Support** (modify `pkg/meta/fielddef.go`):
   - Currently `FieldType.IsValid()` (line 102) checks against the hardcoded `ValidFieldTypes` map (lines 53–89). Unknown field types fail validation, preventing apps from defining custom types.
@@ -228,7 +228,7 @@ No external web research was needed. Key implementation decisions derived from c
     ```
   - This preserves autocomplete for built-in types while accepting any string for custom types.
 
-  **5. @moca/desk Barrel Export** (`desk/src/index.ts` — new file):
+  **5. @osama1998h/desk Barrel Export** (`desk/src/index.ts` — new file):
   - Re-export the public API for app desk extensions:
     ```typescript
     export { registerFieldType } from './lib/fieldTypeRegistry';
@@ -239,8 +239,8 @@ No external web research was needed. Key implementation decisions derived from c
     export { useMetaType } from './providers/MetaProvider';
     export { useDocument, useDocList } from './providers/DocProvider';
     ```
-  - Update `desk/package.json`: add `"name": "@moca/desk"`, add `"exports": { ".": "./src/index.ts" }`.
-  - Add a workspace root `package.json` (if not already present) with `"workspaces": ["desk"]` so that app directories can depend on `@moca/desk` as a workspace package.
+  - Update `desk/package.json`: add `"name": "@osama1998h/desk"`, add `"exports": { ".": "./src/index.ts" }`.
+  - Add a workspace root `package.json` (if not already present) with `"workspaces": ["desk"]` so that app directories can depend on `@osama1998h/desk` as a workspace package.
 
   **6. Build Pipeline Update** (modify `cmd/moca/build.go`):
   - Enhance `moca build desk` to discover app desk extensions:
@@ -249,7 +249,7 @@ No external web research was needed. Key implementation decisions derived from c
     - This ensures `registerFieldType()` calls execute before the React app mounts.
   - The existing `moca build desk` runs `npx vite build` — the enhancement adds the app discovery and entry generation step before the Vite build.
 
-- **Why this task exists:** Without `registerFieldType()`, the Desk is locked to 35 built-in field types. Apps cannot extend the UI, which breaks the three-layer composition model (§17.2). The `@moca/desk` package structure is the import contract that all app extensions depend on.
+- **Why this task exists:** Without `registerFieldType()`, the Desk is locked to 35 built-in field types. Apps cannot extend the UI, which breaks the three-layer composition model (§17.2). The `@osama1998h/desk` package structure is the import contract that all app extensions depend on.
 - **Dependencies:** None (independent of T1 and T2)
 - **Inputs / References:**
   - `MOCA_SYSTEM_DESIGN.md` §9.3 lines 1570–1580 (`registerFieldType` API)
@@ -261,15 +261,15 @@ No external web research was needed. Key implementation decisions derived from c
   - `desk/src/api/types.ts` lines 4–41 (`FieldType` union)
   - `desk/package.json` (current package config)
   - `cmd/moca/build.go` (existing `moca build desk` command)
-  - `docs/moca-cross-doc-mismatch-report.md` MISMATCH-025 lines 874–907 (`@moca/desk` workspace-local)
+  - `docs/moca-cross-doc-mismatch-report.md` MISMATCH-025 lines 874–907 (`@osama1998h/desk` workspace-local)
 - **Deliverable:**
   - Modified `pkg/meta/fielddef.go` — `RegisterCustomFieldType()`, updated `IsValid()`, `IsCustom()`
   - Modified `pkg/meta/columns.go` — custom type default to TEXT
   - `desk/src/lib/fieldTypeRegistry.ts` — runtime custom field type registry
   - Modified `desk/src/components/fields/FieldRenderer.tsx` — custom registry fallback
   - Modified `desk/src/api/types.ts` — widened `FieldType` union
-  - `desk/src/index.ts` — barrel export for `@moca/desk`
-  - Modified `desk/package.json` — renamed to `@moca/desk`, added exports
+  - `desk/src/index.ts` — barrel export for `@osama1998h/desk`
+  - Modified `desk/package.json` — renamed to `@osama1998h/desk`, added exports
   - Modified `cmd/moca/build.go` — app extension discovery
   - Tests: register custom field type, verify it renders in FieldRenderer; backend custom type validation
 - **Acceptance Criteria:**
@@ -277,7 +277,7 @@ No external web research was needed. Key implementation decisions derived from c
   - `FieldRenderer` renders the custom component when `field_type: "TreeSelect"` in field definition
   - Backend accepts MetaType definitions with custom field types (validation passes)
   - Custom field types get `TEXT` SQL columns
-  - `import { registerFieldType } from '@moca/desk'` resolves correctly in app extension files
+  - `import { registerFieldType } from '@osama1998h/desk'` resolves correctly in app extension files
   - `moca build desk` discovers and includes app desk extensions in the build
 - **Risks / Unknowns:**
   - App extension discovery at build time: apps must ship `.tsx` files found by `moca build desk`. The discovery convention (scanning for `desk/setup.ts` in app directories) needs to be documented.
@@ -385,13 +385,13 @@ No external web research was needed. Key implementation decisions derived from c
 ## Recommended Execution Order
 
 1. **MS-19-T1 and MS-19-T2 in parallel** — Both are independent backend tasks. T1 (WebSocket hub) and T2 (version tracking) have no code overlap. Running them in parallel cuts the critical path.
-2. **MS-19-T3 concurrently** — Custom field registry (backend + frontend) is independent of T1 and T2. The backend part (fielddef.go) is small. The frontend part (@moca/desk package) can start immediately.
+2. **MS-19-T3 concurrently** — Custom field registry (backend + frontend) is independent of T1 and T2. The backend part (fielddef.go) is small. The frontend part (@osama1998h/desk package) can start immediately.
 3. **MS-19-T4 last** — Depends on T1 (WebSocket endpoint) and T2 (version API). This is the integration task that ties everything together and delivers the user-visible features.
 
 ```
 Week 1-2:  T1 (WebSocket Hub)  ──────────────┐
            T2 (Version Tracking) ─────────────┤
-           T3 (Custom Fields + @moca/desk) ───┤
+           T3 (Custom Fields + @osama1998h/desk) ───┤
                                               ▼
 Week 3:    T4 (Real-Time UI + Version History)
 ```

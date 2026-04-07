@@ -144,7 +144,7 @@ jobs:
           retention-days: 1
 
   desk-nightly:
-    name: Publish @moca/desk Nightly
+    name: Publish @osama1998h/desk Nightly
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -175,7 +175,7 @@ jobs:
         run: |
           NIGHTLY_VERSION="0.0.0-nightly.$(date -u +'%Y%m%d')"
           npm version "$NIGHTLY_VERSION" --no-git-tag-version --allow-same-version
-          echo "Publishing @moca/desk@${NIGHTLY_VERSION}"
+          echo "Publishing @osama1998h/desk@${NIGHTLY_VERSION}"
         working-directory: desk
 
       - name: Publish to GitHub Packages

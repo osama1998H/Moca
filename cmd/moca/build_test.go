@@ -218,9 +218,9 @@ func TestBuildExtensionContent_ManifestAllTypes(t *testing.T) {
 
 	content := buildExtensionContent(sources, "/project/desk")
 
-	// Should have the @moca/desk import with all 4 registration functions.
-	if !strings.Contains(content, `import { registerFieldType, registerPage, registerSidebarItem, registerDashboardWidget } from "@moca/desk"`) {
-		t.Error("missing @moca/desk import header")
+	// Should have the @osama1998h/desk import with all 4 registration functions.
+	if !strings.Contains(content, `import { registerFieldType, registerPage, registerSidebarItem, registerDashboardWidget } from "@osama1998h/desk"`) {
+		t.Error("missing @osama1998h/desk import header")
 	}
 
 	// Field type registration.
@@ -260,9 +260,9 @@ func TestBuildExtensionContent_LegacyFallback(t *testing.T) {
 	if !strings.Contains(content, `import "../apps/legacy_app/desk/setup"`) {
 		t.Error("missing legacy bare import")
 	}
-	// Should NOT have @moca/desk import header for legacy-only.
-	if strings.Contains(content, `from "@moca/desk"`) {
-		t.Error("unexpected @moca/desk import for legacy-only sources")
+	// Should NOT have @osama1998h/desk import header for legacy-only.
+	if strings.Contains(content, `from "@osama1998h/desk"`) {
+		t.Error("unexpected @osama1998h/desk import for legacy-only sources")
 	}
 }
 

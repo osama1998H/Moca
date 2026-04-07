@@ -14,18 +14,18 @@ type DeskScaffoldOptions struct {
 	// ProjectName is the project identifier used in package.json (e.g. "my-erp").
 	ProjectName string
 
-	// MocaDeskVersion is the semantic version of @moca/desk (e.g. "0.1.0").
+	// MocaDeskVersion is the semantic version of @osama1998h/desk (e.g. "0.1.0").
 	// Used only for display/comments; the actual dependency spec is MocaDeskSpec.
 	MocaDeskVersion string
 
-	// MocaDeskSpec is the npm dependency specifier for @moca/desk.
+	// MocaDeskSpec is the npm dependency specifier for @osama1998h/desk.
 	// Examples: "^0.1.0", "file:../../desk".
 	// Defaults to "^{MocaDeskVersion}" if empty.
 	MocaDeskSpec string
 }
 
 // ScaffoldDesk creates a thin desk/ directory inside the project root with all
-// files needed to consume the @moca/desk npm package. The scaffolded project
+// files needed to consume the @osama1998h/desk npm package. The scaffolded project
 // includes package.json, Vite config, TypeScript config, a minimal main.tsx
 // entry point, and an overrides directory for project-level customizations.
 func ScaffoldDesk(opts DeskScaffoldOptions) error {

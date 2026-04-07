@@ -121,8 +121,8 @@ func runDeskInstall(cmd *cobra.Command, _ []string) error {
 func newDeskUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
-		Short: "Update @moca/desk to latest compatible version",
-		Long: `Update the @moca/desk package to the latest compatible version
+		Short: "Update @osama1998h/desk to latest compatible version",
+		Long: `Update the @osama1998h/desk package to the latest compatible version
 and regenerate desk extension imports.`,
 		RunE: runDeskUpdate,
 	}
@@ -148,8 +148,8 @@ func runDeskUpdate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// Update @moca/desk package.
-	npmCmd := exec.Command("npm", "update", "@moca/desk")
+	// Update @osama1998h/desk package.
+	npmCmd := exec.Command("npm", "update", "@osama1998h/desk")
 	npmCmd.Dir = deskDir
 
 	if verbose {
@@ -157,7 +157,7 @@ func runDeskUpdate(cmd *cobra.Command, _ []string) error {
 		npmCmd.Stderr = os.Stderr
 	}
 
-	s := w.NewSpinner("Updating @moca/desk...")
+	s := w.NewSpinner("Updating @osama1998h/desk...")
 	if !verbose {
 		s.Start()
 	}
@@ -186,7 +186,7 @@ func runDeskUpdate(cmd *cobra.Command, _ []string) error {
 		return extErr
 	}
 
-	w.PrintSuccess("@moca/desk updated and extensions regenerated")
+	w.PrintSuccess("@osama1998h/desk updated and extensions regenerated")
 	return nil
 }
 

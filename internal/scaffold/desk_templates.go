@@ -17,7 +17,7 @@ const deskPackageJSONTmpl = `{
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@moca/desk": "{{.MocaDeskSpec}}",
+    "@osama1998h/desk": "{{.MocaDeskSpec}}",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -48,7 +48,7 @@ const deskIndexHTMLTmpl = `<!doctype html>
 `
 
 const deskViteConfigTmpl = `import { defineConfig } from "vite";
-import { mocaDeskPlugin } from "@moca/desk/vite";
+import { mocaDeskPlugin } from "@osama1998h/desk/vite";
 
 export default defineConfig({
   plugins: [mocaDeskPlugin()],
@@ -108,7 +108,7 @@ const deskTsconfigNodeTmpl = `{
 }
 `
 
-const deskMainTsxTmpl = `import { createDeskApp } from "@moca/desk";
+const deskMainTsxTmpl = `import { createDeskApp } from "@osama1998h/desk";
 import "../.moca-extensions";
 import "./overrides";
 
@@ -127,7 +127,7 @@ const deskOverridesIndexTmpl = `// Project-level overrides for Moca Desk.
 // These run after app extensions and can override any framework default.
 //
 // Example:
-//   import { registerFieldType } from "@moca/desk";
+//   import { registerFieldType } from "@osama1998h/desk";
 //   import MyCustomField from "./MyCustomField";
 //   registerFieldType("MyCustom", MyCustomField);
 
@@ -138,7 +138,7 @@ const deskOverridesThemeTmpl = `// Theme and branding overrides for this project
 // Customize colors, logo, and other visual settings here.
 //
 // Example:
-//   import { createDeskApp } from "@moca/desk";
+//   import { createDeskApp } from "@osama1998h/desk";
 //   // Pass theme overrides to createDeskApp() in main.tsx:
 //   // createDeskApp({ theme: { primaryColor: "#1a73e8" } })
 

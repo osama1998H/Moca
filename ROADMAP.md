@@ -936,7 +936,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 - **Goal:** Build the React Desk app shell, providers (Meta, Doc, Auth), metadata-driven FormView and ListView, and the field type component library. First time users see the Desk UI.
 - **Why now:** REST API (MS-06) and auth (MS-14) are ready. Frontend can now consume metadata and render dynamic forms.
 - **Scope:**
-  - IN: `desk/` React 19 + TypeScript + Vite, `@moca/desk` npm package distribution (ADR-007), App shell (sidebar, breadcrumbs, search), providers (Meta, Doc, Auth), FormView (metadata-driven), ListView (filters, pagination), FieldRenderer for 20+ field types, `moca build desk`, dev HMR proxy, app desk extension system.
+  - IN: `desk/` React 19 + TypeScript + Vite, `@osama1998h/desk` npm package distribution (ADR-007), App shell (sidebar, breadcrumbs, search), providers (Meta, Doc, Auth), FormView (metadata-driven), ListView (filters, pagination), FieldRenderer for 20+ field types, `moca build desk`, dev HMR proxy, app desk extension system.
   - OUT: No WebSocket real-time (MS-19), no custom field registry (MS-19), no Dashboard/Report views (MS-20), no Portal/SSR (MS-27), no i18n (MS-20).
 - **Deliverables:**
   1. Vite project: React 19, TypeScript, TailwindCSS
@@ -949,7 +949,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
   8. Field components: Data, Text, Int, Float, Currency, Date, Datetime, Select, Link (autocomplete), Checkbox, Attach, CodeEditor, Markdown, JSON, ChildTable (inline editable)
   9. `moca build desk`: Runs Vite production build
   10. Dev mode: `moca serve` proxies `/desk` to Vite dev server for HMR
-  11. `@moca/desk` npm package: published to GitHub Packages on `v*` tags, version-synced with Go releases (ADR-007 Phase 4)
+  11. `@osama1998h/desk` npm package: published to GitHub Packages on `v*` tags, version-synced with Go releases (ADR-007 Phase 4)
   12. Compatibility matrix: `docs/desk-compatibility.md`
 - **Acceptance Criteria:**
   - `moca build desk` produces optimized bundle in `desk/dist/`
@@ -958,7 +958,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
   - ListView shows data from API; clicking document opens FormView
   - Editing, saving triggers PUT; creating new document triggers POST
   - LinkField shows autocomplete; ChildTableField renders inline rows
-  - `@moca/desk` is published to GitHub Packages on release
+  - `@osama1998h/desk` is published to GitHub Packages on release
   - `moca init` + `npm install` in scaffolded `desk/` produces a working dev environment
 - **Dependencies:** MS-06, MS-14
 - **Risks:**
@@ -1030,7 +1030,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
   2. Desk `WebSocketProvider`: auto-reconnecting client, event dispatch
   3. Real-time: other user saves -> open FormViews auto-refresh with diff notification
   4. `registerFieldType()` API for app extensions
-  5. `@moca/desk` workspace-local npm package structure
+  5. `@osama1998h/desk` workspace-local npm package structure
   6. Version tracking: field-level diff on save -> `tab_version` entry
   7. FormView version history sidebar
 - **Acceptance Criteria:**

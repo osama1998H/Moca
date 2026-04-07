@@ -68,7 +68,7 @@ And `moca build desk` already generates `.moca-extensions.ts` from discovered ap
 
 2. **`.moca-extensions.ts`** — Auto-generated import manifest. `moca build desk` scans apps for desk extensions and writes this file. Currently produces "No app desk extensions discovered" but the mechanism exists.
 
-3. **`Architecture.md`** already states the intended three-layer composition model: *"The build composes three layers: framework desk (`@moca/desk`), app desk extensions, and optional project-level overrides."*
+3. **`Architecture.md`** already states the intended three-layer composition model: *"The build composes three layers: framework desk (`@osama1998h/desk`), app desk extensions, and optional project-level overrides."*
 
 4. **`DevelopmentConfig`** already has `desk_port` and `desk_dev_server` fields.
 
@@ -78,7 +78,7 @@ And `moca build desk` already generates `.moca-extensions.ts` from discovered ap
 
 ## Decision
 
-Distribute the Moca Desk as an **npm package (`@moca/desk`)** with a **thin project-level scaffold** created by `moca init`, and implement a **build-time plugin system** for app desk extensions.
+Distribute the Moca Desk as an **npm package (`@osama1998h/desk`)** with a **thin project-level scaffold** created by `moca init`, and implement a **build-time plugin system** for app desk extensions.
 
 ---
 
@@ -97,16 +97,16 @@ Distribute the Moca Desk as an **npm package (`@moca/desk`)** with a **thin proj
 
 **How it works:**
 
-1. The Moca team publishes `@moca/desk` to npm (or a private registry). This package contains the core desk application: shell, providers, field components, pages, public API.
+1. The Moca team publishes `@osama1998h/desk` to npm (or a private registry). This package contains the core desk application: shell, providers, field components, pages, public API.
 
 2. `moca init` scaffolds a thin `desk/` directory in the project:
    ```
    my-project/desk/
-   ├── package.json          ← depends on @moca/desk
-   ├── vite.config.ts        ← pre-configured, imports @moca/desk/vite
+   ├── package.json          ← depends on @osama1998h/desk
+   ├── vite.config.ts        ← pre-configured, imports @osama1998h/desk/vite
    ├── index.html            ← entry point, loads main.tsx
    ├── src/
-   │   ├── main.tsx          ← imports createDeskApp() from @moca/desk
+   │   ├── main.tsx          ← imports createDeskApp() from @osama1998h/desk
    │   └── overrides/        ← project-level customizations (empty initially)
    ├── tsconfig.json
    └── .gitignore
@@ -114,7 +114,7 @@ Distribute the Moca Desk as an **npm package (`@moca/desk`)** with a **thin proj
 
 3. The project's `main.tsx` is ~10 lines:
    ```tsx
-   import { createDeskApp } from "@moca/desk";
+   import { createDeskApp } from "@osama1998h/desk";
    import "./overrides"; // project-level customizations
 
    createDeskApp({
@@ -122,7 +122,7 @@ Distribute the Moca Desk as an **npm package (`@moca/desk`)** with a **thin proj
    }).mount("#root");
    ```
 
-4. Updates: `npm update @moca/desk` or `moca desk update`. SemVer ensures breaking changes are explicit. Project files in `src/overrides/` are never touched.
+4. Updates: `npm update @osama1998h/desk` or `moca desk update`. SemVer ensures breaking changes are explicit. Project files in `src/overrides/` are never touched.
 
 5. App extensions: Each Moca app can have a `desk/` directory with a `desk-manifest.json` declaring custom field types, pages, sidebar items. `moca build desk` discovers these and generates `.moca-extensions.ts`.
 
@@ -246,13 +246,13 @@ Make the desk source code part of `apps/core/desk/`. When `moca init` clones/ins
 
 ## Detailed Design: Option A
 
-### 1. Package Structure — `@moca/desk`
+### 1. Package Structure — `@osama1998h/desk`
 
 The current `desk/` directory in the framework repo becomes the source for the npm package:
 
 ```
 desk/                              ← framework repo (source of truth)
-├── package.json                   ← name: "@moca/desk"
+├── package.json                   ← name: "@osama1998h/desk"
 ├── src/
 │   ├── index.ts                   ← public API (already exists)
 │   ├── app.ts                     ← NEW: createDeskApp() factory
@@ -344,7 +344,7 @@ my-project/
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@moca/desk": "^0.1.0"
+    "@osama1998h/desk": "^0.1.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
@@ -358,7 +358,7 @@ my-project/
 **Scaffolded `desk/src/main.tsx`:**
 
 ```tsx
-import { createDeskApp } from "@moca/desk";
+import { createDeskApp } from "@osama1998h/desk";
 import "./overrides";
 
 const app = createDeskApp({
@@ -375,7 +375,7 @@ app.mount("#root");
 
 ```typescript
 import { defineConfig } from "vite";
-import { mocaDeskPlugin } from "@moca/desk/vite";
+import { mocaDeskPlugin } from "@osama1998h/desk/vite";
 
 export default defineConfig({
   plugins: [mocaDeskPlugin()],
@@ -453,7 +453,7 @@ apps/
 3. Generate `.moca-extensions.ts`:
    ```typescript
    // Auto-generated by 'moca build desk'. Do not edit.
-   import { registerFieldType, registerPage, registerSidebarItem } from "@moca/desk";
+   import { registerFieldType, registerPage, registerSidebarItem } from "@osama1998h/desk";
 
    // === crm app extensions ===
    import CrmPhoneField from "../apps/crm/desk/fields/PhoneField";
@@ -489,7 +489,7 @@ apps/
 │  dashboard widgets per-app                      │
 │  ↓ MEDIUM PRIORITY                              │
 ├─────────────────────────────────────────────────┤
-│  Layer 1: @moca/desk (npm package)              │
+│  Layer 1: @osama1998h/desk (npm package)              │
 │  Core shell, providers, standard fields,        │
 │  FormView, ListView, routing, API client        │
 │  ↓ LOWEST PRIORITY (framework defaults)         │
@@ -502,11 +502,11 @@ apps/
 Developer wants to update desk:
 
 1. cd my-project/desk
-2. npm update @moca/desk        # or: moca desk update
+2. npm update @osama1998h/desk        # or: moca desk update
 3. npm run build                # or: moca build desk
 
 What happens:
-- node_modules/@moca/desk/ gets updated (SemVer)
+- node_modules/@osama1998h/desk/ gets updated (SemVer)
 - desk/src/main.tsx         → UNTOUCHED (developer's file)
 - desk/src/overrides/       → UNTOUCHED (developer's files)
 - apps/*/desk/              → UNTOUCHED (app extension files)
@@ -515,7 +515,7 @@ What happens:
 
 Breaking changes:
 - Major version bump (1.x → 2.x) = migration guide published
-- @moca/desk follows React ecosystem SemVer conventions
+- @osama1998h/desk follows React ecosystem SemVer conventions
 - Public API (index.ts exports) covered by SemVer guarantees
 ```
 
@@ -523,9 +523,9 @@ Breaking changes:
 
 | Command | Description |
 |---------|-------------|
-| `moca init` | Scaffolds project **including** `desk/` with `package.json` depending on `@moca/desk` |
+| `moca init` | Scaffolds project **including** `desk/` with `package.json` depending on `@osama1998h/desk` |
 | `moca desk install` | Runs `npm install` in `desk/` directory (convenience wrapper) |
-| `moca desk update` | Runs `npm update @moca/desk` + regenerates extensions + rebuilds |
+| `moca desk update` | Runs `npm update @osama1998h/desk` + regenerates extensions + rebuilds |
 | `moca desk dev` | Starts Vite dev server (port 3000) for desk development |
 | `moca build desk` | Discovers app extensions → generates `.moca-extensions.ts` → runs Vite production build |
 | `moca serve` | Serves built desk from `desk/dist/` (prod) or proxies to Vite (dev) — **unchanged** |
@@ -571,7 +571,7 @@ cat > desk/package.json << 'EOF'
   "name": "demo-desk",
   "private": true,
   "dependencies": {
-    "@moca/desk": "file:../../desk"
+    "@osama1998h/desk": "file:../../desk"
   }
 }
 EOF
@@ -597,7 +597,7 @@ This section catalogs every file in the existing codebase — both frontend (des
 | `cmd/moca/build.go` | Update `generateDeskExtensions()` (lines 347-398) | Currently looks for `desk/setup.ts` in apps; must also handle `desk-manifest.json` schema and generate richer `.moca-extensions.ts` with page/sidebar/widget registrations |
 | `cmd/moca/serve.go` | Update `StaticDir` resolution (line 81) | Path `filepath.Join(projectRoot, "desk", "dist")` remains the same, but init must guarantee this path exists |
 | `internal/serve/server.go` | Minor — add fallback/error for missing desk/dist | Lines 217-225: if neither `DeskDevServer` nor `desk/dist/` exists, serve a helpful "desk not built" page instead of 404 |
-| `internal/config/types.go` | Add new config fields | Lines 122-124: add `DeskPackage string` (default `@moca/desk`), `DeskAutoInstall bool` to `DevelopmentConfig` |
+| `internal/config/types.go` | Add new config fields | Lines 122-124: add `DeskPackage string` (default `@osama1998h/desk`), `DeskAutoInstall bool` to `DevelopmentConfig` |
 | `internal/config/validate.go` | Validate new fields | Add validation for `DeskPackage` format |
 | `internal/config/merge.go` | Merge new fields | Lines 144-145: add merge logic for new desk config fields |
 
@@ -641,7 +641,7 @@ This section catalogs every file in the existing codebase — both frontend (des
 | `desk/src/main.tsx` | Directly creates providers, QueryClient, renders `<App/>` (40 lines) | Becomes the `createDeskApp()` factory inside the package; project's `main.tsx` becomes a thin 10-line consumer |
 | `desk/src/index.ts` | Exports 15 items (field registry, hooks, types, components) | Expand to export `createDeskApp`, `mocaDeskPlugin`, `DeskConfig`, page/sidebar/widget registries |
 | `desk/vite.config.ts` | Hardcodes `base: "/desk/"`, proxy targets `http://localhost:8000` | Extract shared config into `mocaDeskPlugin()` Vite plugin; proxy targets become configurable |
-| `desk/package.json` | `name: "desk"`, all deps as `dependencies` | Change to `name: "@moca/desk"`, move `react`/`react-dom` to `peerDependencies`, add `exports` field and library build config |
+| `desk/package.json` | `name: "desk"`, all deps as `dependencies` | Change to `name: "@osama1998h/desk"`, move `react`/`react-dom` to `peerDependencies`, add `exports` field and library build config |
 
 #### New Files to Create (3 files)
 
@@ -677,7 +677,7 @@ The vast majority of desk source files require **zero modifications**:
 
 | File | Change |
 |------|--------|
-| `MOCA_CLI_SYSTEM_DESIGN.md` | Section 3 (Project Structure): update to show `desk/` with `@moca/desk` dependency; add `moca desk` command group to command tree |
+| `MOCA_CLI_SYSTEM_DESIGN.md` | Section 3 (Project Structure): update to show `desk/` with `@osama1998h/desk` dependency; add `moca desk` command group to command tree |
 | `MOCA_SYSTEM_DESIGN.md` | Section 15 (Framework Package Layout): add desk package structure; frontend architecture notes |
 | `Architecture.md` | "Frontend Architecture" section: expand three-layer composition model with concrete examples |
 | `ROADMAP.md` | Note desk distribution as part of current milestone work |
@@ -718,12 +718,12 @@ The change is **surgically targeted**: 78% of the frontend codebase (140+ files)
 - **Release coordination** — npm package version must be released alongside Go module versions; need CI automation
 - **Monorepo management** — framework repo now publishes both Go modules and an npm package; may need a release workflow for `desk/`
 - **First-time setup** — developers need Node.js installed for desk development (but NOT for production deployment)
-- **Version matrix** — `@moca/desk@0.2.0` must be compatible with `moca-server@0.2.x`; need compatibility table
+- **Version matrix** — `@osama1998h/desk@0.2.0` must be compatible with `moca-server@0.2.x`; need compatibility table
 
 ### What We'll Revisit
 
 - **Desk extension hot reload** — currently `moca build desk` must be re-run when app extensions change; Vite plugin could watch `apps/*/desk/` for changes
-- **Server-side rendering (SSR)** — MS-27 (Portal) may need `@moca/desk` to support SSR; the `createDeskApp()` factory should be designed with this in mind
+- **Server-side rendering (SSR)** — MS-27 (Portal) may need `@osama1998h/desk` to support SSR; the `createDeskApp()` factory should be designed with this in mind
 - **Micro-frontends** — if Moca needs per-app code splitting at scale, we may evolve toward Module Federation
 - **Visual theme editor** — a future desk feature could generate `overrides/theme.ts` via a UI, reducing the need for manual editing
 
@@ -733,7 +733,7 @@ The change is **surgically targeted**: 78% of the frontend codebase (140+ files)
 
 ### Phase 1: Package Extraction (1-2 weeks)
 
-**Goal:** Extract `@moca/desk` as a publishable npm package from the existing `desk/` code.
+**Goal:** Extract `@osama1998h/desk` as a publishable npm package from the existing `desk/` code.
 
 1. [x] Create `createDeskApp()` factory function in `desk/src/createApp.tsx`
    - Accepts config (theme, locale, extensions)
@@ -751,7 +751,7 @@ The change is **surgically targeted**: 78% of the frontend codebase (140+ files)
    - Export all types needed by app extensions
 
 4. [x] Configure `desk/package.json` for npm publishing
-   - Set `name: "@moca/desk"`, configure `exports`, `types`, `files`
+   - Set `name: "@osama1998h/desk"`, configure `exports`, `types`, `files`
    - Move react/react-dom to peerDependencies
    - Add `./vite` export entry for Vite plugin
 
@@ -802,7 +802,7 @@ The change is **surgically targeted**: 78% of the frontend codebase (140+ files)
     - Generate `.moca-extensions.ts` with proper imports and registrations
     - Handle TypeScript compilation of app extension files
 
-12. [x] Implement registration registries in `@moca/desk`
+12. [x] Implement registration registries in `@osama1998h/desk`
     - `pageRegistry` — custom route registration
     - `sidebarRegistry` — sidebar item injection
     - `widgetRegistry` — dashboard widget registration
@@ -816,15 +816,15 @@ The change is **surgically targeted**: 78% of the frontend codebase (140+ files)
 
 ### Phase 4: CI/CD & Publishing (1 week)
 
-**Goal:** Automated publishing of `@moca/desk` alongside Go releases.
+**Goal:** Automated publishing of `@osama1998h/desk` alongside Go releases.
 
 15. [x] Add npm publish step to `.github/workflows/release.yml`
-    - On `v*` tag: build `@moca/desk` → publish to GitHub Packages
+    - On `v*` tag: build `@osama1998h/desk` → publish to GitHub Packages
     - Version synced with Go release tags
     - Frontend validation (typecheck + build) in both `ci.yml` and `release.yml`
 
 16. [x] Add compatibility matrix documentation
-    - `@moca/desk@0.x` ↔ `moca-server@0.x` compatibility table
+    - `@osama1998h/desk@0.x` ↔ `moca-server@0.x` compatibility table
     - Located at `docs/desk-compatibility.md`
 
 17. [x] Update `ROADMAP.md` to reflect desk distribution changes
@@ -836,7 +836,7 @@ The change is **surgically targeted**: 78% of the frontend codebase (140+ files)
 
 **Goal:** Migrate existing projects and document everything.
 
-19. [x] Migrate `demo/` project to use `@moca/desk` package
+19. [x] Migrate `demo/` project to use `@osama1998h/desk` package
 20. [x] Write developer documentation: "Getting Started with Moca Desk"
 21. [x] Write guide: "Creating Desk Extensions for Your Moca App"
 22. [x] Write guide: "Customizing Your Project's Desk Theme"
@@ -847,11 +847,11 @@ The change is **surgically targeted**: 78% of the frontend codebase (140+ files)
 
 ## Open Questions
 
-1. **Package scope:** Should we use `@moca/desk` (scoped) or `moca-desk` (unscoped)? Scoped is cleaner and leaves room for `@moca/cli`, `@moca/sdk`, etc.
+1. **Package scope:** Should we use `@osama1998h/desk` (scoped) or `moca-desk` (unscoped)? Scoped is cleaner and leaves room for `@moca/cli`, `@moca/sdk`, etc.
 
 2. **Monorepo tooling:** Should we adopt a monorepo tool (Turborepo, Nx) to manage the Go framework + npm package in one repo? Or keep it simple with a Makefile target?
 
-3. **Version coupling:** Should `@moca/desk` version exactly match the Go module version, or can they diverge? Exact matching is simpler but means a desk-only fix forces a full release.
+3. **Version coupling:** Should `@osama1998h/desk` version exactly match the Go module version, or can they diverge? Exact matching is simpler but means a desk-only fix forces a full release.
 
 4. **CDN option for production:** Should `moca deploy` support uploading `desk/dist/` to a CDN (CloudFront, Cloudflare R2) instead of serving from the Go process? This is a performance optimization for later.
 
@@ -860,7 +860,7 @@ The change is **surgically targeted**: 78% of the frontend codebase (140+ files)
 ## Action Items
 
 1. [ ] **Immediate:** Fix demo project with `file:` protocol link (unblocks development today)
-2. [ ] **This sprint:** Phase 1 — extract `@moca/desk` package with `createDeskApp()` factory
+2. [ ] **This sprint:** Phase 1 — extract `@osama1998h/desk` package with `createDeskApp()` factory
 3. [ ] **Next sprint:** Phase 2 — scaffold integration into `moca init`
 4. [ ] **Following sprint:** Phase 3 — app extension system
 5. [ ] **Before v1.0:** Phase 4 + 5 — CI/CD publishing and documentation

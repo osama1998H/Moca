@@ -14,7 +14,7 @@ Moca Desk uses a three-layer composition model. Project-level customizations are
 │  apps/*/desk/ (discovered by moca build desk)   │
 │  Custom field types, pages, sidebar items       │
 ├─────────────────────────────────────────────────┤
-│  Layer 1: @moca/desk (npm package)              │
+│  Layer 1: @osama1998h/desk (npm package)              │
 │  Core shell, providers, standard fields,        │
 │  FormView, ListView, routing, API client        │
 └─────────────────────────────────────────────────┘
@@ -37,7 +37,7 @@ desk/src/overrides/
 This file is imported by `main.tsx` as a side-effect. Register custom field types, pages, or sidebar items here:
 
 ```typescript
-import { registerFieldType, registerSidebarItem } from "@moca/desk";
+import { registerFieldType, registerSidebarItem } from "@osama1998h/desk";
 import BrandedCurrencyField from "./BrandedCurrencyField";
 
 // Override the default currency field with project-specific formatting
@@ -65,7 +65,7 @@ The `createDeskApp()` factory accepts a configuration object:
 
 ```tsx
 // desk/src/main.tsx
-import { createDeskApp } from "@moca/desk";
+import { createDeskApp } from "@osama1998h/desk";
 import "../.moca-extensions";
 import "./overrides";
 
@@ -129,7 +129,7 @@ Register project-specific field components that match your brand:
 
 ```tsx
 // desk/src/overrides/BrandedCurrencyField.tsx
-import type { FieldProps } from "@moca/desk";
+import type { FieldProps } from "@osama1998h/desk";
 
 export default function BrandedCurrencyField({ value, onChange, readOnly }: FieldProps) {
   const formatted = new Intl.NumberFormat("en-US", {
@@ -176,7 +176,7 @@ The `mocaDeskPlugin()` accepts options to override defaults:
 ```typescript
 // desk/vite.config.ts
 import { defineConfig } from "vite";
-import { mocaDeskPlugin } from "@moca/desk/vite";
+import { mocaDeskPlugin } from "@osama1998h/desk/vite";
 
 export default defineConfig({
   plugins: [

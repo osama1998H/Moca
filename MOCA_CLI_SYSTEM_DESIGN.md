@@ -188,9 +188,9 @@ my-project/                          ← project root
 │   └── moca-scheduler.log
 ├── storage/                         ← local file storage (dev mode)
 ├── desk/                            ← React frontend (scaffolded by moca init)
-│   ├── package.json                 ← depends on @moca/desk (GitHub Packages)
+│   ├── package.json                 ← depends on @osama1998h/desk (GitHub Packages)
 │   ├── index.html                   ← SPA entry point
-│   ├── vite.config.ts               ← uses mocaDeskPlugin() from @moca/desk/vite
+│   ├── vite.config.ts               ← uses mocaDeskPlugin() from @osama1998h/desk/vite
 │   ├── tsconfig.json                ← composite project references
 │   ├── tsconfig.app.json            ← React app config (includes .moca-extensions.ts)
 │   ├── tsconfig.node.json           ← Node build tools config
@@ -491,7 +491,7 @@ moca
 │
 ├── desk                              # Desk frontend management
 │   ├── install                       # Install desk npm dependencies
-│   ├── update                        # Update @moca/desk + regenerate extensions
+│   ├── update                        # Update @osama1998h/desk + regenerate extensions
 │   └── dev                           # Start Vite dev server for desk development
 │
 ├── user                              # User management
@@ -2271,13 +2271,13 @@ node_modules size.
 ```
 Usage: moca desk update [flags]
 
-Update @moca/desk to the latest compatible version and regenerate
+Update @osama1998h/desk to the latest compatible version and regenerate
 desk extension imports.
 
 Flags:
   --verbose           Show npm output
 
-Runs 'npm update @moca/desk' in desk/, then regenerates
+Runs 'npm update @osama1998h/desk' in desk/, then regenerates
 .moca-extensions.ts from all discovered app desk manifests.
 ```
 

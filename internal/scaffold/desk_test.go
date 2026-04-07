@@ -67,7 +67,7 @@ func TestScaffoldDesk_PackageJSONContent(t *testing.T) {
 	}{
 		{"project name", `"name": "my-erp-desk"`},
 		{"private flag", `"private": true`},
-		{"moca desk dep", `"@moca/desk": "^0.1.0"`},
+		{"moca desk dep", `"@osama1998h/desk": "^0.1.0"`},
 		{"react dep", `"react": "^19.0.0"`},
 		{"react-dom dep", `"react-dom": "^19.0.0"`},
 		{"vite dev dep", `"vite": "^8.0.0"`},
@@ -98,7 +98,7 @@ func TestScaffoldDesk_FileProtocolSpec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read package.json: %v", err)
 	}
-	if !strings.Contains(string(data), `"@moca/desk": "file:../../desk"`) {
+	if !strings.Contains(string(data), `"@osama1998h/desk": "file:../../desk"`) {
 		t.Error("package.json should use file: protocol spec")
 	}
 }
@@ -120,8 +120,8 @@ func TestScaffoldDesk_MainTsxContent(t *testing.T) {
 	}
 	content := string(data)
 
-	if !strings.Contains(content, `from "@moca/desk"`) {
-		t.Error("main.tsx should import from @moca/desk")
+	if !strings.Contains(content, `from "@osama1998h/desk"`) {
+		t.Error("main.tsx should import from @osama1998h/desk")
 	}
 	if !strings.Contains(content, "createDeskApp") {
 		t.Error("main.tsx should use createDeskApp")
@@ -151,8 +151,8 @@ func TestScaffoldDesk_ViteConfigContent(t *testing.T) {
 	}
 	content := string(data)
 
-	if !strings.Contains(content, `from "@moca/desk/vite"`) {
-		t.Error("vite.config.ts should import from @moca/desk/vite")
+	if !strings.Contains(content, `from "@osama1998h/desk/vite"`) {
+		t.Error("vite.config.ts should import from @osama1998h/desk/vite")
 	}
 	if !strings.Contains(content, "mocaDeskPlugin") {
 		t.Error("vite.config.ts should use mocaDeskPlugin")
@@ -196,7 +196,7 @@ func TestScaffoldDesk_DefaultSpec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read package.json: %v", err)
 	}
-	if !strings.Contains(string(data), `"@moca/desk": "^0.2.0"`) {
+	if !strings.Contains(string(data), `"@osama1998h/desk": "^0.2.0"`) {
 		t.Error("package.json should default spec to ^{version}")
 	}
 }

@@ -464,7 +464,7 @@ func buildExtensionContent(sources []extensionSource, deskDir string) string {
 				funcs = append(funcs, fn)
 			}
 		}
-		fmt.Fprintf(&buf, "import { %s } from \"@moca/desk\";\n", strings.Join(funcs, ", "))
+		fmt.Fprintf(&buf, "import { %s } from \"@osama1998h/desk\";\n", strings.Join(funcs, ", "))
 	}
 
 	for _, src := range sources {
