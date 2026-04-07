@@ -48,12 +48,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: 'desk/package-lock.json'
           registry-url: 'https://npm.pkg.github.com'
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
         working-directory: desk
 
       - name: Typecheck
@@ -83,12 +81,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: 'desk/package-lock.json'
           registry-url: 'https://npm.pkg.github.com'
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
         working-directory: desk
 
       - name: Sync version from Git tag
