@@ -56,6 +56,14 @@ curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | M
 
 Or download directly from the [nightly release](https://github.com/osama1998H/moca/releases/tag/nightly).
 
+#### Nightly Desk Frontend
+
+The desk React frontend (`@osama1998h/desk`) is also published nightly to GitHub Packages:
+
+```bash
+npm install @osama1998h/desk@nightly --registry=https://npm.pkg.github.com
+```
+
 ### From Source
 
 ```bash

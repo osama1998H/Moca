@@ -73,6 +73,7 @@ func ScaffoldDesk(opts DeskScaffoldOptions) error {
 		{filepath.Join("src", "overrides", "index.ts"), deskOverridesIndexTmpl},
 		{filepath.Join("src", "overrides", "theme.ts"), deskOverridesThemeTmpl},
 		{".gitignore", deskGitignoreTmpl},
+		{".npmrc", deskNpmrcTmpl},
 		{".moca-extensions.ts", deskExtensionsStubTmpl},
 	}
 

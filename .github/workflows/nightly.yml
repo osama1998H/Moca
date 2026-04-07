@@ -171,6 +171,10 @@ jobs:
         run: npm run build
         working-directory: desk
 
+      - name: Build library
+        run: npm run build:lib
+        working-directory: desk
+
       - name: Set nightly version
         run: |
           NIGHTLY_VERSION="0.0.0-nightly.$(date -u +'%Y%m%d')"
