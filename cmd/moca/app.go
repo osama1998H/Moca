@@ -14,6 +14,13 @@ import (
 	"github.com/osama1998H/moca/internal/scaffold"
 	"github.com/osama1998H/moca/pkg/apps"
 	"github.com/spf13/cobra"
+	"golang.org/x/mod/modfile"
+)
+
+const (
+	frameworkModulePath       = "github.com/osama1998H/moca"
+	localFrameworkVersion     = "v0.0.0"
+	localFrameworkReplacePath = "../.."
 )
 
 // NewAppCommand returns the "moca app" command group with all subcommands.
@@ -102,18 +109,24 @@ func runAppNew(cmd *cobra.Command, args []string) error {
 	}
 
 	appsDir := filepath.Join(ctx.ProjectRoot, "apps")
+	frameworkVersion, frameworkReplacePath, err := resolveAppNewFrameworkDependency(ctx.ProjectRoot, Version)
+	if err != nil {
+		return err
+	}
 
 	opts := scaffold.ScaffoldOptions{
-		AppName:     appName,
-		AppsDir:     appsDir,
-		ProjectRoot: ctx.ProjectRoot,
-		ModuleName:  moduleName,
-		Title:       title,
-		Publisher:   publisher,
-		License:     license,
-		DocType:     doctype,
-		Template:    scaffold.Template(tmpl),
-		IncludeDesk: includeDesk,
+		AppName:                appName,
+		AppsDir:                appsDir,
+		ProjectRoot:            ctx.ProjectRoot,
+		ModuleName:             moduleName,
+		Title:                  title,
+		Publisher:              publisher,
+		License:                license,
+		DocType:                doctype,
+		Template:               scaffold.Template(tmpl),
+		FrameworkModuleVersion: frameworkVersion,
+		FrameworkReplacePath:   frameworkReplacePath,
+		IncludeDesk:            includeDesk,
 	}
 
 	s := w.NewSpinner(fmt.Sprintf("Scaffolding app %q...", appName))
@@ -143,6 +156,41 @@ func runAppNew(cmd *cobra.Command, args []string) error {
 	w.Print("")
 
 	return nil
+}
+
+func resolveAppNewFrameworkDependency(projectRoot, cliVersion string) (string, string, error) {
+	modulePath, err := readModulePathFromGoMod(filepath.Join(projectRoot, "go.mod"))
+	if err != nil {
+		return "", "", output.NewCLIError("Cannot determine project Go module").
+			WithErr(err).
+			WithFix("Ensure the project root contains a valid go.mod. Run 'moca init' to create one, or run 'go mod init <module-path>' in the project root.")
+	}
+
+	if modulePath == frameworkModulePath {
+		return localFrameworkVersion, localFrameworkReplacePath, nil
+	}
+
+	if cliVersion == "" || cliVersion == "dev" {
+		return "", "", output.NewCLIError("Standalone app scaffolding requires a released moca binary").
+			WithContext(fmt.Sprintf("Project module %q is not the framework module %q.", modulePath, frameworkModulePath)).
+			WithFix("Install or run a released moca build so the scaffold can pin github.com/osama1998H/moca to an exact version.")
+	}
+
+	return cliVersion, "", nil
+}
+
+func readModulePathFromGoMod(goModPath string) (string, error) {
+	data, err := os.ReadFile(goModPath)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", goModPath, err)
+	}
+
+	modulePath := modfile.ModulePath(data)
+	if modulePath == "" {
+		return "", fmt.Errorf("parse %s: module path not found", goModPath)
+	}
+
+	return modulePath, nil
 }
 
 // ---------------------------------------------------------------------------
