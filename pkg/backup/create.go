@@ -35,8 +35,8 @@ func Create(ctx context.Context, opts CreateOptions) (*BackupInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create backup directory: %w", err)
 	}
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
-		return nil, fmt.Errorf("create backup directory: %w", err)
+	if mkdirErr := os.MkdirAll(backupDir, 0o755); mkdirErr != nil {
+		return nil, fmt.Errorf("create backup directory: %w", mkdirErr)
 	}
 
 	ext := ".sql"
