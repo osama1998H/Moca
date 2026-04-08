@@ -86,6 +86,14 @@ func TestListEmptyDirectory(t *testing.T) {
 	}
 }
 
+func TestListRejectsTraversalSite(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	if _, err := List(context.Background(), "../../../etc", projectRoot); err == nil {
+		t.Fatal("expected traversal site name to be rejected")
+	}
+}
+
 func TestParseTimestampFromID(t *testing.T) {
 	tests := []struct {
 		expected time.Time

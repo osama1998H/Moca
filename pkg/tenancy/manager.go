@@ -21,6 +21,7 @@ import (
 
 	"github.com/osama1998H/moca/pkg/meta"
 	"github.com/osama1998H/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/sitepath"
 )
 
 // BootstrapFunc returns the compiled MetaType definitions for bootstrap.
@@ -349,6 +350,10 @@ func (m *SiteManager) GetSiteInfo(ctx context.Context, name string) (*SiteInfo, 
 
 // SetActiveSite writes the given site name to .moca/current_site under projectRoot.
 func (m *SiteManager) SetActiveSite(projectRoot, siteName string) error {
+	if err := sitepath.ValidateName(siteName); err != nil {
+		return fmt.Errorf("set active site: %w", err)
+	}
+
 	dotMoca := filepath.Join(projectRoot, ".moca")
 	if err := os.MkdirAll(dotMoca, 0o755); err != nil {
 		return fmt.Errorf("set active site: create .moca dir: %w", err)
@@ -455,6 +460,9 @@ func (m *SiteManager) RenameSite(ctx context.Context, oldName, newName, projectR
 	if newName == "" {
 		return fmt.Errorf("rename site: new name is required")
 	}
+	if err := sitepath.ValidateName(newName); err != nil {
+		return fmt.Errorf("rename site: %w", err)
+	}
 
 	// Check target doesn't already exist.
 	exists, err := m.siteExists(ctx, newName)
@@ -513,9 +521,16 @@ func (m *SiteManager) RenameSite(ctx context.Context, oldName, newName, projectR
 
 	// Best-effort: rename filesystem directory.
 	if projectRoot != "" {
-		oldDir := filepath.Join(projectRoot, "sites", oldName)
-		newDir := filepath.Join(projectRoot, "sites", newName)
-		if _, statErr := os.Stat(oldDir); statErr == nil {
+		oldDir, oldDirErr := sitepath.Path(projectRoot, oldName)
+		newDir, newDirErr := sitepath.Path(projectRoot, newName)
+		if oldDirErr != nil || newDirErr != nil {
+			m.logger.WarnContext(ctx, "rename site: filesystem rename skipped",
+				slog.String("old_name", oldName),
+				slog.String("new_name", newName),
+				slog.Any("old_error", oldDirErr),
+				slog.Any("new_error", newDirErr),
+			)
+		} else if _, statErr := os.Stat(oldDir); statErr == nil {
 			if renameErr := os.Rename(oldDir, newDir); renameErr != nil {
 				m.logger.WarnContext(ctx, "rename site: filesystem rename failed",
 					slog.String("old", oldDir),
@@ -546,6 +561,10 @@ func (m *SiteManager) RenameSite(ctx context.Context, oldName, newName, projectR
 // CloneSite creates a copy of a site's schema and data, optionally anonymizing PII.
 // Uses SQL-based schema cloning (no external pg_dump binary required).
 func (m *SiteManager) CloneSite(ctx context.Context, source, target string, opts CloneOptions) error {
+	if err := sitepath.ValidateName(target); err != nil {
+		return fmt.Errorf("clone site: %w", err)
+	}
+
 	// Verify source exists.
 	sourceInfo, err := m.GetSiteInfo(ctx, source)
 	if err != nil {
@@ -704,8 +723,8 @@ func (m *SiteManager) ReinstallSite(ctx context.Context, name string, adminPassw
 // ── private helpers ─────────────────────────────────────────────────────────
 
 func validateSiteConfig(cfg SiteCreateConfig) error {
-	if cfg.Name == "" {
-		return fmt.Errorf("site name is required")
+	if err := sitepath.ValidateName(cfg.Name); err != nil {
+		return err
 	}
 	if cfg.AdminEmail == "" {
 		return fmt.Errorf("admin email is required")

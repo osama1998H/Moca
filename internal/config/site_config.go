@@ -5,20 +5,27 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/osama1998H/moca/pkg/sitepath"
 	"gopkg.in/yaml.v3"
 )
 
 // LoadSiteConfig reads sites/{site}/site_config.yaml as a raw map.
 // Returns an empty map (not an error) if the file does not exist.
 func LoadSiteConfig(projectRoot, site string) (map[string]any, error) {
-	path := filepath.Join(projectRoot, "sites", site, "site_config.yaml")
+	path, err := sitepath.Path(projectRoot, site, "site_config.yaml")
+	if err != nil {
+		return nil, err
+	}
 	return loadYAMLMap(path)
 }
 
 // SaveSiteConfig writes data as YAML to sites/{site}/site_config.yaml.
 // Creates the directory structure if it does not exist.
 func SaveSiteConfig(projectRoot, site string, data map[string]any) error {
-	path := filepath.Join(projectRoot, "sites", site, "site_config.yaml")
+	path, err := sitepath.Path(projectRoot, site, "site_config.yaml")
+	if err != nil {
+		return err
+	}
 	return saveYAMLMap(path, data)
 }
 

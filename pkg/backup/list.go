@@ -2,12 +2,15 @@ package backup
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/osama1998H/moca/pkg/sitepath"
 )
 
 // backupFilePattern matches backup filenames: bk_{site}_{YYYYMMDD}_{HHMMSS}.sql[.gz]
@@ -16,7 +19,10 @@ var backupFilePattern = regexp.MustCompile(`^(bk_.+_\d{8}_\d{6})\.sql(\.gz)?$`)
 // List scans the backup directory for a site and returns metadata for each backup found.
 // Results are sorted newest-first.
 func List(_ context.Context, site, projectRoot string) ([]BackupInfo, error) {
-	backupDir := filepath.Join(projectRoot, "sites", site, "backups")
+	backupDir, err := sitepath.Path(projectRoot, site, "backups")
+	if err != nil {
+		return nil, fmt.Errorf("backup/list: %w", err)
+	}
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
 		if os.IsNotExist(err) {

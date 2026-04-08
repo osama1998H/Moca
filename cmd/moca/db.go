@@ -22,6 +22,7 @@ import (
 	"github.com/osama1998H/moca/pkg/backup"
 	"github.com/osama1998H/moca/pkg/meta"
 	"github.com/osama1998H/moca/pkg/orm"
+	"github.com/osama1998H/moca/pkg/sitepath"
 	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
@@ -866,7 +867,10 @@ func runDBSnapshot(cmd *cobra.Command, _ []string) error {
 	dbCfg := ctx.Project.Infrastructure.Database
 	schemaName := tenancy.SchemaNameForSite(siteName)
 
-	snapshotDir := filepath.Join(ctx.ProjectRoot, "sites", siteName, "snapshots")
+	snapshotDir, err := sitepath.Path(ctx.ProjectRoot, siteName, "snapshots")
+	if err != nil {
+		return output.NewCLIError("Invalid site name").WithErr(err)
+	}
 	if mkErr := os.MkdirAll(snapshotDir, 0o755); mkErr != nil {
 		return output.NewCLIError("Cannot create snapshots directory").WithErr(mkErr)
 	}

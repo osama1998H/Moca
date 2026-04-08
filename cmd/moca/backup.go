@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/osama1998H/moca/internal/config"
 	"github.com/osama1998H/moca/internal/output"
 	"github.com/osama1998H/moca/pkg/backup"
+	"github.com/osama1998H/moca/pkg/sitepath"
 	"github.com/osama1998H/moca/pkg/storage"
 )
 
@@ -614,7 +614,10 @@ func runBackupDownload(cmd *cobra.Command, args []string) error {
 	// Determine output directory.
 	outputDir, _ := cmd.Flags().GetString("output")
 	if outputDir == "" {
-		outputDir = filepath.Join(ctx.ProjectRoot, "sites", siteName, "backups")
+		outputDir, err = sitepath.Path(ctx.ProjectRoot, siteName, "backups")
+		if err != nil {
+			return output.NewCLIError("Invalid site name").WithErr(err)
+		}
 	}
 	if mkdirErr := os.MkdirAll(outputDir, 0o755); mkdirErr != nil {
 		return output.NewCLIError("Failed to create output directory").

@@ -16,6 +16,7 @@ import (
 	"github.com/osama1998H/moca/internal/config"
 	clicontext "github.com/osama1998H/moca/internal/context"
 	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/pkg/sitepath"
 )
 
 // NewConfigCommand returns the "moca config" command group with all subcommands.
@@ -94,14 +95,14 @@ func saveTargetConfig(target configTarget, projectRoot, site string, data map[st
 }
 
 // configFilePath returns the path to the config file for the given target.
-func configFilePath(target configTarget, projectRoot, site string) string {
+func configFilePath(target configTarget, projectRoot, site string) (string, error) {
 	switch target {
 	case targetSite:
-		return filepath.Join(projectRoot, "sites", site, "site_config.yaml")
+		return sitepath.Path(projectRoot, site, "site_config.yaml")
 	case targetCommon:
-		return filepath.Join(projectRoot, "sites", "common_site_config.yaml")
+		return filepath.Join(projectRoot, "sites", "common_site_config.yaml"), nil
 	default:
-		return filepath.Join(projectRoot, "moca.yaml")
+		return filepath.Join(projectRoot, "moca.yaml"), nil
 	}
 }
 
@@ -404,10 +405,14 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 	}
 
 	if w.Mode() == output.ModeJSON {
+		filePath, pathErr := configFilePath(target, ctx.ProjectRoot, site)
+		if pathErr != nil {
+			return output.NewCLIError("Failed to resolve config file path").WithErr(pathErr)
+		}
 		return w.PrintJSON(map[string]any{
 			"key":   key,
 			"value": value,
-			"file":  configFilePath(target, ctx.ProjectRoot, site),
+			"file":  filePath,
 		})
 	}
 
@@ -906,11 +911,15 @@ func runConfigImport(cmd *cobra.Command, args []string) error {
 	}
 
 	if w.Mode() == output.ModeJSON {
+		filePath, pathErr := configFilePath(target, ctx.ProjectRoot, site)
+		if pathErr != nil {
+			return output.NewCLIError("Failed to resolve config file path").WithErr(pathErr)
+		}
 		return w.PrintJSON(map[string]any{
 			"added":    added,
 			"modified": modified,
 			"skipped":  skipped,
-			"file":     configFilePath(target, ctx.ProjectRoot, site),
+			"file":     filePath,
 		})
 	}
 
@@ -946,7 +955,10 @@ func runConfigEdit(cmd *cobra.Command, _ []string) error {
 	}
 
 	target, site := resolveConfigTarget(cmd)
-	filePath := configFilePath(target, ctx.ProjectRoot, site)
+	filePath, err := configFilePath(target, ctx.ProjectRoot, site)
+	if err != nil {
+		return output.NewCLIError("Failed to resolve config file path").WithErr(err)
+	}
 
 	// Ensure the file exists (create empty if needed for site/common).
 	if target != targetProject {
