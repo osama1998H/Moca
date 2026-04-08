@@ -24,37 +24,8 @@ jobs:
           go-version: '1.26.1'
           cache: true
 
-      # Release contract: the root module and apps/core must require each other
-      # at the exact same release version while still using local replace paths
-      # for workspace development.
-      - name: Verify coupled Go module versions
-        run: go run ./internal/releaseverify -version "${GITHUB_REF_NAME}"
-
-      # Every root release tag vX.Y.Z must have a matching apps/core/vX.Y.Z tag
-      # on the same commit so direct VCS module resolution can fetch the submodule.
-      - name: Create or verify apps/core submodule tag
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME}"
-          CORE_TAG="apps/core/${VERSION}"
-          RELEASE_SHA="${GITHUB_SHA}"
-
-          git fetch --force --tags origin
-
-          if git rev-parse -q --verify "refs/tags/${CORE_TAG}" >/dev/null; then
-            TAG_SHA="$(git rev-list -n 1 "${CORE_TAG}")"
-            if [ "${TAG_SHA}" != "${RELEASE_SHA}" ]; then
-              echo "Tag ${CORE_TAG} points to ${TAG_SHA}, expected ${RELEASE_SHA}" >&2
-              exit 1
-            fi
-            echo "Tag ${CORE_TAG} already exists on ${RELEASE_SHA}"
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${CORE_TAG}" "${RELEASE_SHA}" -m "Release ${CORE_TAG}"
-          git push origin "refs/tags/${CORE_TAG}"
+      - name: Verify single-module builtin core layout
+        run: go run ./internal/releaseverify
 
       - name: External consumer go mod tidy smoke test
         env:
@@ -73,6 +44,7 @@ jobs:
           package main
 
           import (
+          	_ "github.com/osama1998H/moca/pkg/builtin/core"
           	_ "github.com/osama1998H/moca/pkg/document"
           	_ "github.com/osama1998H/moca/pkg/hooks"
           )
@@ -82,7 +54,7 @@ jobs:
 
           export GOPROXY=direct
           export GOSUMDB=off
-          export GOPRIVATE=github.com/osama1998H/moca,github.com/osama1998H/moca/apps/core
+          export GOPRIVATE=github.com/osama1998H/moca
           export GONOSUMDB="${GOPRIVATE}"
 
           go get "github.com/osama1998H/moca@${VERSION}"

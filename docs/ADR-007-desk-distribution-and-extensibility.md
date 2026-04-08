@@ -52,7 +52,7 @@ Moca made a deliberate architectural choice to **decouple** the frontend. The sy
 | Component | Location | Included in `moca init`? |
 |-----------|----------|--------------------------|
 | Go backend (pkg/, cmd/) | Framework repo | Yes (via Go modules) |
-| Core app (apps/core/) | Framework repo | Yes (via `go.work`) |
+| Builtin core package (`pkg/builtin/core/`) | Framework repo | Yes (via root module) |
 | Desk frontend (desk/) | Framework repo root | **No** |
 | App desk extensions | Per-app `desk/` dirs | **No mechanism exists** |
 
@@ -185,7 +185,7 @@ Pre-build desk assets and embed them into `moca-server` using `//go:embed desk/d
 
 **How it works:**
 
-Make the desk source code part of `apps/core/desk/`. When `moca init` clones/installs the core app, the desk comes with it. Updates via `moca app update core`.
+Make the desk source code part of `pkg/builtin/core/desk/`. When `moca init` creates a project, the desk can consume builtin framework assets directly from the root module. Updates ship with the framework release rather than via `moca app update core`.
 
 **Pros:**
 - Always present — core app is mandatory

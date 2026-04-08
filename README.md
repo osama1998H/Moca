@@ -137,7 +137,7 @@ pkg/                  # Core framework packages
   search/             #   Meilisearch indexer
   storage/            #   S3/MinIO adapter
   observe/            #   Prometheus, OpenTelemetry, logging
-apps/core/            # Core framework doctypes (User, Role, DocType, etc.)
+pkg/builtin/core/     # Builtin framework core doctypes (User, Role, DocType, etc.)
 desk/                 # React 19 + TypeScript frontend SPA
 spikes/               # Architecture validation prototypes (MS-00)
 docs/                 # Design documents & milestone plans

@@ -265,7 +265,7 @@ No external web research was needed. The design documents are comprehensive and 
 
 ## Open Questions
 
-- **Module list source:** Should the sidebar fetch `ModuleDef` documents from the API, or derive the module list from registered MetaTypes? The `ModuleDef` doctype exists in `apps/core/` but may not be populated. Fallback: group by MetaType's `module` field.
+- **Module list source:** Should the sidebar fetch `ModuleDef` documents from the API, or derive the module list from registered MetaTypes? The `ModuleDef` doctype exists in `pkg/builtin/core/` but may not be populated. Fallback: group by MetaType's `module` field.
 - **Expression evaluator for `depends_on`:** What expression syntax does the backend expect? Frappe uses Python-like `eval:doc.status == "Draft"`. Need to define the JS-side evaluator format.
 - **TailwindCSS or component library?** The roadmap says TailwindCSS. Should we use a component library (shadcn/ui, Radix) on top, or build from scratch with Tailwind utilities?
 - **Bundle splitting strategy:** Should each field component be lazy-loaded, or is a single bundle acceptable for v1?

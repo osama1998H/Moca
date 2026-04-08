@@ -249,7 +249,7 @@ The primary findings are: (1) **ROADMAP.md status fields are stale** -- MS-11 th
 ### Architectural Decisions (ADRs)
 - [x] **ADR-001** (pg-tenant): AfterConnect for search_path verified in `pkg/orm/postgres.go`; per-site pool registry in `pkg/tenancy/manager.go`; idle eviction goroutine in `internal/serve/server.go:203-218`
 - [x] **ADR-002** (redis-streams): go-redis v9 confirmed in `go.mod`; XAutoClaim in `pkg/queue/worker.go:137`; ZADD for delayed jobs in `pkg/queue/producer.go:80`
-- [x] **ADR-003** (go-workspace): `go.work` composing root + apps/core; MVS resolution; `replace` directives in scaffold templates
+- [x] **ADR-003** (go-workspace): `go.work` composing the root module with installable apps; MVS resolution; `replace` directives in scaffold templates
 - [x] **ADR-005** (cobra-ext): `init()` + blank imports pattern in `cmd/moca/commands.go`; `app:command` namespace convention supported
 - [x] **ADR-006** (meilisearch): index-per-tenant in `pkg/search/indexer.go:140` (`{site}_{doctype}`); `waitForTask` in `pkg/search/client.go:65`
 

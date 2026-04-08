@@ -15,7 +15,7 @@
 
 MS-13 completes the developer CLI experience for app development. MS-09 delivered the ability to bootstrap projects, create sites, and install existing apps. MS-13 extends this with app creation (`moca app new`), external app acquisition (`moca app get`), dependency management (`moca app resolve`), and the build pipeline (`moca build server/app`). Together these form the full app development lifecycle.
 
-User management commands bridge the gap between the existing User/Role DocTypes (defined in `apps/core/`) and CLI operability. Currently, creating users requires direct document insertion. These commands expose the document CRUD system through ergonomic CLI commands.
+User management commands bridge the gap between the existing User/Role DocTypes (defined in `pkg/builtin/core/`) and CLI operability. Currently, creating users requires direct document insertion. These commands expose the document CRUD system through ergonomic CLI commands.
 
 The developer tools (`moca dev execute/request`) provide rapid feedback loops — executing framework functions and making authenticated API requests without writing test code or using external HTTP clients.
 
@@ -38,7 +38,7 @@ The developer tools (`moca dev execute/request`) provide rapid feedback loops �
 
 No web research was needed. All implementation patterns are well-documented in the design docs and validated by existing code:
 - App manifest parsing/loading is mature in `pkg/apps/` (manifest.go, loader.go, installer.go)
-- User DocType with bcrypt hashing exists in `apps/core/user_controller.go`
+- User DocType with bcrypt hashing exists in `pkg/builtin/core/user_controller.go`
 - Go workspace composition was validated in `spikes/go-workspace/` (MS-00 Spike 3)
 - Service wiring pattern is established in `cmd/moca/services.go`
 - Placeholder command pattern is in `cmd/moca/placeholder.go`
@@ -80,8 +80,8 @@ No web research was needed. All implementation patterns are well-documented in t
 - **Inputs / References:**
   - `MOCA_CLI_SYSTEM_DESIGN.md` §4.2.3 lines 871-909 (moca app new spec)
   - `MOCA_SYSTEM_DESIGN.md` §7.3 lines 1337-1382 (canonical app directory structure)
-  - `apps/core/` — reference implementation of a Moca app
-  - `apps/core/manifest.yaml` — manifest format reference
+  - `pkg/builtin/core/` — builtin reference implementation of a framework-owned app package
+  - `pkg/builtin/core/manifest.yaml` — manifest format reference
 - **Deliverable:**
   - `internal/scaffold/scaffold.go`, `templates.go`, `scaffold_test.go`
   - Updated `cmd/moca/app.go` with working `moca app new` command
@@ -92,7 +92,7 @@ No web research was needed. All implementation patterns are well-documented in t
   - Generated `go.mod` has correct module path; `go.work` is updated
   - Generated `manifest.yaml` is valid and loadable by `apps.LoadApp()`
 - **Risks / Unknowns:**
-  - Template content must stay in sync with `AppManifest` struct changes. Mitigated by using the existing `apps/core/` as the canonical reference.
+  - Template content must stay in sync with `AppManifest` struct changes. Mitigated by using `pkg/builtin/core/manifest.yaml` as the canonical builtin reference.
 
 ---
 
@@ -190,8 +190,8 @@ No web research was needed. All implementation patterns are well-documented in t
 - **Dependencies:** None (document CRUD system is complete from MS-04/MS-09)
 - **Inputs / References:**
   - `MOCA_CLI_SYSTEM_DESIGN.md` §4.2.16 lines 2843-2974 (all user command specs)
-  - `apps/core/user_controller.go` — UserController with BeforeSave bcrypt hashing
-  - `apps/core/modules/core/doctypes/user/user.json` — User DocType definition
+  - `pkg/builtin/core/user_controller.go` — UserController with BeforeSave bcrypt hashing
+  - `pkg/builtin/core/modules/core/doctypes/user/user.json` — User DocType definition
   - `pkg/document/crud.go` — DocManager Insert/Update/Delete/Get/GetList
   - `cmd/moca/services.go` — Service wiring pattern to extend
 - **Deliverable:**
@@ -254,7 +254,7 @@ No web research was needed. All implementation patterns are well-documented in t
 - **Acceptance Criteria:**
   - `moca build server` produces working binary at `bin/moca-server`
   - `moca build server --output /tmp/test-server --race` respects flags
-  - `moca build app core` verifies core app compiles cleanly
+  - `moca build app crm` verifies an installable app compiles cleanly
   - `moca build app nonexistent` fails with clear error message
   - Build uses Go workspace mode (respects `go.work`)
 - **Risks / Unknowns:**
@@ -321,41 +321,42 @@ No web research was needed. All implementation patterns are well-documented in t
 ### Task 6
 
 - **Task ID:** MS-13-T6
-- **Title:** Release Tagging and External Module Resolution for `apps/core`
+- **Title:** Builtin Core Folded into the Root Module
 - **Status:** Completed
 - **Description:**
-  Close the release-engineering gap discovered in `docs/dx-test-session-report.md` Issue #5. The framework keeps `apps/core` as a separate Go module, but released root tags must now enforce symmetric root/submodule version requirements and a matching `apps/core/vX.Y.Z` tag so external consumers can resolve `github.com/osama1998H/moca/apps/core` via direct VCS fetch.
+  Replace the temporary submodule-tagging workaround from the earlier alpha line by folding builtin core into the root module. `pkg/builtin/core` is now framework-owned code inside `github.com/osama1998H/moca`, while only installable apps under `apps/` remain separate modules composed via `go.work`.
 
   **Files to create:**
-  - `internal/releaseverify/main.go` — `go run` verifier that validates the coupled root/submodule release contract
-  - `internal/releaseverify/main_test.go` — unit tests for matching versions, mismatches, missing replaces, and invalid tag input
+  - `pkg/builtin/core/` — builtin core package containing runtime/bootstrap code, manifest, and embedded doctypes
+  - `internal/releaseverify/main.go` — `go run` verifier that validates the single-module builtin-core invariants
+  - `internal/releaseverify/main_test.go` — unit tests for legacy-module detection and builtin layout validation
 
   **Files to modify:**
-  - `go.mod` — require `github.com/osama1998H/moca/apps/core` at the exact release version
-  - `apps/core/go.mod` — require `github.com/osama1998H/moca` at the exact same release version
-  - `.github/workflows/release.yml` — verify the contract, create or validate `apps/core/vX.Y.Z`, and run an external `go mod tidy` smoke check
+  - `go.mod` — remove the legacy `github.com/osama1998H/moca/apps/core` require/replace entries
+  - `go.work` — stop composing a separate builtin core module
+  - `.github/workflows/release.yml` — verify the new invariant set and run an external `go mod tidy` smoke check against the root tag only
 
   **Implementation details:**
-  1. Keep local `replace` directives in both modules so workspace development still resolves local source.
-  2. Keep `moca app new` standalone behavior unchanged: pin the released root framework version, but do not add a direct `apps/core` dependency unless generated code imports it.
-  3. Fail release builds if the root tag and `apps/core` tag disagree, or if either `go.mod` file references the wrong release version.
-  4. Verify an external temp module can `go mod tidy` and `go build` after importing `pkg/document` and `pkg/hooks` from the released root module.
+  1. Move bootstrap/runtime code, manifest, and embedded doctypes from `apps/core` to `pkg/builtin/core`.
+  2. Delete the legacy nested module files and remove the `go.work` entry for `./apps/core`.
+  3. Keep `moca app new` standalone behavior unchanged: pin the released root framework version, but do not add a direct builtin-core dependency unless generated code imports it.
+  4. Verify an external temp module can `go mod tidy` and `go build` after importing `pkg/document`, `pkg/hooks`, and `pkg/builtin/core` from the released root module.
 
-- **Why this task exists:** The multi-module workspace design from MS-00 only covered local composition. External consumers failed because the published root module transitively required `apps/core` without a matching released submodule tag.
+- **Why this task exists:** The multi-module workspace design from MS-00 only covered local composition. The short-term submodule-tagging workaround fixed alpha releases, but it kept builtin core on the wrong architectural boundary. Folding builtin core into the root module removes the release-engineering debt before beta.
 - **Dependencies:** MS-13-T1 (completed), MS-00-T1 (completed), MS-00-T4 (completed)
 - **Inputs / References:**
   - `docs/dx-test-session-report.md` — Issue #5 root cause and recommended fix
   - `spikes/go-workspace/ADR-003-go-workspace-composition.md` — local replace + go.work policy
   - `.github/workflows/release.yml` — current root-tag-only release pipeline
 - **Deliverable:**
-  - Verified release workflow that enforces the coupled root/`apps/core` version contract
-  - Matching root and submodule Go module requirements for the current release line
+  - Builtin core package lives under `pkg/builtin/core`
+  - Verified release workflow that enforces the single-module builtin-core contract
 - **Acceptance Criteria:**
-  - Root `go.mod` requires `github.com/osama1998H/moca/apps/core` at the exact release version
-  - `apps/core/go.mod` requires `github.com/osama1998H/moca` at the exact same release version
-  - Release workflow creates or validates `apps/core/vX.Y.Z` on the same commit as `vX.Y.Z`
-  - Release workflow runs an external `go mod tidy` smoke test against the tagged release
-  - Existing scaffold tests continue to pass without adding a direct `apps/core` dependency to generated apps
+  - Root `go.mod` does not require or replace `github.com/osama1998H/moca/apps/core`
+  - `go.work` does not reference `./apps/core`
+  - `pkg/builtin/core` contains the builtin core runtime/bootstrap package and embedded doctypes
+  - Release workflow runs an external `go mod tidy` smoke test against the tagged release after importing `pkg/document`, `pkg/hooks`, and `pkg/builtin/core`
+  - Existing scaffold tests continue to pass without adding a direct builtin-core dependency to generated apps
 
 ## Recommended Execution Order
 

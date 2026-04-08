@@ -29,7 +29,7 @@ The primary finding of this audit is a set of **documentation hygiene issues** i
 
 #### Fulfilled
 - Root `go.mod` for `github.com/osama1998H/moca` -- `go.mod`
-- `go.work` composing root + `apps/core` -- `go.work`
+- `go.work` composing the root module with installable apps while builtin core stays in `pkg/builtin/core` -- `go.work`
 - 5 spike directories under `spikes/` (pg-tenant, redis-streams, go-workspace, meilisearch, cobra-ext)
 - 5 ADR documents (ADR-001, ADR-002, ADR-003, ADR-005, ADR-006)
 - CI pipeline via Makefile targets (`make build`, `make test`, `make lint`)
@@ -213,10 +213,10 @@ None identified.
 - Hook integration into Insert/Update/Delete lifecycle -- `pkg/document/crud.go`, `pkg/document/hooks.go`
 - `AppManifest` parser and validator -- `pkg/apps/manifest.go`
 - `AppLoader` with `ScanApps`, `LoadApp`, `ValidateDependencies` -- `pkg/apps/loader.go`
-- `apps/core/manifest.yaml` (Moca Core v0.1.0) -- `apps/core/manifest.yaml`
-- 5 core DocType definitions (User, Role, DocType, Module, SystemSettings) + 3 child table types (DocField, DocPerm, HasRole) -- `apps/core/modules/core/doctypes/`
-- User controller with bcrypt password hashing on BeforeSave -- `apps/core/user_controller.go`
-- `BootstrapCoreMeta()` with hard-coded DocType MetaType for bootstrap ordering -- `apps/core/bootstrap.go`
+- `pkg/builtin/core/manifest.yaml` (Moca Core v0.1.0) -- `pkg/builtin/core/manifest.yaml`
+- 5 core DocType definitions (User, Role, DocType, Module, SystemSettings) + 3 child table types (DocField, DocPerm, HasRole) -- `pkg/builtin/core/modules/core/doctypes/`
+- User controller with bcrypt password hashing on BeforeSave -- `pkg/builtin/core/user_controller.go`
+- `BootstrapCoreMeta()` with hard-coded DocType MetaType for bootstrap ordering -- `pkg/builtin/core/bootstrap.go`
 - ~~ROADMAP.md showed "Not Started"~~ **Fixed** to "Completed" in this audit
 
 #### Gaps
@@ -319,7 +319,7 @@ None identified.
 - [x] **ADR-001** (pg-tenant): `AfterConnect` for `search_path`, per-site pool registry -- verified in `pkg/orm/postgres.go`
 - [x] **ADR-002** (redis-streams): go-redis v9 -- verified in `go.mod` (`github.com/redis/go-redis/v9 v9.18.0`)
 - [x] **ADR-003** (go-workspace): MVS resolution, `go.work` with two modules -- verified in `go.work`
-- [x] **ADR-005** (cobra-ext): `init()` + blank imports for app commands -- verified in `apps/core/hooks.go` and `cmd/moca/main.go`
+- [x] **ADR-005** (cobra-ext): `init()` + blank imports for app commands -- verified in `pkg/builtin/core/hooks.go` and `cmd/moca/main.go`
 - [x] **ADR-006** (meilisearch): Index-per-tenant pattern validated in spike; production implementation deferred to MS-15
 
 ### Cross-Document Mismatch Resolution
@@ -456,10 +456,10 @@ All 6 items above are safe to defer. Items 2, 3, and 6 are intentional stubs wit
 | Hook integration with CRUD lifecycle | SYSTEM_DESIGN 3.5 | ✅ | ✅ | `pkg/document/hooks.go`, `crud.go` |
 | AppManifest parser/validator | SYSTEM_DESIGN 7.1 | ✅ | ✅ | `pkg/apps/manifest.go` |
 | App directory scanner/loader | SYSTEM_DESIGN 7.2 | ✅ | ✅ | `pkg/apps/loader.go` |
-| apps/core manifest.yaml | SYSTEM_DESIGN 7.3 | ✅ | ✅ | `apps/core/manifest.yaml` |
-| 8 core DocType definitions | SYSTEM_DESIGN 7.3 | ✅ | ✅ | `apps/core/modules/core/doctypes/` |
-| User controller (bcrypt on BeforeSave) | SYSTEM_DESIGN 7.3 | ✅ | ✅ | `apps/core/user_controller.go` |
-| BootstrapCoreMeta (self-referential DocType) | SYSTEM_DESIGN 7.3 | ✅ | ✅ | `apps/core/bootstrap.go` |
+| builtin core manifest.yaml | SYSTEM_DESIGN 7.3 | ✅ | ✅ | `pkg/builtin/core/manifest.yaml` |
+| 8 core DocType definitions | SYSTEM_DESIGN 7.3 | ✅ | ✅ | `pkg/builtin/core/modules/core/doctypes/` |
+| User controller (bcrypt on BeforeSave) | SYSTEM_DESIGN 7.3 | ✅ | ✅ | `pkg/builtin/core/user_controller.go` |
+| BootstrapCoreMeta (self-referential DocType) | SYSTEM_DESIGN 7.3 | ✅ | ✅ | `pkg/builtin/core/bootstrap.go` |
 | **MS-09: CLI Init, Site, App Commands** | | | | |
 | MigrationRunner (Pending/Apply/Rollback/DryRun) | CLI_DESIGN 4.2.5 | ✅ | ✅ | `pkg/orm/migrate.go` |
 | SiteManager 9-step CreateSite | SYSTEM_DESIGN 8.3 | ✅ | ✅ | `pkg/tenancy/manager.go` |

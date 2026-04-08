@@ -373,7 +373,7 @@ moca init . --name test-erp \
 # Step 3 — Verify project structure
 test -f moca.yaml
 test -f moca.lock
-test -d apps/core
+test -d apps
 test -f go.work
 test -d .moca
 
@@ -576,7 +576,8 @@ curl -sf http://localhost:8000/api/method/moca.ping
 moca status    # Should show server running
 
 # Step 5 — Simulate a file change for hot reload
-touch apps/core/core.go
+mkdir -p apps/demo
+touch apps/demo/hooks.go
 sleep 3
 # Verify the server restarted (check logs or PID changed)
 
@@ -1610,7 +1611,7 @@ jobs:
           assert_file_exists "moca.lock created" /tmp/test-project/moca.lock
           assert_file_exists "go.work created" /tmp/test-project/go.work
           assert_file_exists ".moca dir created" /tmp/test-project/.moca
-          assert_file_exists "core app present" /tmp/test-project/apps/core
+          assert_file_exists "apps dir created" /tmp/test-project/apps
           print_summary
 
       - name: "Test: moca config"

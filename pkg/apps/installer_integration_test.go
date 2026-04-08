@@ -17,9 +17,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/osama1998H/moca/apps/core"
 	"github.com/osama1998H/moca/internal/config"
 	"github.com/osama1998H/moca/pkg/apps"
+	"github.com/osama1998H/moca/pkg/builtin/core"
 	"github.com/osama1998H/moca/pkg/meta"
 	"github.com/osama1998H/moca/pkg/observe"
 	"github.com/osama1998H/moca/pkg/orm"

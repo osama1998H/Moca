@@ -1381,7 +1381,7 @@ apps/
     go.sum
 ```
 
-**Build Composition Model:** Each app is a separate Go module with its own `go.mod`. The project root contains a `go.work` file (Go workspaces) that includes the framework and all installed apps. `moca app get` and `moca app install` update `go.work` to include the new app module. `moca serve` and `moca build server` compile all apps into the single `moca-server` binary via the workspace. `moca build app APP_NAME` verifies that a single app compiles cleanly within the workspace context but does not produce a standalone binary.
+**Build Composition Model:** Each installable app is a separate Go module with its own `go.mod`. The project root contains a `go.work` file (Go workspaces) that includes the framework root module and all installed apps. Builtin framework apps such as `pkg/builtin/core` stay inside the root module. `moca app get` and `moca app install` update `go.work` to include new installable app modules. `moca serve` and `moca build server` compile the framework and all installed apps into the single `moca-server` binary via the workspace. `moca build app APP_NAME` verifies that a single installable app compiles cleanly within the workspace context but does not produce a standalone binary.
 
 ---
 
@@ -2028,9 +2028,10 @@ moca/
 │       ├── logging.go       # structured logging
 │       └── health.go        # health check endpoints
 │
-├── apps/                    # Built-in and community apps
-│   ├── core/                # Core framework doctypes (User, Role, DocType, etc.)
+├── apps/                    # Project and community installable apps
 │   └── ...
+│
+├── pkg/builtin/core/        # Builtin core doctypes (User, Role, DocType, etc.)
 │
 ├── desk/                    # React frontend source
 │   ├── src/
@@ -2124,7 +2125,7 @@ To avoid ambiguity, the following terms have precise meanings throughout Moca do
 
 | Term | Definition |
 |------|-----------|
-| **App** | A Moca application package — has `manifest.yaml`, modules, DocTypes, hooks, and its own `go.mod`. |
+| **App** | A Moca application package — has `manifest.yaml`, modules, DocTypes, hooks, and, when installable under `apps/`, its own `go.mod`. Builtin framework apps live in the root module. |
 | **Module** | A logical grouping of DocTypes within an App (e.g., "Selling", "Buying"). |
 | **Desk Extension** | App-provided React components that extend the Desk UI (custom field types, views, dashboard widgets). Formerly "desk plugin." |
 | **CLI Extension** | App-registered custom CLI commands via `cli.RegisterCommand()` in `hooks.go`, discovered at build time. |

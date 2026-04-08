@@ -72,7 +72,10 @@ func TestUserController_BeforeSave_SkipsAlreadyHashed(t *testing.T) {
 		t.Fatalf("BeforeSave error: %v", err)
 	}
 
-	got := doc.Get("password").(string)
+	got, ok := doc.Get("password").(string)
+	if !ok {
+		t.Fatalf("expected password string, got %T", doc.Get("password"))
+	}
 	if got != existing {
 		t.Errorf("expected password unchanged, got: %s", got)
 	}

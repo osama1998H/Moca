@@ -7,98 +7,128 @@ import (
 	"testing"
 )
 
-func TestRun_VerifiesSymmetricReleaseVersioning(t *testing.T) {
+func TestRun_AcceptsBuiltinCoreLayout(t *testing.T) {
 	dir := t.TempDir()
-	rootGoMod, coreGoMod := writeModuleFixtures(t, dir, "v0.1.1-alpha.7", true)
+	rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod := writeValidRepoLayout(t, dir)
 
-	if err := run("v0.1.1-alpha.7", rootGoMod, coreGoMod); err != nil {
+	if err := run(rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod); err != nil {
 		t.Fatalf("run() error = %v", err)
 	}
 }
 
-func TestRun_FailsOnVersionMismatch(t *testing.T) {
+func TestRun_FailsWhenLegacyCoreModuleRequired(t *testing.T) {
 	dir := t.TempDir()
-	rootGoMod, coreGoMod := writeModuleFixtures(t, dir, "v0.1.1-alpha.7", true)
-	overwriteGoMod(t, rootGoMod, strings.ReplaceAll(readFile(t, rootGoMod), "v0.1.1-alpha.7", "v0.1.1-alpha.6"))
+	rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod := writeValidRepoLayout(t, dir)
+	overwriteFile(t, rootGoMod, "module github.com/osama1998H/moca\n\ngo 1.26.1\n\nrequire github.com/osama1998H/moca/apps/core v0.1.1-alpha.7\n")
 
-	err := run("v0.1.1-alpha.7", rootGoMod, coreGoMod)
+	err := run(rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod)
 	if err == nil {
-		t.Fatal("run() error = nil, want mismatch error")
+		t.Fatal("run() error = nil, want legacy require failure")
 	}
-	if !strings.Contains(err.Error(), `must require "github.com/osama1998H/moca/apps/core" at "v0.1.1-alpha.7"`) {
+	if !strings.Contains(err.Error(), "must not require legacy core module") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestRun_FailsWhenReplaceIsMissing(t *testing.T) {
+func TestRun_FailsWhenLegacyCoreModuleReplaced(t *testing.T) {
 	dir := t.TempDir()
-	rootGoMod, coreGoMod := writeModuleFixtures(t, dir, "v0.1.1-alpha.7", false)
+	rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod := writeValidRepoLayout(t, dir)
+	overwriteFile(t, rootGoMod, "module github.com/osama1998H/moca\n\ngo 1.26.1\n\nreplace github.com/osama1998H/moca/apps/core => ./apps/core\n")
 
-	err := run("v0.1.1-alpha.7", rootGoMod, coreGoMod)
+	err := run(rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod)
 	if err == nil {
-		t.Fatal("run() error = nil, want missing replace error")
+		t.Fatal("run() error = nil, want legacy replace failure")
 	}
-	if !strings.Contains(err.Error(), `must replace "github.com/osama1998H/moca/apps/core" with local path "./apps/core"`) {
+	if !strings.Contains(err.Error(), "must not replace legacy core module") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestNormalizeReleaseVersion_RejectsWrongTagInput(t *testing.T) {
-	cases := []string{
-		"",
-		"1.2.3",
-		"refs/tags/apps/core/v0.1.1-alpha.7",
-		"apps/core/v0.1.1-alpha.7",
-	}
+func TestRun_FailsWhenLegacyCoreGoModExists(t *testing.T) {
+	dir := t.TempDir()
+	rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod := writeValidRepoLayout(t, dir)
+	overwriteFile(t, legacyCoreGoMod, "module github.com/osama1998H/moca/apps/core\n")
 
-	for _, input := range cases {
-		t.Run(input, func(t *testing.T) {
-			if _, err := normalizeReleaseVersion(input); err == nil {
-				t.Fatalf("normalizeReleaseVersion(%q) error = nil, want error", input)
-			}
-		})
+	err := run(rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod)
+	if err == nil {
+		t.Fatal("run() error = nil, want legacy go.mod failure")
+	}
+	if !strings.Contains(err.Error(), "legacy core go.mod must not exist") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func writeModuleFixtures(t *testing.T, dir, version string, includeReplace bool) (string, string) {
+func TestRun_FailsWhenBuiltinCoreDirMissing(t *testing.T) {
+	dir := t.TempDir()
+	rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod := writeValidRepoLayout(t, dir)
+
+	if err := os.RemoveAll(builtinCoreDir); err != nil {
+		t.Fatalf("remove builtin core dir: %v", err)
+	}
+
+	err := run(rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod)
+	if err == nil {
+		t.Fatal("run() error = nil, want missing builtin core dir failure")
+	}
+	if !strings.Contains(err.Error(), "builtin core package") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_FailsWhenBuiltinCoreContainsNestedGoMod(t *testing.T) {
+	dir := t.TempDir()
+	rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod := writeValidRepoLayout(t, dir)
+	overwriteFile(t, filepath.Join(builtinCoreDir, "go.mod"), "module github.com/osama1998H/moca/pkg/builtin/core\n")
+
+	err := run(rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod)
+	if err == nil {
+		t.Fatal("run() error = nil, want nested builtin go.mod failure")
+	}
+	if !strings.Contains(err.Error(), "must not contain nested go.mod") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_FailsWhenGoWorkUsesLegacyCore(t *testing.T) {
+	dir := t.TempDir()
+	rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod := writeValidRepoLayout(t, dir)
+	overwriteFile(t, goWork, "go 1.26.1\n\nuse (\n\t.\n\t./apps/core\n)\n")
+
+	err := run(rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod)
+	if err == nil {
+		t.Fatal("run() error = nil, want legacy go.work entry failure")
+	}
+	if !strings.Contains(err.Error(), "go.work must not reference legacy core workspace entry") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func writeValidRepoLayout(t *testing.T, dir string) (string, string, string, string) {
 	t.Helper()
 
 	rootGoMod := filepath.Join(dir, "go.mod")
-	coreDir := filepath.Join(dir, "apps", "core")
-	coreGoMod := filepath.Join(coreDir, "go.mod")
+	goWork := filepath.Join(dir, "go.work")
+	builtinCoreDir := filepath.Join(dir, "pkg", "builtin", "core")
+	legacyCoreGoMod := filepath.Join(dir, "apps", "core", "go.mod")
 
-	if err := os.MkdirAll(coreDir, 0o755); err != nil {
-		t.Fatalf("mkdir %s: %v", coreDir, err)
+	if err := os.MkdirAll(builtinCoreDir, 0o755); err != nil {
+		t.Fatalf("mkdir builtin core dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(legacyCoreGoMod), 0o755); err != nil {
+		t.Fatalf("mkdir legacy core dir: %v", err)
 	}
 
-	rootReplace := ""
-	coreReplace := ""
-	if includeReplace {
-		rootReplace = "\nreplace github.com/osama1998H/moca/apps/core => ./apps/core\n"
-		coreReplace = "\nreplace github.com/osama1998H/moca => ../..\n"
-	}
+	overwriteFile(t, rootGoMod, "module github.com/osama1998H/moca\n\ngo 1.26.1\n")
+	overwriteFile(t, goWork, "go 1.26.1\n\nuse (\n\t.\n)\n")
+	overwriteFile(t, filepath.Join(builtinCoreDir, "manifest.yaml"), "name: core\nversion: \"0.1.0\"\nmoca_version: \">=0.1.0\"\nmodules: []\n")
 
-	overwriteGoMod(t, rootGoMod, "module github.com/osama1998H/moca\n\ngo 1.26.1\n\nrequire github.com/osama1998H/moca/apps/core "+version+"\n"+rootReplace)
-	overwriteGoMod(t, coreGoMod, "module github.com/osama1998H/moca/apps/core\n\ngo 1.26.1\n\nrequire github.com/osama1998H/moca "+version+"\n"+coreReplace)
-
-	return rootGoMod, coreGoMod
+	return rootGoMod, goWork, builtinCoreDir, legacyCoreGoMod
 }
 
-func overwriteGoMod(t *testing.T, path, content string) {
+func overwriteFile(t *testing.T, path, content string) {
 	t.Helper()
 
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
-}
-
-func readFile(t *testing.T, path string) string {
-	t.Helper()
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-
-	return string(data)
 }

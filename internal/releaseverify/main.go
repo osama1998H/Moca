@@ -4,20 +4,20 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/mod/modfile"
-	"golang.org/x/mod/semver"
 )
 
 const (
-	rootModulePath   = "github.com/osama1998H/moca"
-	coreModulePath   = "github.com/osama1998H/moca/apps/core"
-	rootReplacePath  = "./apps/core"
-	coreReplacePath  = "../.."
-	defaultRootGoMod = "go.mod"
-	defaultCoreGoMod = "apps/core/go.mod"
+	rootModulePath       = "github.com/osama1998H/moca"
+	legacyCoreModulePath = "github.com/osama1998H/moca/apps/core"
+	legacyCoreWorkUse    = "./apps/core"
+	defaultRootGoMod     = "go.mod"
+	defaultGoWork        = "go.work"
+	defaultBuiltinCore   = "pkg/builtin/core"
+	defaultLegacyCoreMod = "apps/core/go.mod"
 )
 
 type moduleState struct {
@@ -27,64 +27,55 @@ type moduleState struct {
 }
 
 func main() {
-	var version string
 	var rootGoMod string
-	var coreGoMod string
+	var goWorkPath string
+	var builtinCorePath string
+	var legacyCoreGoMod string
 
-	flag.StringVar(&version, "version", "", "release version tag (for example v0.1.1-alpha.7)")
 	flag.StringVar(&rootGoMod, "root-go-mod", defaultRootGoMod, "path to the root go.mod")
-	flag.StringVar(&coreGoMod, "core-go-mod", defaultCoreGoMod, "path to the apps/core go.mod")
+	flag.StringVar(&goWorkPath, "go-work", defaultGoWork, "path to the workspace go.work")
+	flag.StringVar(&builtinCorePath, "builtin-core", defaultBuiltinCore, "path to the builtin core package directory")
+	flag.StringVar(&legacyCoreGoMod, "legacy-core-go-mod", defaultLegacyCoreMod, "path where the legacy apps/core go.mod must not exist")
 	flag.Parse()
 
-	if err := run(version, rootGoMod, coreGoMod); err != nil {
+	if err := run(rootGoMod, goWorkPath, builtinCorePath, legacyCoreGoMod); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "release verification failed: %v\n", err)
 		os.Exit(1)
 	}
 
-	_, _ = fmt.Fprintf(os.Stdout, "release verification passed for %s\n", version)
+	_, _ = fmt.Fprintln(os.Stdout, "release verification passed")
 }
 
-func run(version, rootGoMod, coreGoMod string) error {
-	releaseVersion, err := normalizeReleaseVersion(version)
-	if err != nil {
-		return err
-	}
-
+func run(rootGoMod, goWorkPath, builtinCorePath, legacyCoreGoMod string) error {
 	rootState, err := loadModuleState(rootGoMod)
 	if err != nil {
 		return fmt.Errorf("load root module state: %w", err)
 	}
-
-	coreState, err := loadModuleState(coreGoMod)
-	if err != nil {
-		return fmt.Errorf("load apps/core module state: %w", err)
+	if rootState.ModulePath != rootModulePath {
+		return fmt.Errorf("root module must declare %q, got %q", rootModulePath, rootState.ModulePath)
+	}
+	if version, ok := rootState.Requires[legacyCoreModulePath]; ok {
+		return fmt.Errorf("root module must not require legacy core module %q (found %q)", legacyCoreModulePath, version)
+	}
+	if replacement, ok := rootState.Replaces[legacyCoreModulePath]; ok {
+		return fmt.Errorf("root module must not replace legacy core module %q (found %q)", legacyCoreModulePath, replacement)
 	}
 
-	if err := verifyModuleState("root module", rootState, rootModulePath, coreModulePath, releaseVersion, rootReplacePath); err != nil {
+	if _, err := os.Stat(legacyCoreGoMod); err == nil {
+		return fmt.Errorf("legacy core go.mod must not exist at %q", legacyCoreGoMod)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat legacy core go.mod %q: %w", legacyCoreGoMod, err)
+	}
+
+	if err := verifyBuiltinCoreDir(builtinCorePath); err != nil {
 		return err
 	}
 
-	if err := verifyModuleState("apps/core module", coreState, coreModulePath, rootModulePath, releaseVersion, coreReplacePath); err != nil {
+	if err := verifyGoWork(goWorkPath); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func normalizeReleaseVersion(version string) (string, error) {
-	if version == "" {
-		return "", fmt.Errorf("version is required")
-	}
-
-	version = strings.TrimPrefix(version, "refs/tags/")
-	if strings.HasPrefix(version, "apps/core/") {
-		return "", fmt.Errorf("version must be a root release tag like vX.Y.Z, got %q", version)
-	}
-	if !strings.HasPrefix(version, "v") || !semver.IsValid(version) {
-		return "", fmt.Errorf("version must be a valid semantic version tag like vX.Y.Z, got %q", version)
-	}
-
-	return version, nil
 }
 
 func loadModuleState(goModPath string) (*moduleState, error) {
@@ -110,43 +101,44 @@ func loadModuleState(goModPath string) (*moduleState, error) {
 	for _, req := range file.Require {
 		state.Requires[req.Mod.Path] = req.Mod.Version
 	}
-
 	for _, rep := range file.Replace {
-		replacement := normalizeReplaceTarget(rep.New.Path)
-		if rep.New.Version != "" {
-			replacement = replacement + "@" + rep.New.Version
-		}
-		state.Replaces[rep.Old.Path] = replacement
+		state.Replaces[rep.Old.Path] = rep.New.Path
 	}
 
 	return state, nil
 }
 
-func normalizeReplaceTarget(target string) string {
-	return path.Clean(strings.ReplaceAll(target, "\\", "/"))
+func verifyBuiltinCoreDir(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("builtin core package %q: %w", path, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("builtin core package %q must be a directory", path)
+	}
+
+	manifestPath := filepath.Join(path, "manifest.yaml")
+	if _, err := os.Stat(manifestPath); err != nil {
+		return fmt.Errorf("builtin core manifest %q: %w", manifestPath, err)
+	}
+
+	legacyNestedGoMod := filepath.Join(path, "go.mod")
+	if _, err := os.Stat(legacyNestedGoMod); err == nil {
+		return fmt.Errorf("builtin core package must not contain nested go.mod at %q", legacyNestedGoMod)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat builtin core nested go.mod %q: %w", legacyNestedGoMod, err)
+	}
+
+	return nil
 }
 
-func verifyModuleState(label string, state *moduleState, expectedModule, requiredModule, expectedVersion, expectedReplace string) error {
-	if state.ModulePath != expectedModule {
-		return fmt.Errorf("%s must declare module %q, got %q", label, expectedModule, state.ModulePath)
+func verifyGoWork(goWorkPath string) error {
+	data, err := os.ReadFile(goWorkPath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", goWorkPath, err)
 	}
-
-	requiredVersion, ok := state.Requires[requiredModule]
-	if !ok {
-		return fmt.Errorf("%s must require %q", label, requiredModule)
+	if strings.Contains(string(data), legacyCoreWorkUse) {
+		return fmt.Errorf("go.work must not reference legacy core workspace entry %q", legacyCoreWorkUse)
 	}
-	if requiredVersion != expectedVersion {
-		return fmt.Errorf("%s must require %q at %q, got %q", label, requiredModule, expectedVersion, requiredVersion)
-	}
-
-	replaceTarget, ok := state.Replaces[requiredModule]
-	if !ok {
-		return fmt.Errorf("%s must replace %q with local path %q", label, requiredModule, expectedReplace)
-	}
-	normalizedExpectedReplace := normalizeReplaceTarget(expectedReplace)
-	if replaceTarget != normalizedExpectedReplace {
-		return fmt.Errorf("%s must replace %q with %q, got %q", label, requiredModule, expectedReplace, replaceTarget)
-	}
-
 	return nil
 }

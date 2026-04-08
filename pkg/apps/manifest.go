@@ -1,6 +1,8 @@
-// Package apps provides app manifest parsing, validation, and directory scanning
-// for the Moca app system. An app is a self-contained Go module under apps/ that
-// declares its metadata in a manifest.yaml file.
+// Package apps provides manifest parsing, validation, and directory scanning
+// for installable Moca apps. Installable apps live under apps/, carry their own
+// go.mod, and declare metadata in a manifest.yaml file. Builtin framework apps
+// such as pkg/builtin/core are part of the root module and are not discovered
+// through apps/ scanning.
 package apps
 
 import (
@@ -37,7 +39,7 @@ type AppManifest struct {
 	// Forward-compatible: declared but not validated in MS-08.
 	Fixtures     []FixtureDef  `yaml:"fixtures,omitempty"`
 	Migrations   []Migration   `yaml:"migrations,omitempty"`
-	StaticAssets []AssetBundle  `yaml:"static_assets,omitempty"`
+	StaticAssets []AssetBundle `yaml:"static_assets,omitempty"`
 	PortalPages  []PortalPage  `yaml:"portal_pages,omitempty"`
 }
 

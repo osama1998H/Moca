@@ -37,8 +37,8 @@ The 5-step resolution order (API scope → role-based → field-level → row-le
 | `pkg/meta/stubs.go` | PermRule | 10–18 | Permission rule struct with bitmask, field-level, match fields |
 | `pkg/auth/user.go` | User | 1–12 | Current user struct (Email, FullName, Roles only) |
 | `pkg/document/context.go` | DocContext | 18–40 | User carried through document lifecycle |
-| `apps/core/user_controller.go` | — | 1–54 | Existing bcrypt password hashing |
-| `apps/core/modules/core/doctypes/` | user, role, has_role, doc_perm | — | Core doctype definitions |
+| `pkg/builtin/core/user_controller.go` | — | 1–54 | Existing bcrypt password hashing |
+| `pkg/builtin/core/modules/core/doctypes/` | user, role, has_role, doc_perm | — | Core doctype definitions |
 
 ## Research Notes
 
@@ -48,7 +48,7 @@ No web research was needed. The design documents and existing codebase provide s
 - **Middleware chain ready:** `pkg/api/gateway.go` already chains Tenant → Auth → RateLimit. The auth middleware calls `Authenticator.Authenticate()` and stores the user in context. Just needs a real implementation.
 - **Permission check already wired:** `pkg/api/rest.go:300` already calls `h.perm.CheckDocPerm(...)` — the integration point exists, it just calls `AllowAllPermissionChecker`.
 - **Gateway options ready:** `WithAuthenticator()` and `WithPermissionChecker()` options already exist on the Gateway.
-- **Password hashing exists:** `apps/core/user_controller.go` already implements bcrypt hashing in a BeforeSave hook.
+- **Password hashing exists:** `pkg/builtin/core/user_controller.go` already implements bcrypt hashing in a BeforeSave hook.
 
 ## Milestone Plan
 
@@ -93,7 +93,7 @@ No web research was needed. The design documents and existing codebase provide s
   - `pkg/api/auth.go` lines 12–15 (`Authenticator` interface)
   - `pkg/api/middleware.go` lines 206–228 (authMiddleware calling `Authenticate()`)
   - `internal/drivers/redis.go` (`KeySession` constant, Session client on DB 2)
-  - `apps/core/user_controller.go` (bcrypt password hashing)
+  - `pkg/builtin/core/user_controller.go` (bcrypt password hashing)
   - ROADMAP.md lines 808–815 (deliverables 2, 3, 4, 9)
 - **Deliverable:**
   - `pkg/auth/jwt.go` — `JWTConfig`, `IssueTokenPair()`, `ValidateAccessToken()`, `RotateRefreshToken()`

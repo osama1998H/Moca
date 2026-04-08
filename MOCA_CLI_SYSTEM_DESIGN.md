@@ -161,7 +161,6 @@ my-project/                          ← project root
 ├── moca.yaml                        ← project manifest (replaces bench's implicit structure)
 ├── moca.lock                        ← lockfile for app versions (NEW — not in bench)
 ├── apps/                            ← installed Moca applications
-│   ├── core/                        ← framework core app (always present)
 │   ├── crm/                         ← example: CRM app
 │   └── accounting/                  ← example: accounting app
 ├── sites/                           ← all site data
@@ -624,7 +623,7 @@ Examples:
 3. Connects to PostgreSQL and creates the `moca_system` schema.
 4. Connects to Redis and verifies connectivity.
 5. Optionally creates Kafka topics.
-6. Installs the `core` framework app.
+6. Registers the builtin `core` framework app.
 7. Generates initial `moca.lock`.
 8. Initializes git repository.
 

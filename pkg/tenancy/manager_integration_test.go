@@ -19,8 +19,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/osama1998H/moca/apps/core"
 	"github.com/osama1998H/moca/internal/config"
+	"github.com/osama1998H/moca/pkg/builtin/core"
 	"github.com/osama1998H/moca/pkg/meta"
 	"github.com/osama1998H/moca/pkg/observe"
 	"github.com/osama1998H/moca/pkg/orm"

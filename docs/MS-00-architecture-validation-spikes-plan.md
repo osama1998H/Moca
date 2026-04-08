@@ -85,12 +85,12 @@ Web research was conducted for four library decisions. Key findings:
 - **Status:** Completed
 - **Title:** Initialize Go Module, Workspace, and CI Pipeline
 - **Description:**
-  Create the root Go module (`github.com/osama1998H/moca`), the `go.work` file composing the framework and a stub `apps/core` module, the `spikes/` directory structure, and the GitHub Actions CI pipeline.
+  Create the root Go module (`github.com/osama1998H/moca`), the `go.work` file composing the framework root and installable app modules, the `spikes/` directory structure, and the GitHub Actions CI pipeline.
 
   Specific deliverables:
   1. `go.mod` at project root for `github.com/osama1998H/moca` (Go 1.26+)
-  2. `apps/core/go.mod` for `github.com/osama1998H/moca/apps/core`
-  3. `go.work` composing both modules: `use (. ./apps/core)`
+  2. `pkg/builtin/core/` skeleton for the builtin core package in the root module
+  3. `go.work` composing the root module and validating installable app-module composition through the spike workspace
   4. `.github/workflows/ci.yml` with three jobs: `go build ./...`, `go test ./...`, `golangci-lint run`
   5. `spikes/` directory with subdirectories: `pg-tenant/`, `redis-streams/`, `go-workspace/`, `meilisearch/`, `cobra-ext/`
   6. `.golangci.yml` with baseline linter config (govet, errcheck, staticcheck, unused, gosimple)

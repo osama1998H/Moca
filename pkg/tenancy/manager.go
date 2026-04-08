@@ -25,8 +25,8 @@ import (
 )
 
 // BootstrapFunc returns the compiled MetaType definitions for bootstrap.
-// The canonical implementation is core.BootstrapCoreMeta.
-// Injected to avoid import cycles (apps/core → pkg/document → pkg/tenancy).
+// The canonical implementation is builtin core.BootstrapCoreMeta.
+// Injected to avoid import cycles (pkg/builtin/core -> pkg/document -> pkg/tenancy).
 type BootstrapFunc func() ([]*meta.MetaType, error)
 
 // Sentinel errors for site operations.
@@ -84,7 +84,7 @@ type SiteManager struct {
 
 // NewSiteManager creates a SiteManager.
 // redisCache and redisPubSub may be nil; Redis-dependent steps degrade gracefully.
-// bootstrapFn should be core.BootstrapCoreMeta (injected to avoid import cycles).
+// bootstrapFn should be builtin core.BootstrapCoreMeta (injected to avoid import cycles).
 func NewSiteManager(
 	db *orm.DBManager,
 	migrator *meta.Migrator,

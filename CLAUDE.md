@@ -135,7 +135,7 @@ internal/
   lockfile/          # Distributed lock support (Redis-backed), PID file management
   scaffold/          # Project scaffolding templates
   testutil/          # Test utilities, benchmarking helpers (internal/testutil/bench/)
-apps/core/           # Core framework doctypes (User, Role, DocType, Module, SystemSettings)
+pkg/builtin/core/    # Builtin framework core doctypes (User, Role, DocType, Module, SystemSettings)
   modules/core/      # Modular doctype definitions (JSON schemas + controllers)
     doctypes/
       doctype/       # DocType meta-definition
@@ -150,7 +150,7 @@ desk/                # React frontend (MS-17, in progress)
 spikes/              # MS-00 validation prototypes (5 spikes, all passing)
 ```
 
-Go multi-module workspace (`go.work`) composes the root module with `apps/core`.
+Go multi-module workspace (`go.work`) composes the root module with installable app modules under `apps/`; builtin core lives in the root module at `pkg/builtin/core`.
 
 ## Key Architectural Decisions
 

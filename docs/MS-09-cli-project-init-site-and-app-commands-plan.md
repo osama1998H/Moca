@@ -38,7 +38,7 @@ After MS-09, a developer can: `moca init my-erp && moca site create acme.localho
 | `pkg/orm/schema.go` | EnsureSystemSchema | 1–83 | Existing system schema DDL (sites, apps, site_apps tables) |
 | `pkg/meta/migrator.go` | Migrator | 1–224 | Existing MetaType schema diffing and DDL application |
 | `pkg/apps/loader.go` | ScanApps, ValidateDependencies | 1–200 | Existing app discovery, manifest validation, cycle detection |
-| `apps/core/bootstrap.go` | BootstrapCoreMeta | 1–95 | Core app's 8 MetaType definitions, self-referential DocType bootstrap |
+| `pkg/builtin/core/bootstrap.go` | BootstrapCoreMeta | 1–95 | Core app's 8 MetaType definitions, self-referential DocType bootstrap |
 
 ---
 
@@ -145,8 +145,8 @@ No web research was needed. The design documents, existing codebase, and ROADMAP
   - `MOCA_SYSTEM_DESIGN.md` §8.3 lines 1435–1462 (9-step create-site, 6-step install-app)
   - `pkg/orm/schema.go:EnsureSystemSchema()` (pattern for system schema DDL)
   - `pkg/meta/migrator.go:EnsureMetaTables()` (creates per-tenant system tables)
-  - `apps/core/bootstrap.go:BootstrapCoreMeta()` (8 core MetaTypes)
-  - `apps/core/user_controller.go` (bcrypt pattern for admin password)
+  - `pkg/builtin/core/bootstrap.go:BootstrapCoreMeta()` (8 core MetaTypes)
+  - `pkg/builtin/core/user_controller.go` (bcrypt pattern for admin password)
   - `pkg/apps/loader.go` (ScanApps, LoadApp, ValidateDependencies)
   - `internal/drivers/redis.go` (RedisClients for cache namespace setup)
   - `pkg/meta/registry.go` (Register, Get, InvalidateAll for cache warming)
@@ -272,7 +272,7 @@ No web research was needed. The design documents, existing codebase, and ROADMAP
 - **Why this task exists:** MS-09 is the first milestone where multiple subsystems interact end-to-end (CLI → service layer → ORM → PostgreSQL + Redis). Integration tests are essential to verify the full chain works and to prevent regressions as downstream milestones build on this foundation.
 - **Dependencies:** MS-09-T1, MS-09-T2, MS-09-T3 (tests exercise all layers)
 - **Inputs / References:**
-  - `apps/core/integration_test.go` — existing integration test pattern (setup helper, Docker PG/Redis)
+  - `pkg/builtin/core/integration_test.go` — existing integration test pattern (setup helper, Docker PG/Redis)
   - `pkg/orm/integration_test.go` — existing ORM integration test pattern
   - `cmd/moca/commands_test.go` — existing CLI test pattern
   - `docker-compose.yml` — PostgreSQL on port 5433, Redis for test infrastructure
@@ -304,7 +304,7 @@ Tasks are strictly sequential due to layered dependencies. However, within T2, S
 
 1. **Should `moca init` also create a default site?** The design docs keep them separate, but the acceptance criteria show `moca init my-erp` doing a lot of setup. Recommendation: keep them separate, print a "Next: run `moca site create`" message. Revisit if user feedback indicates friction.
 
-2. **Fixture format for core app:** The core app needs fixture data (at minimum: "System Manager" role, "Administrator" module). Should these be JSON files in `apps/core/fixtures/` or hardcoded in the SiteManager? Recommendation: JSON fixtures in `apps/core/fixtures/` to establish the pattern that all apps will follow.
+2. **Fixture format for core app:** The core app needs fixture data (at minimum: "System Manager" role, "Administrator" module). Should these be JSON files in `pkg/builtin/core/fixtures/` or hardcoded in the SiteManager? Recommendation: JSON fixtures in `pkg/builtin/core/fixtures/` to establish the pattern that builtin and installable apps will follow.
 
 3. **Advisory lock for concurrent migration safety:** Should the MigrationRunner acquire a PostgreSQL advisory lock before running migrations? This prevents two `moca db migrate` invocations from racing. Recommendation: yes, use `pg_advisory_xact_lock(hash)` inside the migration transaction. Low cost, high safety.
 

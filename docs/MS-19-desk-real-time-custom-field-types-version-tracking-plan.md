@@ -172,7 +172,7 @@ No external web research was needed. Key implementation decisions derived from c
   - `pkg/document/crud.go` lines 838, 901, 906, 912–942 (Update flow — prevData capture, changesJSON, outboxEvent, transaction block)
   - `pkg/document/crud.go` lines 1449–1475 (`buildChangesJSON` — reusable diff logic)
   - `pkg/api/rest.go` (ResourceHandler route registration pattern)
-  - `apps/core/modules/core/doctypes/doctype/doctype.json` (example with `track_changes: true`)
+  - `pkg/builtin/core/modules/core/doctypes/doctype/doctype.json` (example with `track_changes: true`)
 - **Deliverable:**
   - `pkg/document/version.go` — `insertVersion()`, `buildVersionDiff()`, `fetchVersions()`, `VersionRecord` struct
   - Modified `pkg/document/crud.go` — version insertion in Insert (after line 775) and Update (after line 939) transactions

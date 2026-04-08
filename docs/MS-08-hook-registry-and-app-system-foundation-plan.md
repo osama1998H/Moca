@@ -4,7 +4,7 @@
 - **ID:** MS-08
 - **Name:** Hook Registry and App System Foundation
 - **Roadmap Reference:** `ROADMAP.md` lines 521-561
-- **Goal:** Implement HookRegistry (priority-ordered, dependency-aware), AppManifest parser, app directory scanner, and the `apps/core` framework app with core DocTypes (User, Role, DocType, Module, SystemSettings).
+- **Goal:** Implement HookRegistry (priority-ordered, dependency-aware), AppManifest parser, app directory scanner, and the builtin `pkg/builtin/core` framework package with core DocTypes (User, Role, DocType, Module, SystemSettings).
 - **Why it matters:** Hooks wire app-provided lifecycle behavior into Document Runtime. Core app provides the minimum MetaTypes for the system to function. Without this milestone, apps cannot extend framework behavior and the system has no built-in doctypes.
 - **Position in roadmap:** MS-08 (Phase 2 -- Core Runtime). Follows MS-07 (CLI Foundation). Precedes MS-09 (CLI Project Init, Site, App Commands).
 - **Upstream dependencies:** MS-04 (Document Runtime) -- complete
@@ -38,7 +38,7 @@ The explicit priority + dependency ordering in HookRegistry is a deliberate impr
 | `pkg/meta/registry.go` | Three-tier cache pattern | 1-143 | Registry design pattern reference |
 | `internal/config/parse.go` | YAML parsing | 1-107 | Pattern for AppManifest parser |
 | `pkg/cli/registry.go` | Command registration | full file | init() + blank import pattern (validated in ADR-005) |
-| `apps/core/core.go` | Package doc | 1-8 | Empty package to be populated |
+| `pkg/builtin/core/core.go` | Package doc | 1-8 | Empty package to be populated |
 | `spikes/cobra-ext/ADR-005-cobra-cli-extension.md` | Full ADR | all | Validated init() registration pattern |
 
 ## Research Notes
@@ -203,11 +203,11 @@ No web research was needed. All implementation patterns are well-defined in the 
 
 - **Task ID:** MS-08-T4
 - **Status:** Completed
-- **Title:** apps/core with manifest.yaml, 5 DocType JSON definitions, User controller, and bootstrap sequence
+- **Title:** pkg/builtin/core with manifest.yaml, 5 DocType JSON definitions, User controller, and bootstrap sequence
 - **Description:**
-  Build the `apps/core` framework app -- the minimum set of system doctypes every Moca deployment needs.
+  Build the builtin `pkg/builtin/core` framework package -- the minimum set of system doctypes every Moca deployment needs.
 
-  **apps/core/manifest.yaml:**
+  **pkg/builtin/core/manifest.yaml:**
   ```yaml
   name: core
   title: Moca Core
@@ -227,7 +227,7 @@ No web research was needed. All implementation patterns are well-defined in the 
         - SystemSettings
   ```
 
-  **DocType JSON definitions** (in `apps/core/modules/core/doctypes/<name>/`):
+  **DocType JSON definitions** (in `pkg/builtin/core/modules/core/doctypes/<name>/`):
 
   1. **User** (`user.json`): Fields -- email (unique, required), full_name, password (Password type, hidden in API), enabled (Check, default 1), language, time_zone, user_type (Select: System/Website), roles (Table child linking to Role). `naming_rule: "field:email"`.
 
@@ -239,16 +239,16 @@ No web research was needed. All implementation patterns are well-defined in the 
 
   5. **SystemSettings** (`system_settings.json`): `is_single: true` (uses `tab_singles` table pattern -- one row per field, not one row per document). Fields -- site_name, default_language, time_zone, date_format, enable_password_policy, password_min_length, session_expiry.
 
-  **apps/core/modules/core/doctypes/user/user.go** -- User controller:
+  **pkg/builtin/core/modules/core/doctypes/user/user.go** -- User controller:
   - Embeds `document.BaseController`
   - `BeforeSave`: hash password with bcrypt if modified and not already hashed (check `$2a$`/`$2b$` prefix)
-  - Uses `golang.org/x/crypto/bcrypt` (add to apps/core/go.mod)
+  - Uses `golang.org/x/crypto/bcrypt` (add to the root `go.mod`)
 
-  **apps/core/hooks.go:**
+  **pkg/builtin/core/hooks.go:**
   - `init()` function that registers the User controller override with `document.ControllerRegistry`
   - Registers any core doc event hooks with `hooks.HookRegistry`
 
-  **Bootstrap sequence** (`apps/core/bootstrap.go`):
+  **Bootstrap sequence** (`pkg/builtin/core/bootstrap.go`):
   - `BootstrapCoreMeta() []*meta.MetaType` -- returns hard-coded DocType MetaType and other core MetaTypes
   - Solves the self-referential problem: DocType MetaType is built in Go code, seeded into the L1 cache before normal registry loading
   - Other 4 doctypes are loaded from their JSON files using the standard MetaType compiler
@@ -263,15 +263,15 @@ No web research was needed. All implementation patterns are well-defined in the 
   - `pkg/document/controller.go` -- BaseController pattern
   - `ROADMAP.md` acceptance criteria -- User DDL correctness, SystemSettings tab_singles
 - **Deliverable:**
-  - `apps/core/manifest.yaml`
-  - `apps/core/hooks.go` -- init() with controller and hook registration
-  - `apps/core/bootstrap.go` -- BootstrapCoreMeta()
-  - `apps/core/modules/core/doctypes/user/user.json` + `user.go`
-  - `apps/core/modules/core/doctypes/role/role.json`
-  - `apps/core/modules/core/doctypes/doctype/doctype.json`
-  - `apps/core/modules/core/doctypes/module/module.json`
-  - `apps/core/modules/core/doctypes/system_settings/system_settings.json`
-  - Updated `apps/core/go.mod` with `golang.org/x/crypto` dependency
+  - `pkg/builtin/core/manifest.yaml`
+  - `pkg/builtin/core/hooks.go` -- init() with controller and hook registration
+  - `pkg/builtin/core/bootstrap.go` -- BootstrapCoreMeta()
+  - `pkg/builtin/core/modules/core/doctypes/user/user.json` + `user.go`
+  - `pkg/builtin/core/modules/core/doctypes/role/role.json`
+  - `pkg/builtin/core/modules/core/doctypes/doctype/doctype.json`
+  - `pkg/builtin/core/modules/core/doctypes/module/module.json`
+  - `pkg/builtin/core/modules/core/doctypes/system_settings/system_settings.json`
+  - Updated root `go.mod` with the `golang.org/x/crypto` dependency required by builtin core
 - **Risks / Unknowns:**
   - **Self-referential DocType bootstrap** is the biggest risk. The hard-coded Go fallback must stay in sync with doctype.json. Mitigation: add a test that compiles doctype.json and compares it field-by-field with the Go-built MetaType.
   - **tab_singles pattern**: Need to verify that the MetaType compiler and DDL generator handle `is_single: true` correctly (generates `tab_singles` key-value table instead of a regular columnar table). If not implemented in MS-03/MS-04, this becomes a hidden dependency.
@@ -293,8 +293,8 @@ No web research was needed. All implementation patterns are well-defined in the 
   - Circular dependency produces `CircularDependencyError`
   - Hook fires during actual document Insert/Update via DocManager
 
-  **apps/core/integration_test.go** (build tag: `integration`):
-  - `apps/core/manifest.yaml` parses and validates successfully via AppManifest parser
+  **pkg/builtin/core/integration_test.go** (build tag: `integration`):
+  - `pkg/builtin/core/manifest.yaml` parses and validates successfully via AppManifest parser
   - All 5 core DocType JSONs compile via MetaType compiler
   - User MetaType generates correct DDL (columns, constraints, naming)
   - SystemSettings MetaType generates tab_singles DDL
@@ -311,7 +311,7 @@ No web research was needed. All implementation patterns are well-defined in the 
   - Existing integration test patterns in the codebase
 - **Deliverable:**
   - `pkg/hooks/integration_test.go`
-  - `apps/core/integration_test.go`
+  - `pkg/builtin/core/integration_test.go`
   - All tests pass with `make test-integration`
 - **Risks / Unknowns:**
   - Integration tests require Docker (PostgreSQL + Redis). CI must have Docker available.

@@ -536,9 +536,8 @@ FROM golang:1.26-bookworm AS builder
 
 WORKDIR /src
 
-COPY go.work go.work.sum ./
+COPY go.work ./
 COPY go.mod go.sum ./
-COPY apps/core/go.mod apps/core/go.sum ./apps/core/
 RUN go mod download
 
 COPY . .

@@ -81,9 +81,9 @@ After reading all documents, systematically read **every Go source file** in the
 - Every `.go` file under `pkg/apps/` (AppManifest, loader, installer)
 - Every `.go` file under `pkg/tenancy/` (site creation manager)
 - Every `.go` file under `internal/` (config, drivers, context, output, process, scaffold, lockfile)
-- Every `.go` file under `apps/core/` (core doctypes, controllers, manifest)
+- Every `.go` file under `pkg/builtin/core/` (core doctypes, controllers, manifest)
 - Every `*_test.go` file across the entire project
-- Every `.json` file under `apps/core/` (DocType definitions)
+- Every `.json` file under `pkg/builtin/core/` (DocType definitions)
 - `go.mod`, `go.work`, `go.sum`, `Makefile`, `docker-compose.yml`, `.golangci.yml`
 - Any other source files you discover
 
@@ -233,7 +233,7 @@ Create `docs/MVP-VALIDATION-REPORT.md` with this exact structure:
 | HookRegistry (priority + deps) | SYS §3.5 | | | |
 | DocEvent dispatcher integration | SYS §3.5 | | | |
 | AppManifest parser & loader | SYS §7.1 | | | |
-| apps/core with 5 DocTypes | SYS §7.2 | | | |
+| pkg/builtin/core with 5 DocTypes | SYS §7.2 | | | |
 | Schema-per-tenant DB isolation | SYS §4.1 | | | |
 | Transaction manager | SYS §4.2 | | | |
 | Redis client factory (4 DBs) | SYS §5.1 | | | |

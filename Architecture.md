@@ -100,12 +100,12 @@ internal/                # Private implementation details
   scaffold/              # Code generation templates
   lockfile/              # App version lockfile management
 
-apps/core/               # Core framework doctypes (User, Role, DocType, Module, etc.)
+pkg/builtin/core/        # Builtin framework core doctypes (User, Role, DocType, Module, etc.)
 spikes/                  # MS-00 architecture validation prototypes (5 spikes)
 docs/                    # Milestone plans, ADRs, validation reports
 ```
 
-Go multi-module workspace (`go.work`) composes the root module with `apps/core` and any installed application modules.
+Go multi-module workspace (`go.work`) composes the root module with installable application modules; builtin core lives in the root module at `pkg/builtin/core`.
 
 ---
 
@@ -148,7 +148,7 @@ Hooks are the extension mechanism. Apps register hooks programmatically in `hook
 
 ### App System
 
-Each Moca app is a self-contained Go module with its own `go.mod`, manifest, modules, DocTypes, hooks, migrations, fixtures, and optional React desk extensions. Apps are composed into the framework via Go workspaces (`go.work`). The installation lifecycle is: Download → Validate Manifest & Dependencies → Migrate Schema → Register Hooks & Routes → Seed Fixtures.
+Each installable Moca app is a self-contained Go module with its own `go.mod`, manifest, modules, DocTypes, hooks, migrations, fixtures, and optional React desk extensions. Builtin framework apps such as `pkg/builtin/core` stay in the root module. Installable apps are composed into the framework via Go workspaces (`go.work`). The installation lifecycle is: Download → Validate Manifest & Dependencies → Migrate Schema → Register Hooks & Routes → Seed Fixtures.
 
 ---
 

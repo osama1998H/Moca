@@ -94,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `DocEventDispatcher` integrated with document lifecycle
 - `AppManifest` YAML parser and validator
 - App directory scanner and loader with dependency validation
-- `apps/core` with 8 core DocTypes: DocType, User, Role, Module, SystemSettings, DocField, DocPerm, HasRole
+- `pkg/builtin/core` with 8 core DocTypes: DocType, User, Role, Module, SystemSettings, DocField, DocPerm, HasRole
 - User controller with bcrypt password hashing
 - Bootstrap sequence for self-referential DocType MetaType
 

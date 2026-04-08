@@ -13,13 +13,13 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/osama1998H/moca/apps/core"
 	"github.com/osama1998H/moca/internal/config"
 	clicontext "github.com/osama1998H/moca/internal/context"
 	"github.com/osama1998H/moca/internal/drivers"
 	"github.com/osama1998H/moca/internal/output"
 	"github.com/osama1998H/moca/internal/process"
 	"github.com/osama1998H/moca/pkg/apps"
+	"github.com/osama1998H/moca/pkg/builtin/core"
 	"github.com/osama1998H/moca/pkg/document"
 	"github.com/osama1998H/moca/pkg/hooks"
 	"github.com/osama1998H/moca/pkg/meta"

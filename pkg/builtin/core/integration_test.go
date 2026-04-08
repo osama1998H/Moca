@@ -435,31 +435,25 @@ func TestInteg_UserControllerBcryptOnInsert(t *testing.T) {
 	}
 }
 
-func TestInteg_AppDirectoryScanDiscoversCore(t *testing.T) {
-	// From apps/core/, the apps directory is "..".
-	appsDir := filepath.Join(".", "..")
-	absAppsDir, err := filepath.Abs(appsDir)
+func TestInteg_BuiltinCoreManifestValidates(t *testing.T) {
+	manifestPath := filepath.Join(".", "manifest.yaml")
+	absManifestPath, err := filepath.Abs(manifestPath)
 	if err != nil {
-		t.Fatalf("resolve apps dir: %v", err)
+		t.Fatalf("resolve manifest path: %v", err)
 	}
 
-	discovered, err := apps.ScanApps(absAppsDir)
+	m, err := apps.ParseManifest(absManifestPath)
 	if err != nil {
-		t.Fatalf("ScanApps: %v", err)
+		t.Fatalf("ParseManifest: %v", err)
 	}
-
-	found := false
-	for _, app := range discovered {
-		if app.Name == "core" {
-			found = true
-			if app.Manifest.Version != "0.1.0" {
-				t.Errorf("core app version: got %q, want %q", app.Manifest.Version, "0.1.0")
-			}
-			break
-		}
+	if err := apps.ValidateManifest(m); err != nil {
+		t.Fatalf("ValidateManifest: %v", err)
 	}
-	if !found {
-		t.Errorf("core app not found in scan results: %v", discovered)
+	if m.Name != "core" {
+		t.Fatalf("manifest name = %q, want core", m.Name)
+	}
+	if m.Version != "0.1.0" {
+		t.Fatalf("manifest version = %q, want 0.1.0", m.Version)
 	}
 }
 

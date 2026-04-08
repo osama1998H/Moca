@@ -77,22 +77,14 @@ The project root has no `go.mod`. This means:
 
 ---
 
-### Issue #5: `apps/core` is a separate Go module without version tags
+### Issue #5: Builtin core lived behind a separate Go module boundary
 
 **Severity:** Blocker  
 **File:** `apps/core/go.mod`  
 
-The `apps/core` directory has its own `go.mod`, making it a separate Go module. When the root module is published to the Go proxy, `apps/core/` is excluded (Go module proxy strips directories with their own `go.mod`). The framework's test code (`pkg/tenancy_test`) imports `apps/core`, so `go mod tidy` on any external consumer fails with:
+The old `apps/core` directory had its own `go.mod`, making builtin core a separate Go module. When the root module was published to the Go proxy, `apps/core/` was excluded (Go module proxy strips directories with their own `go.mod`). External consumers could then fail `go mod tidy` even though builtin core is a framework-owned package.
 
-```
-github.com/osama1998H/moca/apps/core@v0.0.0-...: invalid version: unknown revision
-```
-
-**Fix options:**
-- A) Tag `apps/core` separately (e.g., `apps/core/v0.1.1-alpha.7`) alongside the root tag
-- B) Merge `apps/core` into the root module (remove `apps/core/go.mod`, move to `pkg/core/`)
-- C) Remove the test dependency on `apps/core` from the root module's test files (use build tags or interfaces)
-- D) Document that external apps need a replace directive for `apps/core` and provide it in the scaffold
+**Implemented fix:** Fold builtin core into the root module at `pkg/builtin/core`, delete the nested `apps/core/go.mod`, remove the `go.work` entry for `./apps/core`, and switch release validation to a root-tag-only smoke test that imports `pkg/builtin/core`.
 
 ---
 
@@ -148,14 +140,14 @@ resolve: {
 | 2 | No `go.work` after `moca init` | Blocker | cmd/moca/init.go | **Fixed** — `initGoWorkspace()` creates go.work |
 | 3 | Wrong replace path in app go.mod | Blocker | internal/scaffold/scaffold.go | Open |
 | 4 | No `go.mod` in project root | Blocker | cmd/moca/init.go | **Fixed** — `initGoWorkspace()` creates go.mod |
-| 5 | `apps/core` not resolvable externally | Blocker | apps/core/go.mod, root go.mod | Open |
+| 5 | Builtin core nested-module release gap | Blocker | apps/core/go.mod, root go.mod | **Fixed** — builtin core moved into root module as `pkg/builtin/core` |
 | 6 | Server doesn't load app hooks | Major | internal/serve/server.go | Open |
 | 7 | Vite can't resolve app ext imports | Major | desk/src/vite-plugin.ts | Open |
 
-**3 fixed**, 2 blockers remaining, 2 major issues remaining.
+**4 fixed**, 1 blocker remaining, 2 major issues remaining.
 
 ## Recommended Fix Priority
 
-1. **Issues #3, #5** (scaffold replace path + apps/core module) — Next priority. Fix the go.mod template to use published version for standalone projects, and tag apps/core separately.
+1. **Issue #3** (scaffold replace path) — Next priority. Fix the go.mod template to use published version for standalone projects.
 2. **Issue #6** (server hooks) — Implement dynamic app loading in `moca build server` or server startup.
 3. **Issue #7** (Vite resolve) — Add resolve aliases to `mocaDeskPlugin()`.

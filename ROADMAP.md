@@ -184,7 +184,7 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
   - OUT: No production code, no CLI, no frontend.
 - **Deliverables:**
   1. Root `go.mod` for `github.com/osama1998H/moca`
-  2. `go.work` file composing framework + a stub `apps/core` module
+  2. `go.work` file composing the framework root with installable app modules
   3. 5 spike directories under `spikes/` with self-contained validation code
   4. CI pipeline (GitHub Actions) with `go build ./...`, `go test ./...`, `golangci-lint`
   5. ADR documents for each spike decision
@@ -521,24 +521,24 @@ MS-00 → MS-01 → MS-02 → MS-03 → MS-04 → MS-06 → MS-12 → MS-15 → 
 ### MS-08: Hook Registry and App System Foundation
 
 - **Status:** Completed
-- **Goal:** Implement HookRegistry (priority-ordered, dependency-aware), AppManifest parser, app directory scanner, and the `apps/core` framework app with core DocTypes (User, Role, DocType, Module, SystemSettings).
+- **Goal:** Implement HookRegistry (priority-ordered, dependency-aware), AppManifest parser, app directory scanner, and the builtin `pkg/builtin/core` framework package with core DocTypes (User, Role, DocType, Module, SystemSettings).
 - **Why now:** Hooks wire app-provided lifecycle behavior into Document Runtime. Core app provides the minimum MetaTypes for the system to function.
 - **Scope:**
-  - IN: `pkg/hooks/registry.go` (PrioritizedHandler, dependency resolution, topological sort), `pkg/hooks/docevents.go`, `pkg/apps/manifest.go`, `pkg/apps/loader.go`, `apps/core/` (5 DocType definitions + Go controllers).
+  - IN: `pkg/hooks/registry.go` (PrioritizedHandler, dependency resolution, topological sort), `pkg/hooks/docevents.go`, `pkg/apps/manifest.go`, `pkg/apps/loader.go`, `pkg/builtin/core/` (5 DocType definitions + Go controllers).
   - OUT: No app installation lifecycle (MS-09), no migration runner (MS-09), no fixtures (MS-09).
 - **Deliverables:**
   1. `HookRegistry` with `Register(event, handler)`, `Resolve(event) -> []handler` sorted by priority
   2. DocEvent dispatcher integrated with lifecycle engine
   3. `AppManifest` parser and validator
   4. App directory scanner/loader
-  5. `apps/core/manifest.yaml`
+  5. `pkg/builtin/core/manifest.yaml`
   6. Core DocType definitions: User, Role, DocType, Module, SystemSettings (JSON + Go controllers)
   7. User controller with bcrypt password hashing on BeforeSave
 - **Acceptance Criteria:**
   - `Register("SalesOrder", "after_save", handler, priority=100)` followed by `priority=200` dispatches in order
   - Hook with `DependsOn: ["crm"]` sorted after all "crm" hooks
   - Circular dependencies produce clear error
-  - `apps/core/manifest.yaml` validates successfully
+  - `pkg/builtin/core/manifest.yaml` validates successfully
   - User MetaType compiles and generates correct DDL
   - SystemSettings uses `tab_singles` (not regular table)
 - **Dependencies:** MS-04
