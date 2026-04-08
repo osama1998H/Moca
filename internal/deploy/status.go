@@ -40,6 +40,9 @@ func Status(_ context.Context, projectRoot string, cfg *config.ProjectConfig) (*
 		result.Processes = append(result.Processes, info)
 	}
 
+	// Check generated config existence.
+	result.Config = checkConfigStatus(projectRoot)
+
 	// Count sites.
 	result.SiteCount = countSites(projectRoot)
 
@@ -98,6 +101,40 @@ func pidFileMtime(projectRoot, name string) (time.Time, error) {
 		return time.Time{}, err
 	}
 	return info.ModTime(), nil
+}
+
+// checkConfigStatus checks whether generated proxy and process-manager configs exist.
+func checkConfigStatus(projectRoot string) ConfigStatus {
+	cs := ConfigStatus{}
+
+	// Check proxy configs (Caddy or NGINX).
+	caddyPath := filepath.Join(projectRoot, "config", "caddy", "Caddyfile")
+	nginxPath := filepath.Join(projectRoot, "config", "nginx", "moca.conf")
+	if fileExists(caddyPath) || fileExists(nginxPath) {
+		cs.ProxyConfigured = true
+	}
+
+	// Check process-manager configs (systemd or docker).
+	systemdDir := filepath.Join(projectRoot, "config", "systemd")
+	dockerPath := filepath.Join(projectRoot, "config", "docker", "docker-compose.yml")
+	if dirHasFiles(systemdDir) || fileExists(dockerPath) {
+		cs.ProcessMgrConfigured = true
+	}
+
+	return cs
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func dirHasFiles(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	return len(entries) > 0
 }
 
 // countSites counts site directories under sites/.

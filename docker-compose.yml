@@ -30,6 +30,24 @@ services:
     tmpfs:
       - /data
 
+  minio:
+    image: minio/minio:latest
+    container_name: moca-test-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      - /data
+
   meilisearch:
     image: getmeili/meilisearch:v1.12
     container_name: moca-test-meili

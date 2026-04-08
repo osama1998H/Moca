@@ -3,6 +3,7 @@ package deploy
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/osama1998H/moca/internal/config"
 	"github.com/osama1998H/moca/pkg/backup"
+	"github.com/osama1998H/moca/pkg/storage"
 )
 
 // Update performs a 4-phase atomic production update.
@@ -170,9 +172,12 @@ func phaseBackup(ctx context.Context, opts UpdateOptions, cfg *config.ProjectCon
 	close(resultsCh)
 
 	var backupErrors []string
+	var backupInfos []backup.BackupInfo
 	for br := range resultsCh {
 		if br.err != nil {
 			backupErrors = append(backupErrors, fmt.Sprintf("%s: %v", br.site, br.err))
+		} else if br.info != nil {
+			backupInfos = append(backupInfos, *br.info)
 		}
 	}
 
@@ -184,6 +189,21 @@ func phaseBackup(ctx context.Context, opts UpdateOptions, cfg *config.ProjectCon
 		Name:        "backup-sites",
 		Description: fmt.Sprintf("Backed up %d site(s)", len(sites)),
 	})
+
+	// Upload backups to S3 if remote storage is configured.
+	if cfg.Backup.Destination.Driver == "s3" {
+		uploaded, err := uploadBackups(ctx, cfg, backupInfos)
+		if err != nil {
+			// Upload failure is non-fatal — the local backups succeeded.
+			slog.Warn("backup upload to S3 failed", "error", err)
+		}
+		if uploaded > 0 {
+			results = append(results, StepResult{
+				Name:        "upload-backups",
+				Description: fmt.Sprintf("Uploaded %d backup(s) to S3", uploaded),
+			})
+		}
+	}
 
 	// Create deployment snapshot.
 	if err := CreateSnapshot(opts.ProjectRoot, deploymentID); err != nil {
@@ -284,6 +304,31 @@ func runMigrations(ctx context.Context, opts UpdateOptions, _ *config.ProjectCon
 		return fmt.Errorf("migrations failed: %s: %w", string(out), err)
 	}
 	return nil
+}
+
+// uploadBackups uploads completed backup files to S3-compatible remote storage.
+// Returns the number of successfully uploaded backups.
+func uploadBackups(ctx context.Context, cfg *config.ProjectConfig, infos []backup.BackupInfo) (int, error) {
+	s3Client, err := storage.NewS3Storage(cfg.Infrastructure.Storage)
+	if err != nil {
+		return 0, fmt.Errorf("init S3 client: %w", err)
+	}
+
+	if err := s3Client.EnsureBucket(ctx); err != nil {
+		return 0, fmt.Errorf("ensure bucket: %w", err)
+	}
+
+	remote := backup.NewRemoteStorage(s3Client, cfg.Backup.Destination.Prefix)
+
+	var uploaded int
+	for _, info := range infos {
+		if _, err := remote.Upload(ctx, info); err != nil {
+			slog.Warn("failed to upload backup", "backup_id", info.ID, "error", err)
+			continue
+		}
+		uploaded++
+	}
+	return uploaded, nil
 }
 
 // discoverSites returns site names by scanning the sites/ directory.

@@ -169,7 +169,7 @@ No web research was needed. All implementation details are fully specified in th
 
 - **Task ID:** MS-21-T4
 - **Title:** Integration Wiring and End-to-End Validation
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:** Wire generate, deploy, and backup packages together. Write integration tests (`//go:build integration`) validating all 8 roadmap acceptance criteria. Ensure cross-package calls work correctly (deploy setup → generate + backup schedule, deploy update → backup upload).
 
   **Wiring points:**

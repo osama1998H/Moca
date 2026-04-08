@@ -112,8 +112,15 @@ type PromoteOptions struct {
 type StatusResult struct {
 	CurrentDeployment string        `json:"current_deployment"`
 	Processes         []ProcessInfo `json:"processes"`
+	Config            ConfigStatus  `json:"config"`
 	Uptime            time.Duration `json:"uptime"`
 	SiteCount         int           `json:"site_count"`
+}
+
+// ConfigStatus reports whether generated infrastructure configs exist.
+type ConfigStatus struct {
+	ProxyConfigured      bool `json:"proxy_configured"`
+	ProcessMgrConfigured bool `json:"process_mgr_configured"`
 }
 
 // ProcessInfo describes the state of a single Moca process.
