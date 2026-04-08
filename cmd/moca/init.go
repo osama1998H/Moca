@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	goredis "github.com/redis/go-redis/v9"
@@ -87,24 +88,28 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	s.Stop("Project structure created")
 
-	// 4.5. Scaffold desk/ frontend directory.
+	// 4.5. Create go.work and go.mod for the Go workspace.
+	s = w.NewSpinner("Creating Go workspace...")
+	s.Start()
+	if err := initGoWorkspace(targetDir, projectName); err != nil {
+		s.Stop("Failed")
+		return output.NewCLIError("Failed to create Go workspace").WithErr(err)
+	}
+	s.Stop("Go workspace created")
+
+	// 4.6. Scaffold desk/ frontend directory.
 	skipDesk, _ := cmd.Flags().GetBool("skip-desk")
 	if !skipDesk {
 		s = w.NewSpinner("Scaffolding desk frontend...")
 		s.Start()
 
-		// Use file: protocol if the framework desk exists nearby (development),
-		// otherwise default to the semver constraint for published packages.
-		deskSpec := "^0.1.0"
-		frameworkDesk := filepath.Join(targetDir, "..", "desk", "package.json")
-		if _, err := os.Stat(frameworkDesk); err == nil {
-			deskSpec = "file:../desk"
-		}
+		// Resolve @osama1998h/desk version from the binary version.
+		deskVersion, deskSpec := resolveDeskVersion(targetDir)
 
 		if err := scaffold.ScaffoldDesk(scaffold.DeskScaffoldOptions{
 			ProjectRoot:     targetDir,
 			ProjectName:     projectName,
-			MocaDeskVersion: "0.1.0",
+			MocaDeskVersion: deskVersion,
 			MocaDeskSpec:    deskSpec,
 		}); err != nil {
 			s.Stop("Failed")
@@ -385,6 +390,51 @@ func initGit(targetDir string) error {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Run()
+}
+
+// initGoWorkspace creates a thin go.mod and go.work in the project root.
+// The go.mod provides a module path for the workspace root (needed by
+// readGoModulePath in the scaffold package). The go.work composes the
+// root module and will have app modules added by `moca app new`.
+func initGoWorkspace(targetDir, projectName string) error {
+	// Write go.mod — thin root module for the workspace.
+	goModContent := fmt.Sprintf("module %s\n\ngo 1.26.1\n", projectName)
+	if err := os.WriteFile(filepath.Join(targetDir, "go.mod"), []byte(goModContent), 0o644); err != nil {
+		return fmt.Errorf("write go.mod: %w", err)
+	}
+
+	// Run `go work init .` to create go.work referencing the root module.
+	cmd := exec.Command("go", "work", "init", ".")
+	cmd.Dir = targetDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("go work init: %s: %w", strings.TrimSpace(string(out)), err)
+	}
+
+	return nil
+}
+
+// resolveDeskVersion determines the @osama1998h/desk version and npm spec
+// to use in the scaffolded desk/package.json.
+//
+// Priority:
+//  1. If a framework desk/ exists nearby (development monorepo), use file: protocol.
+//  2. If the binary was built with a release version, pin to that exact version.
+//  3. Fallback to "^0.1.0" for dev builds.
+func resolveDeskVersion(targetDir string) (version, spec string) {
+	// Development: use file: protocol when the framework desk is adjacent.
+	frameworkDesk := filepath.Join(targetDir, "..", "desk", "package.json")
+	if _, err := os.Stat(frameworkDesk); err == nil {
+		return "0.1.0", "file:../desk"
+	}
+
+	// Release build: pin to the exact binary version.
+	if Version != "" && Version != "dev" {
+		return Version, Version
+	}
+
+	// Dev build fallback.
+	return "0.1.0", "^0.1.0"
 }
 
 // buildInitDSN constructs a PostgreSQL DSN from DatabaseConfig.

@@ -142,23 +142,20 @@ resolve: {
 
 ## Summary
 
-| # | Issue | Severity | Component |
-|---|-------|----------|-----------|
-| 1 | Desk version `^0.1.0` unresolvable | Blocker | scaffold/desk_templates.go |
-| 2 | No `go.work` after `moca init` | Blocker | cmd/moca/init.go |
-| 3 | Wrong replace path in app go.mod | Blocker | internal/scaffold/scaffold.go |
-| 4 | No `go.mod` in project root | Blocker | cmd/moca/init.go |
-| 5 | `apps/core` not resolvable externally | Blocker | apps/core/go.mod, root go.mod |
-| 6 | Server doesn't load app hooks | Major | internal/serve/server.go |
-| 7 | Vite can't resolve app ext imports | Major | desk/src/vite-plugin.ts |
+| # | Issue | Severity | Component | Status |
+|---|-------|----------|-----------|--------|
+| 1 | Desk version `^0.1.0` unresolvable | Blocker | scaffold/desk_templates.go | **Fixed** — release builds now pin to exact version |
+| 2 | No `go.work` after `moca init` | Blocker | cmd/moca/init.go | **Fixed** — `initGoWorkspace()` creates go.work |
+| 3 | Wrong replace path in app go.mod | Blocker | internal/scaffold/scaffold.go | Open |
+| 4 | No `go.mod` in project root | Blocker | cmd/moca/init.go | **Fixed** — `initGoWorkspace()` creates go.mod |
+| 5 | `apps/core` not resolvable externally | Blocker | apps/core/go.mod, root go.mod | Open |
+| 6 | Server doesn't load app hooks | Major | internal/serve/server.go | Open |
+| 7 | Vite can't resolve app ext imports | Major | desk/src/vite-plugin.ts | Open |
 
-**4 blockers** prevent a developer from completing the basic workflow.  
-**2 major issues** prevent backend customization and frontend extensions from working even after workarounds.
+**3 fixed**, 2 blockers remaining, 2 major issues remaining.
 
 ## Recommended Fix Priority
 
-1. **Issues #2, #3, #4** (init + scaffold) — Fix together as they're related. `moca init` should create `go.work` + `go.mod`. Scaffold should detect standalone vs in-framework projects.
-2. **Issue #5** (apps/core module) — Architectural decision needed. Recommend option D short-term (add replace to scaffold), option B long-term (merge into root).
-3. **Issue #1** (desk version) — Quick fix: pin to current release version in scaffold template.
-4. **Issue #6** (server hooks) — Implement dynamic app loading in `moca build server` or server startup.
-5. **Issue #7** (Vite resolve) — Add resolve aliases to `mocaDeskPlugin()`.
+1. **Issues #3, #5** (scaffold replace path + apps/core module) — Next priority. Fix the go.mod template to use published version for standalone projects, and tag apps/core separately.
+2. **Issue #6** (server hooks) — Implement dynamic app loading in `moca build server` or server startup.
+3. **Issue #7** (Vite resolve) — Add resolve aliases to `mocaDeskPlugin()`.
