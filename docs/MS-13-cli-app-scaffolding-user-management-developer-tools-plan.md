@@ -316,6 +316,47 @@ No web research was needed. All implementation patterns are well-documented in t
   - **Auth for `dev request`:** Full JWT auth is in MS-14. For now, use a simpler mechanism — e.g., a `X-Moca-Internal` header with a shared secret from config, or bypass auth in dev mode. Document the limitation.
   - **`dev execute` code-gen:** Template must handle imports correctly. Consider using `goimports` on the generated file, or require the user to write full import paths.
 
+---
+
+### Task 6
+
+- **Task ID:** MS-13-T6
+- **Title:** Release Tagging and External Module Resolution for `apps/core`
+- **Status:** Completed
+- **Description:**
+  Close the release-engineering gap discovered in `docs/dx-test-session-report.md` Issue #5. The framework keeps `apps/core` as a separate Go module, but released root tags must now enforce symmetric root/submodule version requirements and a matching `apps/core/vX.Y.Z` tag so external consumers can resolve `github.com/osama1998H/moca/apps/core` via direct VCS fetch.
+
+  **Files to create:**
+  - `internal/releaseverify/main.go` — `go run` verifier that validates the coupled root/submodule release contract
+  - `internal/releaseverify/main_test.go` — unit tests for matching versions, mismatches, missing replaces, and invalid tag input
+
+  **Files to modify:**
+  - `go.mod` — require `github.com/osama1998H/moca/apps/core` at the exact release version
+  - `apps/core/go.mod` — require `github.com/osama1998H/moca` at the exact same release version
+  - `.github/workflows/release.yml` — verify the contract, create or validate `apps/core/vX.Y.Z`, and run an external `go mod tidy` smoke check
+
+  **Implementation details:**
+  1. Keep local `replace` directives in both modules so workspace development still resolves local source.
+  2. Keep `moca app new` standalone behavior unchanged: pin the released root framework version, but do not add a direct `apps/core` dependency unless generated code imports it.
+  3. Fail release builds if the root tag and `apps/core` tag disagree, or if either `go.mod` file references the wrong release version.
+  4. Verify an external temp module can `go mod tidy` and `go build` after importing `pkg/document` and `pkg/hooks` from the released root module.
+
+- **Why this task exists:** The multi-module workspace design from MS-00 only covered local composition. External consumers failed because the published root module transitively required `apps/core` without a matching released submodule tag.
+- **Dependencies:** MS-13-T1 (completed), MS-00-T1 (completed), MS-00-T4 (completed)
+- **Inputs / References:**
+  - `docs/dx-test-session-report.md` — Issue #5 root cause and recommended fix
+  - `spikes/go-workspace/ADR-003-go-workspace-composition.md` — local replace + go.work policy
+  - `.github/workflows/release.yml` — current root-tag-only release pipeline
+- **Deliverable:**
+  - Verified release workflow that enforces the coupled root/`apps/core` version contract
+  - Matching root and submodule Go module requirements for the current release line
+- **Acceptance Criteria:**
+  - Root `go.mod` requires `github.com/osama1998H/moca/apps/core` at the exact release version
+  - `apps/core/go.mod` requires `github.com/osama1998H/moca` at the exact same release version
+  - Release workflow creates or validates `apps/core/vX.Y.Z` on the same commit as `vX.Y.Z`
+  - Release workflow runs an external `go mod tidy` smoke test against the tagged release
+  - Existing scaffold tests continue to pass without adding a direct `apps/core` dependency to generated apps
+
 ## Recommended Execution Order
 
 1. **MS-13-T1** (App Scaffold) — Foundation for T2; establishes `addToGoWork` helper and `internal/scaffold/` package
