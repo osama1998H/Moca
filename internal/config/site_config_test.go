@@ -64,6 +64,27 @@ func TestSaveAndLoadSiteConfig_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestLoadSiteConfigRejectsTraversalSite(t *testing.T) {
+	dir := t.TempDir()
+
+	if _, err := LoadSiteConfig(dir, "../../../etc"); err == nil {
+		t.Fatal("expected traversal site name to be rejected")
+	}
+}
+
+func TestSaveSiteConfigRejectsTraversalSite(t *testing.T) {
+	dir := t.TempDir()
+
+	err := SaveSiteConfig(dir, "../../../etc", map[string]any{"test": true})
+	if err == nil {
+		t.Fatal("expected traversal site name to be rejected")
+	}
+
+	if _, statErr := os.Stat(filepath.Join(dir, "..", "..", "..", "etc", "site_config.yaml")); !os.IsNotExist(statErr) {
+		t.Fatalf("expected no file to be created outside project root, got %v", statErr)
+	}
+}
+
 func TestLoadCommonSiteConfig_NotExists(t *testing.T) {
 	dir := t.TempDir()
 	data, err := LoadCommonSiteConfig(dir)

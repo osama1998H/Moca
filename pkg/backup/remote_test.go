@@ -95,11 +95,22 @@ func TestRemoteKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.site+"/"+tt.filename, func(t *testing.T) {
-			got := rs.remoteKey(tt.site, tt.filename)
+			got, err := rs.remoteKey(tt.site, tt.filename)
+			if err != nil {
+				t.Fatalf("remoteKey returned error: %v", err)
+			}
 			if got != tt.expected {
 				t.Errorf("remoteKey(%q, %q) = %q, want %q", tt.site, tt.filename, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestRemoteKeyRejectsTraversalSite(t *testing.T) {
+	rs := NewRemoteStorage(newMockRemoteClient(), "project1")
+
+	if _, err := rs.remoteKey("../../../etc", "bk_acme_20260402_120000.sql.gz"); err == nil {
+		t.Fatal("expected traversal site name to be rejected")
 	}
 }
 
@@ -291,6 +302,15 @@ func TestRemoteStorageListRemoteEmpty(t *testing.T) {
 	}
 }
 
+func TestRemoteStorageListRemoteRejectsTraversalSite(t *testing.T) {
+	mock := newMockRemoteClient()
+	rs := NewRemoteStorage(mock, "proj")
+
+	if _, err := rs.ListRemote(context.Background(), "../../../etc"); err == nil {
+		t.Fatal("expected traversal site name to be rejected")
+	}
+}
+
 func TestRemoteStorageUploadContentType(t *testing.T) {
 	// Verify that .gz files get "application/gzip" and .sql get "application/sql".
 	// We test this by checking that upload succeeds for both extensions
@@ -334,7 +354,10 @@ func TestRemoteKeyFormat(t *testing.T) {
 	// Verify path.Join normalizes correctly (no double slashes, etc.).
 	rs := NewRemoteStorage(newMockRemoteClient(), "my-project")
 
-	key := rs.remoteKey("site1.localhost", "bk_site1_20260101_000000.sql")
+	key, err := rs.remoteKey("site1.localhost", "bk_site1_20260101_000000.sql")
+	if err != nil {
+		t.Fatalf("remoteKey returned error: %v", err)
+	}
 	parts := strings.Split(key, "/")
 	if len(parts) != 4 {
 		t.Errorf("expected 4 path segments, got %d: %q", len(parts), key)

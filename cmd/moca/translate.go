@@ -13,6 +13,7 @@ import (
 
 	"github.com/osama1998H/moca/internal/output"
 	"github.com/osama1998H/moca/pkg/i18n"
+	"github.com/osama1998H/moca/pkg/sitepath"
 )
 
 // NewTranslateCommand returns the "moca translate" command group with all subcommands.
@@ -434,7 +435,10 @@ func runTranslateCompile(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Create output directory.
-	outputDir := filepath.Join(cliCtx.ProjectRoot, "sites", siteName, "translations")
+	outputDir, err := sitepath.Path(cliCtx.ProjectRoot, siteName, "translations")
+	if err != nil {
+		return output.NewCLIError("Invalid site name").WithErr(err)
+	}
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return output.NewCLIError("Cannot create output directory").WithErr(err)
 	}

@@ -1,0 +1,26 @@
+# Security Fix Report
+
+- Selected issue: `SEC-001` Path Traversal via Unsanitized Site Name in Filesystem Operations
+- Severity: High
+- Root cause: Site names were treated as trusted filesystem path segments across CLI, backup, and site-config code. `validateSiteConfig` only rejected empty names, so raw site identifiers flowed into `projectRoot/sites/<site>/...` joins and remote backup key prefixes without any shared path-segment validation or boundary check.
+- Files changed:
+  - `cmd/moca/backup.go`
+  - `cmd/moca/config_cmd.go`
+  - `cmd/moca/db.go`
+  - `cmd/moca/site.go`
+  - `cmd/moca/translate.go`
+  - `internal/config/site_config.go`
+  - `internal/config/site_config_test.go`
+  - `pkg/backup/create.go`
+  - `pkg/backup/list.go`
+  - `pkg/backup/list_test.go`
+  - `pkg/backup/remote.go`
+  - `pkg/backup/remote_test.go`
+  - `pkg/sitepath/sitepath.go`
+  - `pkg/tenancy/manager.go`
+  - `pkg/tenancy/manager_test.go`
+- Tests run:
+  - `GOCACHE=/tmp/moca-go-cache go test ./pkg/sitepath ./pkg/tenancy ./pkg/backup ./internal/config ./cmd/moca -count=1`
+  - `GOCACHE=/tmp/moca-go-cache go vet ./pkg/sitepath ./pkg/tenancy ./pkg/backup ./internal/config ./cmd/moca`
+- PR URL: Not created. Remote GitHub write actions are blocked by the session safety layer.
+- Issue status update: No open GitHub security issue existed for `SEC-001`, and remote issue/PR comment writes were blocked. The local remediation is complete and validated; opening the PR and posting the tracker update must be completed in a session that permits GitHub write actions.

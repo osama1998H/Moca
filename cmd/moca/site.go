@@ -11,6 +11,7 @@ import (
 
 	"github.com/osama1998H/moca/internal/output"
 	"github.com/osama1998H/moca/pkg/backup"
+	"github.com/osama1998H/moca/pkg/sitepath"
 	"github.com/osama1998H/moca/pkg/tenancy"
 	"github.com/spf13/cobra"
 )
@@ -73,6 +74,11 @@ func runSiteCreate(cmd *cobra.Command, args []string) error {
 	ctx, err := requireProject(cmd)
 	if err != nil {
 		return err
+	}
+
+	siteDir, err := sitepath.Path(ctx.ProjectRoot, siteName)
+	if err != nil {
+		return output.NewCLIError("Invalid site name").WithErr(err)
 	}
 
 	// Resolve admin password.
@@ -138,7 +144,6 @@ func runSiteCreate(cmd *cobra.Command, args []string) error {
 	s.Stop(fmt.Sprintf("Site %q created", siteName))
 
 	// Create site filesystem directory.
-	siteDir := filepath.Join(ctx.ProjectRoot, "sites", siteName)
 	if mkErr := os.MkdirAll(siteDir, 0o755); mkErr != nil {
 		w.PrintWarning(fmt.Sprintf("Could not create site directory: %v", mkErr))
 	}
@@ -234,8 +239,10 @@ func runSiteDrop(cmd *cobra.Command, args []string) error {
 	s.Stop(fmt.Sprintf("Site %q dropped", siteName))
 
 	// Remove site filesystem directory.
-	siteDir := filepath.Join(ctx.ProjectRoot, "sites", siteName)
-	if rmErr := os.RemoveAll(siteDir); rmErr != nil {
+	siteDir, pathErr := sitepath.Path(ctx.ProjectRoot, siteName)
+	if pathErr != nil {
+		w.PrintWarning(fmt.Sprintf("Skipped site directory cleanup: %v", pathErr))
+	} else if rmErr := os.RemoveAll(siteDir); rmErr != nil {
 		w.PrintWarning(fmt.Sprintf("Could not remove site directory: %v", rmErr))
 	}
 
@@ -357,6 +364,10 @@ func newSiteUseCmd() *cobra.Command {
 func runSiteUse(cmd *cobra.Command, args []string) error {
 	w := output.NewWriter(cmd)
 	siteName := args[0]
+
+	if err := sitepath.ValidateName(siteName); err != nil {
+		return output.NewCLIError("Invalid site name").WithErr(err)
+	}
 
 	ctx, err := requireProject(cmd)
 	if err != nil {

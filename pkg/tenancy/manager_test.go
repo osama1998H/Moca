@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/sitepath"
 )
 
 func TestSanitizeForSchema(t *testing.T) {
@@ -68,6 +69,10 @@ func TestValidateSiteConfig(t *testing.T) {
 			name: "valid config",
 		},
 		{
+			cfg:  SiteCreateConfig{Name: "acme.localhost", AdminEmail: "admin@acme.com", AdminPassword: "secret123"},
+			name: "valid dotted name",
+		},
+		{
 			cfg:     SiteCreateConfig{AdminEmail: "admin@acme.com", AdminPassword: "secret123"},
 			name:    "missing name",
 			wantErr: true,
@@ -82,6 +87,11 @@ func TestValidateSiteConfig(t *testing.T) {
 			name:    "missing password",
 			wantErr: true,
 		},
+		{
+			cfg:     SiteCreateConfig{Name: "../../../etc", AdminEmail: "admin@acme.com", AdminPassword: "secret123"},
+			name:    "reject traversal",
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -91,6 +101,57 @@ func TestValidateSiteConfig(t *testing.T) {
 				t.Errorf("validateSiteConfig() error = %v, wantErr = %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestValidateSiteName(t *testing.T) {
+	valid := []string{"acme", "acme.localhost", "my-site", "my_site", "Acme-01"}
+	for _, name := range valid {
+		t.Run("valid/"+name, func(t *testing.T) {
+			if err := sitepath.ValidateName(name); err != nil {
+				t.Fatalf("ValidateName(%q) returned error: %v", name, err)
+			}
+		})
+	}
+
+	invalid := []string{"", " ", "../etc", "/tmp/evil", "acme/site", ".hidden", "trailing-", " leading"}
+	for _, name := range invalid {
+		t.Run("invalid/"+name, func(t *testing.T) {
+			if err := sitepath.ValidateName(name); err == nil {
+				t.Fatalf("ValidateName(%q) unexpectedly succeeded", name)
+			}
+		})
+	}
+}
+
+func TestSitePath(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	path, err := sitepath.Path(projectRoot, "acme.localhost", "backups")
+	if err != nil {
+		t.Fatalf("Path returned error: %v", err)
+	}
+
+	want := filepath.Join(projectRoot, "sites", "acme.localhost", "backups")
+	if path != want {
+		t.Fatalf("SitePath = %q, want %q", path, want)
+	}
+}
+
+func TestSitePathRejectsTraversal(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	if _, err := sitepath.Path(projectRoot, "../../../etc"); err == nil {
+		t.Fatal("expected Path to reject traversal site name")
+	}
+}
+
+func TestSetActiveSiteRejectsInvalidName(t *testing.T) {
+	tmpDir := t.TempDir()
+	mgr := &SiteManager{}
+
+	if err := mgr.SetActiveSite(tmpDir, "../etc"); err == nil {
+		t.Fatal("expected SetActiveSite to reject invalid site name")
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/osama1998H/moca/pkg/sitepath"
 	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
@@ -30,9 +31,12 @@ func Create(ctx context.Context, opts CreateOptions) (*BackupInfo, error) {
 	now := time.Now()
 	backupID := fmt.Sprintf("bk_%s_%s", sanitizeSiteName(opts.Site), now.Format("20060102_150405"))
 
-	backupDir := filepath.Join(opts.ProjectRoot, "sites", opts.Site, "backups")
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+	backupDir, err := sitepath.Path(opts.ProjectRoot, opts.Site, "backups")
+	if err != nil {
 		return nil, fmt.Errorf("create backup directory: %w", err)
+	}
+	if mkdirErr := os.MkdirAll(backupDir, 0o755); mkdirErr != nil {
+		return nil, fmt.Errorf("create backup directory: %w", mkdirErr)
 	}
 
 	ext := ".sql"

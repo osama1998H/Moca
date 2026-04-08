@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/osama1998H/moca/pkg/sitepath"
 	"github.com/osama1998H/moca/pkg/storage"
 )
 
@@ -37,8 +38,11 @@ func NewRemoteStorage(client RemoteClient, prefix string) *RemoteStorage {
 }
 
 // remoteKey builds "{prefix}/backups/{site}/{filename}".
-func (r *RemoteStorage) remoteKey(site, filename string) string {
-	return path.Join(r.prefix, "backups", site, filename)
+func (r *RemoteStorage) remoteKey(site, filename string) (string, error) {
+	if err := sitepath.ValidateName(site); err != nil {
+		return "", err
+	}
+	return path.Join(r.prefix, "backups", site, filename), nil
 }
 
 // Upload opens the local backup file at info.Path, uploads it to S3, and
@@ -57,7 +61,10 @@ func (r *RemoteStorage) Upload(ctx context.Context, info BackupInfo) (string, er
 	}
 
 	filename := filepath.Base(info.Path)
-	key := r.remoteKey(info.Site, filename)
+	key, err := r.remoteKey(info.Site, filename)
+	if err != nil {
+		return "", fmt.Errorf("backup/remote: upload %s: %w", info.ID, err)
+	}
 
 	contentType := "application/sql"
 	if strings.HasSuffix(filename, ".gz") {
@@ -108,7 +115,10 @@ func (r *RemoteStorage) Download(ctx context.Context, remoteKey, outputDir strin
 // ListRemote lists all backup files at the site prefix. Keys are parsed using
 // the backup filename pattern. Results are sorted newest-first.
 func (r *RemoteStorage) ListRemote(ctx context.Context, site string) ([]RemoteBackupInfo, error) {
-	prefix := r.prefix + "/backups/" + site + "/"
+	if err := sitepath.ValidateName(site); err != nil {
+		return nil, fmt.Errorf("backup/remote: list %s: %w", site, err)
+	}
+	prefix := path.Join(r.prefix, "backups", site) + "/"
 
 	objects, err := r.client.ListObjects(ctx, prefix, true)
 	if err != nil {
