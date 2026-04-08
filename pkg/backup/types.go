@@ -1,6 +1,10 @@
 package backup
 
-import "time"
+import (
+	"time"
+
+	"github.com/osama1998H/moca/internal/config"
+)
 
 // BackupInfo holds metadata about a single backup file.
 type BackupInfo struct {
@@ -48,4 +52,38 @@ type DBConnConfig struct {
 	Password string
 	Database string
 	Port     int
+}
+
+// RemoteBackupInfo extends BackupInfo with remote storage metadata.
+type RemoteBackupInfo struct {
+	RemoteKey string `json:"remote_key,omitempty"`
+	RemoteURL string `json:"remote_url,omitempty"`
+	BackupInfo
+}
+
+// ScheduleInfo holds the current state of the backup cron schedule.
+type ScheduleInfo struct {
+	CronExpr    string `json:"cron_expr,omitempty"`
+	ProjectName string `json:"project_name"`
+	ProjectRoot string `json:"project_root"`
+	Enabled     bool   `json:"enabled"`
+	Installed   bool   `json:"installed"`
+}
+
+// PruneOptions configures a prune operation.
+type PruneOptions struct {
+	Remote      *RemoteStorage
+	Now         time.Time // injectable for testing; zero means time.Now()
+	Site        string
+	ProjectRoot string
+	Retention   config.RetentionConfig
+	DryRun      bool
+}
+
+// PruneResult summarizes a prune operation.
+type PruneResult struct {
+	Deleted []BackupInfo `json:"deleted"`
+	Kept    []BackupInfo `json:"kept"`
+	Errors  []string     `json:"errors,omitempty"`
+	DryRun  bool         `json:"dry_run"`
 }

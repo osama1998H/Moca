@@ -107,6 +107,34 @@ func (s *S3Storage) Exists(ctx context.Context, key string) (bool, error) {
 	return true, nil
 }
 
+// ObjectInfo holds metadata about a single S3 object.
+type ObjectInfo struct {
+	LastModified time.Time
+	Key          string
+	Size         int64
+}
+
+// ListObjects collects all objects matching the given prefix.
+// If recursive is false, only direct "children" are returned (delimiter="/").
+func (s *S3Storage) ListObjects(ctx context.Context, prefix string, recursive bool) ([]ObjectInfo, error) {
+	opts := minio.ListObjectsOptions{
+		Prefix:    prefix,
+		Recursive: recursive,
+	}
+	var objects []ObjectInfo
+	for obj := range s.client.ListObjects(ctx, s.bucket, opts) {
+		if obj.Err != nil {
+			return nil, fmt.Errorf("storage/s3: list objects prefix=%q: %w", prefix, obj.Err)
+		}
+		objects = append(objects, ObjectInfo{
+			Key:          obj.Key,
+			Size:         obj.Size,
+			LastModified: obj.LastModified,
+		})
+	}
+	return objects, nil
+}
+
 // EnsureBucket creates the bucket if it does not exist. Call during server startup.
 func (s *S3Storage) EnsureBucket(ctx context.Context) error {
 	exists, err := s.client.BucketExists(ctx, s.bucket)

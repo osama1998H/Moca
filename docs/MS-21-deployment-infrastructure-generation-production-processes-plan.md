@@ -133,7 +133,7 @@ No web research was needed. All implementation details are fully specified in th
 
 - **Task ID:** MS-21-T3
 - **Title:** Backup Automation: Schedule, Remote Storage, and Pruning
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:** Extend `pkg/backup/` with S3 remote storage, cron scheduling, and retention-based pruning. Implement 4 remaining `moca backup` subcommands.
 
   **New files:**
