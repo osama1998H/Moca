@@ -8,7 +8,7 @@ require (
 	github.com/graph-gophers/dataloader/v7 v7.1.3
 	github.com/graphql-go/graphql v0.8.1
 	github.com/jackc/pgx/v5 v5.9.1
-	github.com/osama1998H/moca/apps/core v0.0.0-00010101000000-000000000000
+	github.com/osama1998H/moca/apps/core v0.1.1-alpha.7
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/image v0.38.0

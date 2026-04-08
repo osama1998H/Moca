@@ -3,7 +3,7 @@ module github.com/osama1998H/moca/apps/core
 go 1.26.1
 
 require (
-	github.com/osama1998H/moca v0.0.0
+	github.com/osama1998H/moca v0.1.1-alpha.7
 	golang.org/x/crypto v0.49.0
 )
 
