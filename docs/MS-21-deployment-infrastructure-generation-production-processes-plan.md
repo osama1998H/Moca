@@ -91,7 +91,7 @@ No web research was needed. All implementation details are fully specified in th
 
 - **Task ID:** MS-21-T2
 - **Title:** Deployment Command Orchestration
-- **Status:** Not Started
+- **Status:** Completed
 - **Description:** Create `internal/deploy/` package implementing the deployment lifecycle. Implement all 6 `moca deploy` subcommands. `deploy setup` is a 14-step idempotent pipeline that calls into generate and backup packages. `deploy update` is a 4-phase atomic update with auto-rollback on failure. Deployment history is YAML-based in `.moca/deployments/`.
 
   **New files:**
