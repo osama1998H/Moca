@@ -123,8 +123,34 @@ func TestScaffoldApp_Standard(t *testing.T) {
 	if !strings.Contains(string(gomodContent), "module github.com/test/project/apps/my_app") {
 		t.Errorf("go.mod should contain correct module path, got:\n%s", gomodContent)
 	}
+	if !strings.Contains(string(gomodContent), "github.com/osama1998H/moca v0.0.0") {
+		t.Errorf("go.mod should contain local framework version, got:\n%s", gomodContent)
+	}
 	if !strings.Contains(string(gomodContent), "replace github.com/osama1998H/moca => ../..") {
 		t.Error("go.mod should contain replace directive")
+	}
+}
+
+func TestScaffoldApp_StandaloneFrameworkDependency(t *testing.T) {
+	appsDir, projectRoot := setupTestDir(t)
+	opts := baseOpts(appsDir, projectRoot)
+	opts.FrameworkModuleVersion = "v0.1.1-alpha.7"
+	opts.FrameworkReplacePath = ""
+
+	if err := ScaffoldApp(opts); err != nil {
+		t.Fatalf("ScaffoldApp: %v", err)
+	}
+
+	gomodContent, err := os.ReadFile(filepath.Join(appsDir, "my_app", "go.mod"))
+	if err != nil {
+		t.Fatalf("read go.mod: %v", err)
+	}
+
+	if !strings.Contains(string(gomodContent), "github.com/osama1998H/moca v0.1.1-alpha.7") {
+		t.Errorf("go.mod should contain release framework version, got:\n%s", gomodContent)
+	}
+	if strings.Contains(string(gomodContent), "replace github.com/osama1998H/moca =>") {
+		t.Errorf("go.mod should not contain replace directive in standalone mode, got:\n%s", gomodContent)
 	}
 }
 

@@ -4,17 +4,19 @@ package scaffold
 
 // templateData holds all values available to templates.
 type templateData struct {
-	AppName      string // snake_case: "my_app"
-	PackageName  string // Go package name (same as AppName)
-	ModuleName   string // TitleCase: "MyApp"
-	ModuleSnake  string // snake_case: "my_app"
-	Title        string // "My App"
-	Publisher    string
-	License      string
-	GoModulePath string // full module path: "github.com/osama1998H/moca/apps/my_app"
-	DocType      string // optional: "Task"
-	DocTypeSnake string // optional: "task"
-	IncludeDesk  bool   // scaffold desk/ directory with desk-manifest.json
+	AppName                string // snake_case: "my_app"
+	PackageName            string // Go package name (same as AppName)
+	ModuleName             string // TitleCase: "MyApp"
+	ModuleSnake            string // snake_case: "my_app"
+	Title                  string // "My App"
+	Publisher              string
+	License                string
+	GoModulePath           string // full module path: "github.com/osama1998H/moca/apps/my_app"
+	FrameworkModuleVersion string // framework require version written to go.mod
+	FrameworkReplacePath   string // optional local replace target for framework module
+	DocType                string // optional: "Task"
+	DocTypeSnake           string // optional: "task"
+	IncludeDesk            bool   // scaffold desk/ directory with desk-manifest.json
 }
 
 const manifestTmpl = `name: {{.AppName}}
@@ -53,10 +55,12 @@ const goModTmpl = `module {{.GoModulePath}}
 go 1.26.1
 
 require (
-	github.com/osama1998H/moca v0.0.0
+	github.com/osama1998H/moca {{.FrameworkModuleVersion}}
 )
+{{if .FrameworkReplacePath}}
 
-replace github.com/osama1998H/moca => ../..
+replace github.com/osama1998H/moca => {{.FrameworkReplacePath}}
+{{end}}
 `
 
 const readmeTmpl = `# {{.Title}}

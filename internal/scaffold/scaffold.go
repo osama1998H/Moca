@@ -1,7 +1,6 @@
 package scaffold
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"os"
@@ -10,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+
+	"golang.org/x/mod/modfile"
 )
 
 // Template is the scaffold template mode.
@@ -58,6 +59,14 @@ type ScaffoldOptions struct {
 	// If empty, read from the project root go.mod.
 	GoModulePath string
 
+	// FrameworkModuleVersion is the required framework module version written
+	// into the generated app go.mod. Defaults to v0.0.0 for in-repo development.
+	FrameworkModuleVersion string
+
+	// FrameworkReplacePath is an optional local replace directive target for the
+	// framework module. Defaults to ../.. for in-repo development.
+	FrameworkReplacePath string
+
 	// SkipGoModTidy skips running "go mod tidy" after scaffolding.
 	SkipGoModTidy bool
 
@@ -86,17 +95,19 @@ func ScaffoldApp(opts ScaffoldOptions) error {
 	moduleSnake := toSnakeCase(opts.ModuleName)
 
 	data := templateData{
-		AppName:      opts.AppName,
-		PackageName:  opts.AppName,
-		ModuleName:   opts.ModuleName,
-		ModuleSnake:  moduleSnake,
-		Title:        opts.Title,
-		Publisher:    opts.Publisher,
-		License:      opts.License,
-		GoModulePath: goModPath + "/apps/" + opts.AppName,
-		DocType:      opts.DocType,
-		DocTypeSnake: toSnakeCase(opts.DocType),
-		IncludeDesk:  opts.IncludeDesk,
+		AppName:                opts.AppName,
+		PackageName:            opts.AppName,
+		ModuleName:             opts.ModuleName,
+		ModuleSnake:            moduleSnake,
+		Title:                  opts.Title,
+		Publisher:              opts.Publisher,
+		License:                opts.License,
+		GoModulePath:           goModPath + "/apps/" + opts.AppName,
+		FrameworkModuleVersion: opts.FrameworkModuleVersion,
+		FrameworkReplacePath:   opts.FrameworkReplacePath,
+		DocType:                opts.DocType,
+		DocTypeSnake:           toSnakeCase(opts.DocType),
+		IncludeDesk:            opts.IncludeDesk,
 	}
 
 	if err := createDirectories(appDir, opts.Template, moduleSnake, opts.IncludeDesk); err != nil {
@@ -169,6 +180,12 @@ func validateOpts(opts *ScaffoldOptions) error {
 	}
 	if opts.Title == "" {
 		opts.Title = deriveTitle(opts.AppName)
+	}
+	if opts.FrameworkModuleVersion == "" {
+		opts.FrameworkModuleVersion = "v0.0.0"
+		if opts.FrameworkReplacePath == "" {
+			opts.FrameworkReplacePath = "../.."
+		}
 	}
 
 	return nil
@@ -379,18 +396,13 @@ func runGoModTidy(appDir string) error {
 func readGoModulePath(dir string) string {
 	const fallback = "github.com/osama1998H/moca"
 
-	f, err := os.Open(filepath.Join(dir, "go.mod"))
+	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
 	if err != nil {
 		return fallback
 	}
-	defer f.Close() //nolint:errcheck
 
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if modPath, ok := strings.CutPrefix(line, "module "); ok {
-			return strings.TrimSpace(modPath)
-		}
+	if modPath := modfile.ModulePath(data); modPath != "" {
+		return modPath
 	}
 	return fallback
 }
