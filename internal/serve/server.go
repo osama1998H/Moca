@@ -129,12 +129,16 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	fieldLevelTransformer := api.NewFieldLevelTransformer(permResolver)
 
 	// ── Field Encryption ────────────────────────────────────────────────
+	// fieldEncryptor is declared at outer scope so SSO handler can reuse it
+	// for decrypting client_secret and sp_private_key loaded via direct SQL.
+	var fieldEncryptor *auth.FieldEncryptor
 	if encKey := os.Getenv("MOCA_ENCRYPTION_KEY"); encKey != "" {
-		fieldEnc, encErr := auth.NewFieldEncryptor(encKey)
+		var encErr error
+		fieldEncryptor, encErr = auth.NewFieldEncryptor(encKey)
 		if encErr != nil {
 			return nil, fmt.Errorf("init field encryption: %w", encErr)
 		}
-		encHook := encryption.NewFieldEncryptionHook(fieldEnc)
+		encHook := encryption.NewFieldEncryptionHook(fieldEncryptor)
 		hookRegistry.RegisterGlobal(document.EventBeforeSave, hooks.PrioritizedHandler{
 			Handler:  encHook.EncryptBeforeSave,
 			AppName:  "moca_core",
@@ -197,6 +201,16 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 
 	authHandler := api.NewAuthHandler(jwtCfg, sessionMgr, userLoader, logger)
 	authHandler.RegisterRoutes(gw.Mux(), "v1")
+
+	// ── SSO Authentication ───────────────────────────────────────────
+	userProvisioner := auth.NewUserProvisioner(logger)
+	ssoConfigLoader := auth.NewSSOConfigLoader(logger)
+	// Reuse the FieldEncryptor created above for decrypting SSO secrets
+	// (client_secret, sp_private_key). If MOCA_ENCRYPTION_KEY is not set,
+	// fieldEncryptor will be nil and SSO handler skips decryption.
+	ssoHandler := api.NewSSOHandler(sessionMgr, userProvisioner,
+		ssoConfigLoader.LoadFunc(), fieldEncryptor, redisClients.Session, logger)
+	ssoHandler.RegisterRoutes(gw.Mux(), "v1")
 
 	// File upload/download handler.
 	fileManager := storage.NewFileManager(stor, dbManager, logger, 0)

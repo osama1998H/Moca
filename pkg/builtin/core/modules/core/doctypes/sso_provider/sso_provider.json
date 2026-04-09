@@ -1,0 +1,142 @@
+{
+  "name": "SSOProvider",
+  "module": "Core",
+  "label": "SSO Provider",
+  "description": "Configuration for an external SSO identity provider (OAuth2, OIDC, or SAML 2.0).",
+  "naming_rule": {
+    "rule": "field",
+    "field_name": "provider_name"
+  },
+  "sort_field": "creation",
+  "sort_order": "asc",
+  "fields": [
+    {
+      "name": "provider_name",
+      "field_type": "Data",
+      "label": "Provider Name",
+      "required": true,
+      "unique": true,
+      "in_list_view": true,
+      "searchable": true
+    },
+    {
+      "name": "provider_type",
+      "field_type": "Select",
+      "label": "Provider Type",
+      "options": "OAuth2\nOIDC\nSAML",
+      "required": true,
+      "in_list_view": true,
+      "in_filter": true
+    },
+    {
+      "name": "enabled",
+      "field_type": "Check",
+      "label": "Enabled",
+      "default": 1,
+      "in_list_view": true
+    },
+    {
+      "name": "client_id",
+      "field_type": "Data",
+      "label": "Client ID"
+    },
+    {
+      "name": "client_secret",
+      "field_type": "Password",
+      "label": "Client Secret"
+    },
+    {
+      "name": "authorize_url",
+      "field_type": "Data",
+      "label": "Authorize URL"
+    },
+    {
+      "name": "token_url",
+      "field_type": "Data",
+      "label": "Token URL"
+    },
+    {
+      "name": "userinfo_url",
+      "field_type": "Data",
+      "label": "UserInfo URL"
+    },
+    {
+      "name": "discovery_url",
+      "field_type": "Data",
+      "label": "OIDC Discovery URL"
+    },
+    {
+      "name": "scopes",
+      "field_type": "Data",
+      "label": "Scopes",
+      "default": "openid email profile"
+    },
+    {
+      "name": "idp_entity_id",
+      "field_type": "Data",
+      "label": "IdP Entity ID"
+    },
+    {
+      "name": "idp_sso_url",
+      "field_type": "Data",
+      "label": "IdP SSO URL"
+    },
+    {
+      "name": "idp_certificate",
+      "field_type": "LongText",
+      "label": "IdP Certificate"
+    },
+    {
+      "name": "sp_private_key",
+      "field_type": "Password",
+      "label": "SP Private Key"
+    },
+    {
+      "name": "sp_certificate",
+      "field_type": "LongText",
+      "label": "SP Certificate"
+    },
+    {
+      "name": "auto_create_user",
+      "field_type": "Check",
+      "label": "Auto Create User",
+      "default": 0
+    },
+    {
+      "name": "default_role",
+      "field_type": "Link",
+      "label": "Default Role",
+      "options": "Role"
+    },
+    {
+      "name": "email_claim",
+      "field_type": "Data",
+      "label": "Email Claim",
+      "default": "email"
+    },
+    {
+      "name": "fullname_claim",
+      "field_type": "Data",
+      "label": "Full Name Claim",
+      "default": "name"
+    }
+  ],
+  "api_config": {
+    "enabled": true,
+    "allow_get": true,
+    "allow_list": true,
+    "allow_create": true,
+    "allow_update": true,
+    "allow_delete": true,
+    "allow_count": true,
+    "default_page_size": 20,
+    "max_page_size": 50,
+    "exclude_fields": ["client_secret", "sp_private_key"]
+  },
+  "permissions": [
+    {
+      "role": "System Manager",
+      "doctype_perm": 63
+    }
+  ]
+}

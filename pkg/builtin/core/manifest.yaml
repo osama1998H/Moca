@@ -17,3 +17,4 @@ modules:
       - HasRole
       - DocField
       - DocPerm
+      - SSOProvider

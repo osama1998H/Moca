@@ -128,7 +128,7 @@ Encryption completes the "Defense in Depth" architecture (§13.3 of the system d
 
 - **Task ID:** MS-22-T2
 - **Title:** Enterprise SSO — OAuth2 Authorization Code Flow, SAML 2.0 SP, OIDC Discovery
-- **Status:** Not Started
+- **Status:** Completed
 
 - **Description:**
   Implement three SSO protocols that create standard Moca sessions, integrating seamlessly with the existing auth middleware chain.
