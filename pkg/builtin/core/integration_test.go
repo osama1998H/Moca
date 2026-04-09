@@ -320,14 +320,14 @@ func TestInteg_ManifestParsesAndValidates(t *testing.T) {
 	if m.Modules[0].Name != "Core" {
 		t.Errorf("module name: got %q, want %q", m.Modules[0].Name, "Core")
 	}
-	if len(m.Modules[0].DocTypes) != 8 {
-		t.Errorf("expected 8 doctypes in Core module, got %d", len(m.Modules[0].DocTypes))
+	if len(m.Modules[0].DocTypes) != 9 {
+		t.Errorf("expected 9 doctypes in Core module, got %d", len(m.Modules[0].DocTypes))
 	}
 }
 
 func TestInteg_AllCoreDoctypesCompile(t *testing.T) {
-	if len(coreMetaTypes) != 8 {
-		t.Fatalf("expected 8 MetaTypes from BootstrapCoreMeta, got %d", len(coreMetaTypes))
+	if len(coreMetaTypes) != 9 {
+		t.Fatalf("expected 9 MetaTypes from BootstrapCoreMeta, got %d", len(coreMetaTypes))
 	}
 
 	for _, mt := range coreMetaTypes {
