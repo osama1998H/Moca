@@ -138,16 +138,14 @@ resolve: {
 |---|-------|----------|-----------|--------|
 | 1 | Desk version `^0.1.0` unresolvable | Blocker | scaffold/desk_templates.go | **Fixed** — release builds now pin to exact version |
 | 2 | No `go.work` after `moca init` | Blocker | cmd/moca/init.go | **Fixed** — `initGoWorkspace()` creates go.work |
-| 3 | Wrong replace path in app go.mod | Blocker | internal/scaffold/scaffold.go | Open |
+| 3 | Wrong replace path in app go.mod | Blocker | internal/scaffold/scaffold.go | **Fixed** — standalone projects use published version, no replace |
 | 4 | No `go.mod` in project root | Blocker | cmd/moca/init.go | **Fixed** — `initGoWorkspace()` creates go.mod |
 | 5 | Builtin core nested-module release gap | Blocker | apps/core/go.mod, root go.mod | **Fixed** — builtin core moved into root module as `pkg/builtin/core` |
 | 6 | Server doesn't load app hooks | Major | internal/serve/server.go | **Fixed** — app init registry + auto-loading via init() |
 | 7 | Vite can't resolve app ext imports | Major | desk/src/vite-plugin.ts | **Fixed** — resolve aliases + fs.allow added to mocaDeskPlugin() |
 
-**6 fixed**, 1 blocker remaining.
+**All 7 fixed.**
 
-## Recommended Fix Priority
+## DX Test v0.1.8 (2026-04-10)
 
-1. **Issue #3** (scaffold replace path) — Next priority. Fix the go.mod template to use published version for standalone projects.
-2. **Issue #6** (server hooks) — Implement dynamic app loading in `moca build server` or server startup.
-3. **Issue #7** (Vite resolve) — Add resolve aliases to `mocaDeskPlugin()`.
+See [dx-test-session-v0.1.8-report.md](dx-test-session-v0.1.8-report.md) for the full follow-up session report — 10 new issues found (#8–#17), 3 fixed locally, 7 open.

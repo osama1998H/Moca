@@ -176,7 +176,12 @@ func resolveAppNewFrameworkDependency(projectRoot, cliVersion string) (string, s
 			WithFix("Install or run a released moca build so the scaffold can pin github.com/osama1998H/moca to an exact version.")
 	}
 
-	return cliVersion, "", nil
+	// Go module versions require a "v" prefix (e.g. "v0.1.8").
+	v := cliVersion
+	if len(v) > 0 && v[0] != 'v' {
+		v = "v" + v
+	}
+	return v, "", nil
 }
 
 func readModulePathFromGoMod(goModPath string) (string, error) {

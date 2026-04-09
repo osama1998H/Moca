@@ -121,7 +121,7 @@ const docTypeTmpl = `{
   "naming_rule": {
     "rule": "autoincrement"
   },
-  "title_field": "name",
+  "title_field": "title",
   "sort_field": "creation",
   "sort_order": "desc",
   "fields": [
@@ -143,6 +143,17 @@ const docTypeTmpl = `{
       "in_filter": true
     }
   ],
+  "api_config": {
+    "enabled": true,
+    "allow_list": true,
+    "allow_get": true,
+    "allow_create": true,
+    "allow_update": true,
+    "allow_delete": true,
+    "allow_count": true,
+    "default_page_size": 20,
+    "max_page_size": 100
+  },
   "permissions": [
     {
       "role": "System Manager",
