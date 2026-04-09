@@ -141,10 +141,10 @@ resolve: {
 | 3 | Wrong replace path in app go.mod | Blocker | internal/scaffold/scaffold.go | Open |
 | 4 | No `go.mod` in project root | Blocker | cmd/moca/init.go | **Fixed** — `initGoWorkspace()` creates go.mod |
 | 5 | Builtin core nested-module release gap | Blocker | apps/core/go.mod, root go.mod | **Fixed** — builtin core moved into root module as `pkg/builtin/core` |
-| 6 | Server doesn't load app hooks | Major | internal/serve/server.go | Open |
-| 7 | Vite can't resolve app ext imports | Major | desk/src/vite-plugin.ts | Open |
+| 6 | Server doesn't load app hooks | Major | internal/serve/server.go | **Fixed** — app init registry + auto-loading via init() |
+| 7 | Vite can't resolve app ext imports | Major | desk/src/vite-plugin.ts | **Fixed** — resolve aliases + fs.allow added to mocaDeskPlugin() |
 
-**4 fixed**, 1 blocker remaining, 2 major issues remaining.
+**6 fixed**, 1 blocker remaining.
 
 ## Recommended Fix Priority
 

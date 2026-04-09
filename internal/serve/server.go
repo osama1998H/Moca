@@ -12,6 +12,7 @@ import (
 	"github.com/osama1998H/moca/internal/config"
 	"github.com/osama1998H/moca/internal/drivers"
 	"github.com/osama1998H/moca/pkg/api"
+	"github.com/osama1998H/moca/pkg/apps"
 	"github.com/osama1998H/moca/pkg/auth"
 	"github.com/osama1998H/moca/pkg/document"
 	"github.com/osama1998H/moca/pkg/hooks"
@@ -95,9 +96,14 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	naming := document.NewNamingEngine()
 	validator := document.NewValidator()
 	controllers := document.NewControllerRegistry()
-	docManager := document.NewDocManager(registry, dbManager, naming, validator, controllers, logger)
-
 	hookRegistry := hooks.NewHookRegistry()
+
+	// Initialize all apps that registered via init() (blank imports).
+	if err := apps.InitializeAll(controllers, hookRegistry); err != nil {
+		return nil, fmt.Errorf("init apps: %w", err)
+	}
+
+	docManager := document.NewDocManager(registry, dbManager, naming, validator, controllers, logger)
 	docManager.SetHookDispatcher(hooks.NewDocEventDispatcher(hookRegistry))
 
 	// Webhook dispatch engine — enqueues delivery jobs on document events.

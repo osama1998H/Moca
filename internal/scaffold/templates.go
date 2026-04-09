@@ -36,9 +36,14 @@ modules:
 const hooksTmpl = `package {{.PackageName}}
 
 import (
+	"github.com/osama1998H/moca/pkg/apps"
 	"github.com/osama1998H/moca/pkg/document"
 	"github.com/osama1998H/moca/pkg/hooks"
 )
+
+func init() {
+	apps.MustRegisterInit("{{.PackageName}}", Initialize)
+}
 
 // Initialize registers controllers and hooks for the {{.Title}} app.
 func Initialize(cr *document.ControllerRegistry, hr *hooks.HookRegistry) {

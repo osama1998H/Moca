@@ -1,3 +1,54 @@
+# Security Review — 2026-04-09
+
+**Scan Date:** 2026-04-09  
+**Reviewer:** Automated sec-ops scheduled task  
+**Commits Reviewed:** All commits merged to `main` in the last 24 hours  
+**Commits of Interest:**
+- `f44bc1c` — `fix: path traversal remediation via pkg/sitepath`
+- `f59c4b3` — `feat: release module version contract enforcement`
+- `af09fef` — `feat: standalone app scaffold go.mod generation`
+
+---
+
+## Summary (2026-04-09)
+
+No new HIGH or CRITICAL vulnerabilities were introduced in the last 24 hours.
+
+**SEC-001 (Path Traversal — tracked in 2026-04-08 review) is now RESOLVED** via commit `f44bc1c`. The new `pkg/sitepath` package enforces whitelist-based name validation and filesystem boundary checks across all 10 previously affected code paths.
+
+**SEC-002 (JWT tokens in localStorage — tracked in 2026-04-08 review) remains OPEN.** No changes to `desk/src/api/client.ts` or the auth token storage strategy were made in today's commits.
+
+The two additional commits (`f59c4b3`, `af09fef`) improve release-engineering and dependency management hygiene. No security vulnerabilities were introduced.
+
+### Updated Finding Status
+
+| ID | Title | Severity | Status |
+|----|-------|----------|--------|
+| SEC-001 | Path Traversal via Unsanitised Site Name | High | ✅ RESOLVED (`f44bc1c`) |
+| SEC-002 | JWT Tokens in Browser localStorage | High | ⚠️ OPEN (no fix merged) |
+
+### Top Risky Areas Reviewed (2026-04-09 commits)
+
+- `pkg/sitepath/sitepath.go` (new) — path traversal remediation; fix validated correct
+- `internal/releaseverify/main.go` (new) — module version contract; no vulnerabilities
+- `cmd/moca/app.go` — scaffold framework dependency resolution; no vulnerabilities
+- `.github/workflows/release.yml` — release pipeline; no vulnerabilities
+
+### Gaps & Uncertainty
+
+- **SEC-002 remains unresolved.** The `desk/src/api/client.ts` localStorage pattern persists; any XSS in the Desk frontend gives an attacker both JWT tokens. This is the highest-priority outstanding security item.
+- The `moca site rename` path identified in yesterday's review (pre-existing issue, not newly introduced) was not patched in today's commits. Confirm whether `pkg/sitepath` was retrofitted to that path.
+
+### Recommended Follow-Up
+
+1. Prioritise SEC-002 remediation — replace `localStorage` token persistence with the existing `HttpOnly` session cookie or an in-memory-only token refresh flow.
+2. Confirm `moca site rename` in `pkg/tenancy/manager.go` (~line 516) now routes through `sitepath.SiteDirPath()`.
+3. Add a fuzz test for `sitepath.ValidateSiteName` (Unicode, null bytes, overlong inputs).
+
+---
+
+---
+
 # Security Review — 2026-04-08
 
 **Scan Date:** 2026-04-08  

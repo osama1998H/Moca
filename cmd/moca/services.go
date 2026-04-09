@@ -87,8 +87,15 @@ func newServices(ctx context.Context, cfg *config.ProjectConfig, verbose bool) (
 	naming := document.NewNamingEngine()
 	validator := document.NewValidator()
 	controllers := document.NewControllerRegistry()
-	core.Initialize(controllers, hooks.NewHookRegistry())
+	hookRegistry := hooks.NewHookRegistry()
+
+	// Initialize all apps that registered via init() (core auto-registers).
+	if err := apps.InitializeAll(controllers, hookRegistry); err != nil {
+		return nil, fmt.Errorf("init apps: %w", err)
+	}
+
 	docManager := document.NewDocManager(registry, db, naming, validator, controllers, logger)
+	docManager.SetHookDispatcher(hooks.NewDocEventDispatcher(hookRegistry))
 
 	redisPubSub := redis.PubSub
 	if redisCache == nil {

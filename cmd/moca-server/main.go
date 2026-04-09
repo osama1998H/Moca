@@ -12,6 +12,9 @@ import (
 	"github.com/osama1998H/moca/internal/config"
 	"github.com/osama1998H/moca/internal/serve"
 	"github.com/osama1998H/moca/pkg/observe"
+
+	// Blank-import builtin core so its init() registers controllers/hooks.
+	_ "github.com/osama1998H/moca/pkg/builtin/core"
 )
 
 // Build-time variables injected via -ldflags.

@@ -1,9 +1,14 @@
 package core
 
 import (
+	"github.com/osama1998H/moca/pkg/apps"
 	"github.com/osama1998H/moca/pkg/document"
 	"github.com/osama1998H/moca/pkg/hooks"
 )
+
+func init() {
+	apps.MustRegisterInit("core", Initialize)
+}
 
 // Initialize registers all core app controllers and hooks with the provided
 // registries. Called by the framework during app loading or server startup.
