@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/osama1998H/moca/internal/config"
@@ -14,6 +15,7 @@ import (
 	"github.com/osama1998H/moca/pkg/api"
 	"github.com/osama1998H/moca/pkg/apps"
 	"github.com/osama1998H/moca/pkg/auth"
+	"github.com/osama1998H/moca/pkg/encryption"
 	"github.com/osama1998H/moca/pkg/document"
 	"github.com/osama1998H/moca/pkg/hooks"
 	"github.com/osama1998H/moca/pkg/meta"
@@ -125,6 +127,24 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	permChecker := auth.NewRoleBasedPermChecker(permResolver, api.SiteFromContext, logger)
 	scopeEnforcer := api.NewScopeEnforcer(permChecker)
 	fieldLevelTransformer := api.NewFieldLevelTransformer(permResolver)
+
+	// ── Field Encryption ────────────────────────────────────────────────
+	if encKey := os.Getenv("MOCA_ENCRYPTION_KEY"); encKey != "" {
+		fieldEnc, encErr := auth.NewFieldEncryptor(encKey)
+		if encErr != nil {
+			return nil, fmt.Errorf("init field encryption: %w", encErr)
+		}
+		encHook := encryption.NewFieldEncryptionHook(fieldEnc)
+		hookRegistry.RegisterGlobal(document.EventBeforeSave, hooks.PrioritizedHandler{
+			Handler:  encHook.EncryptBeforeSave,
+			AppName:  "moca_core",
+			Priority: 100, // Run early — encrypt before other hooks see the data
+		})
+		docManager.SetPostLoadTransformer(encHook)
+		logger.Info("field encryption enabled")
+	} else {
+		logger.Info("field encryption disabled (MOCA_ENCRYPTION_KEY not set)")
+	}
 
 	// ── Search ──────────────────────────────────────────────────────────
 	var searchClient *search.Client

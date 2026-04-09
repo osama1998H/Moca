@@ -16,23 +16,27 @@ type BackupInfo struct {
 	Checksum   string    `json:"checksum,omitempty"`
 	Size       int64     `json:"size"`
 	Compressed bool      `json:"compressed"`
+	Encrypted  bool      `json:"encrypted"`
 	Verified   bool      `json:"verified"`
 }
 
 // CreateOptions configures a backup creation.
 type CreateOptions struct {
-	Site        string
-	ProjectRoot string
-	DBConfig    DBConnConfig
-	Compress    bool
+	Site          string
+	ProjectRoot   string
+	EncryptionKey string // 64-char hex key; required when Encrypt is true
+	DBConfig      DBConnConfig
+	Compress      bool
+	Encrypt       bool
 }
 
 // RestoreOptions configures a backup restore.
 type RestoreOptions struct {
-	Site       string
-	BackupPath string
-	DBConfig   DBConnConfig
-	Force      bool
+	Site          string
+	BackupPath    string
+	EncryptionKey string // 64-char hex key; required for .enc files
+	DBConfig      DBConnConfig
+	Force         bool
 }
 
 // VerifyResult holds the outcome of a backup verification.

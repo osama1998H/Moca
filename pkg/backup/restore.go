@@ -54,8 +54,25 @@ func restoreFromFile(ctx context.Context, opts RestoreOptions) error {
 	defer func() { _ = f.Close() }()
 
 	var reader io.Reader = f
-	if strings.HasSuffix(opts.BackupPath, ".gz") {
-		gz, gzErr := gzip.NewReader(f)
+	path := opts.BackupPath
+
+	// Decrypt if the file has a .enc extension.
+	if strings.HasSuffix(path, ".enc") {
+		encKey, keyErr := ParseHexKey(opts.EncryptionKey)
+		if keyErr != nil {
+			return fmt.Errorf("backup decryption key: %w", keyErr)
+		}
+		dr, decErr := DecryptStream(f, encKey)
+		if decErr != nil {
+			return fmt.Errorf("decrypt backup: %w", decErr)
+		}
+		reader = dr
+		path = strings.TrimSuffix(path, ".enc")
+	}
+
+	// Decompress if the (possibly stripped) path ends with .gz.
+	if strings.HasSuffix(path, ".gz") {
+		gz, gzErr := gzip.NewReader(reader)
 		if gzErr != nil {
 			return fmt.Errorf("decompress backup: %w", gzErr)
 		}

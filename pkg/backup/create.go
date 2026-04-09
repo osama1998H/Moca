@@ -43,6 +43,9 @@ func Create(ctx context.Context, opts CreateOptions) (*BackupInfo, error) {
 	if opts.Compress {
 		ext = ".sql.gz"
 	}
+	if opts.Encrypt {
+		ext += ".enc"
+	}
 	filename := backupID + ext
 	filePath := filepath.Join(backupDir, filename)
 
@@ -65,6 +68,7 @@ func Create(ctx context.Context, opts CreateOptions) (*BackupInfo, error) {
 	info.Size = size
 	info.CreatedAt = now
 	info.Compressed = opts.Compress
+	info.Encrypted = opts.Encrypt
 	info.Verified = true
 	info.Checksum = checksum
 
@@ -87,9 +91,33 @@ func runPGDump(ctx context.Context, opts CreateOptions, schemaName, filePath str
 		return nil, fmt.Errorf("create backup file: %w", err)
 	}
 
-	var writer io.WriteCloser = outFile
+	// Build writer chain: pg_dump → [gzip] → [encrypt] → file.
+	// Close order is innermost to outermost.
+	var baseWriter io.Writer = outFile
+	var encWriter io.WriteCloser
+
+	if opts.Encrypt {
+		encKey, keyErr := ParseHexKey(opts.EncryptionKey)
+		if keyErr != nil {
+			_ = outFile.Close()
+			return nil, fmt.Errorf("backup encryption key: %w", keyErr)
+		}
+		ew, encErr := EncryptStream(outFile, encKey)
+		if encErr != nil {
+			_ = outFile.Close()
+			return nil, fmt.Errorf("init backup encryption: %w", encErr)
+		}
+		encWriter = ew
+		baseWriter = ew
+	}
+
+	var writer io.WriteCloser
+	var gzWriter *gzip.Writer
 	if opts.Compress {
-		writer = gzip.NewWriter(outFile)
+		gzWriter = gzip.NewWriter(baseWriter)
+		writer = gzWriter
+	} else {
+		writer = nopWriteCloser{baseWriter}
 	}
 
 	cmd.Stdout = writer
@@ -97,10 +125,15 @@ func runPGDump(ctx context.Context, opts CreateOptions, schemaName, filePath str
 
 	runErr := cmd.Run()
 
-	// Close writers in correct order.
-	if opts.Compress {
-		if closeErr := writer.Close(); closeErr != nil && runErr == nil {
+	// Close writers innermost to outermost: gzip → encrypt → file.
+	if gzWriter != nil {
+		if closeErr := gzWriter.Close(); closeErr != nil && runErr == nil {
 			runErr = fmt.Errorf("close gzip writer: %w", closeErr)
+		}
+	}
+	if encWriter != nil {
+		if closeErr := encWriter.Close(); closeErr != nil && runErr == nil {
+			runErr = fmt.Errorf("close encryption writer: %w", closeErr)
 		}
 	}
 	if closeErr := outFile.Close(); closeErr != nil && runErr == nil {
@@ -161,3 +194,8 @@ func sanitizeSiteName(name string) string {
 	}
 	return string(out)
 }
+
+// nopWriteCloser wraps an io.Writer as a no-op WriteCloser.
+type nopWriteCloser struct{ io.Writer }
+
+func (nopWriteCloser) Close() error { return nil }

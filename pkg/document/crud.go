@@ -377,16 +377,23 @@ type PermResolver interface {
 // lifecycle.
 //
 // All public methods are safe for concurrent use.
+// PostLoadTransformer transforms documents after loading from the database.
+// Used for transparent field decryption of sensitive fields.
+type PostLoadTransformer interface {
+	TransformAfterLoad(ctx *DocContext, doc *DynamicDoc) error
+}
+
 type DocManager struct {
-	registry       *meta.Registry
-	db             *orm.DBManager
-	queryAdapter   orm.MetaProvider
-	naming         *NamingEngine
-	validator      *Validator
-	controllers    *ControllerRegistry
-	hookDispatcher HookDispatcher // nil = no hooks
-	permResolver   PermResolver   // nil = no row-level filtering
-	logger         *slog.Logger
+	registry            *meta.Registry
+	db                  *orm.DBManager
+	queryAdapter        orm.MetaProvider
+	naming              *NamingEngine
+	validator           *Validator
+	controllers         *ControllerRegistry
+	hookDispatcher      HookDispatcher      // nil = no hooks
+	permResolver        PermResolver        // nil = no row-level filtering
+	postLoadTransformer PostLoadTransformer // nil = no transform
+	logger              *slog.Logger
 }
 
 // SetHookDispatcher configures an optional hook dispatcher that fires
@@ -394,6 +401,13 @@ type DocManager struct {
 // Pass nil to disable hooks.
 func (m *DocManager) SetHookDispatcher(d HookDispatcher) {
 	m.hookDispatcher = d
+}
+
+// SetPostLoadTransformer configures an optional transformer that runs after
+// documents are loaded from the database. Used for transparent field decryption.
+// Pass nil to disable post-load transformation.
+func (m *DocManager) SetPostLoadTransformer(t PostLoadTransformer) {
+	m.postLoadTransformer = t
 }
 
 // SetPermResolver configures an optional permission resolver for row-level
@@ -1114,6 +1128,14 @@ func (m *DocManager) Get(ctx *DocContext, doctype, name string) (*DynamicDoc, er
 	}
 	doc.resetDirtyState() // re-snapshot after children are loaded
 
+	// Transparent field decryption (e.g. Password fields encrypted at rest).
+	if m.postLoadTransformer != nil {
+		if err := m.postLoadTransformer.TransformAfterLoad(ctx, doc); err != nil {
+			return nil, fmt.Errorf("crud: Get %q %q: post-load transform: %w", doctype, name, err)
+		}
+		doc.resetDirtyState() // re-snapshot after decryption
+	}
+
 	// Row-level permission check: return 404 (not 403) to avoid info leakage.
 	if err := m.checkRowLevelAccessForDoc(ctx, doctype, name, doc); err != nil {
 		return nil, err
@@ -1293,6 +1315,12 @@ func (m *DocManager) GetList(ctx *DocContext, doctype string, opts ListOptions) 
 			doc.values[col] = normalizeDBValue(vals[i])
 		}
 		doc.resetDirtyState()
+		if m.postLoadTransformer != nil {
+			if err := m.postLoadTransformer.TransformAfterLoad(ctx, doc); err != nil {
+				return nil, 0, fmt.Errorf("crud: GetList %q: post-load transform: %w", doctype, err)
+			}
+			doc.resetDirtyState()
+		}
 		docs = append(docs, doc)
 	}
 	if err := rows.Err(); err != nil {
@@ -1342,6 +1370,15 @@ func (m *DocManager) GetSingle(ctx *DocContext, doctype string) (*DynamicDoc, er
 	}
 
 	doc.resetDirtyState()
+
+	// Transparent field decryption for Single documents.
+	if m.postLoadTransformer != nil {
+		if err := m.postLoadTransformer.TransformAfterLoad(ctx, doc); err != nil {
+			return nil, fmt.Errorf("crud: GetSingle %q: post-load transform: %w", doctype, err)
+		}
+		doc.resetDirtyState()
+	}
+
 	return doc, nil
 }
 

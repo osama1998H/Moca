@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/osama1998H/moca/internal/config"
+	clicontext "github.com/osama1998H/moca/internal/context"
 	"github.com/osama1998H/moca/internal/output"
 	"github.com/osama1998H/moca/pkg/backup"
 	"github.com/osama1998H/moca/pkg/sitepath"
@@ -52,6 +53,8 @@ func newBackupCreateCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.String("site", "", "Target site name")
 	f.Bool("compress", true, "Compress backup with gzip")
+	f.Bool("encrypt", false, "Encrypt backup with AES-256")
+	f.String("encryption-key", "", "64-char hex encryption key (overrides config/env)")
 
 	return cmd
 }
@@ -76,15 +79,25 @@ func runBackupCreate(cmd *cobra.Command, _ []string) error {
 	}
 
 	compress, _ := cmd.Flags().GetBool("compress")
+	encrypt, _ := cmd.Flags().GetBool("encrypt")
+
+	encKey := resolveEncryptionKey(cmd, ctx)
+	if encrypt && encKey == "" {
+		return output.NewCLIError("Encryption key required").
+			WithCause("--encrypt flag set but no encryption key found").
+			WithFix("Set --encryption-key, backup.encryption_key in config, or MOCA_ENCRYPTION_KEY env var.")
+	}
 
 	s := w.NewSpinner("Creating backup...")
 	s.Start()
 
 	info, err := backup.Create(cmd.Context(), backup.CreateOptions{
-		Site:        siteName,
-		ProjectRoot: ctx.ProjectRoot,
-		Compress:    compress,
-		DBConfig:    dbConnConfig(ctx.Project.Infrastructure.Database),
+		Site:          siteName,
+		ProjectRoot:   ctx.ProjectRoot,
+		Compress:      compress,
+		Encrypt:       encrypt,
+		EncryptionKey: encKey,
+		DBConfig:      dbConnConfig(ctx.Project.Infrastructure.Database),
 	})
 	if err != nil {
 		s.Stop("Failed")
@@ -126,6 +139,7 @@ func newBackupRestoreCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.String("site", "", "Target site name")
 	f.Bool("force", false, "Skip confirmation prompt")
+	f.String("encryption-key", "", "64-char hex encryption key (overrides config/env)")
 
 	return cmd
 }
@@ -150,6 +164,14 @@ func runBackupRestore(cmd *cobra.Command, args []string) error {
 			WithFix("Install pg_dump and psql, then retry.")
 	}
 
+	// Auto-detect encrypted backup by .enc extension.
+	encKey := resolveEncryptionKey(cmd, ctx)
+	if strings.HasSuffix(backupPath, ".enc") && encKey == "" {
+		return output.NewCLIError("Encryption key required for encrypted backup").
+			WithCause("backup file has .enc extension but no encryption key found").
+			WithFix("Set --encryption-key, backup.encryption_key in config, or MOCA_ENCRYPTION_KEY env var.")
+	}
+
 	force, _ := cmd.Flags().GetBool("force")
 	if !force {
 		confirmed, promptErr := confirmPrompt(
@@ -168,10 +190,11 @@ func runBackupRestore(cmd *cobra.Command, args []string) error {
 	s.Start()
 
 	err = backup.Restore(cmd.Context(), backup.RestoreOptions{
-		Site:       siteName,
-		BackupPath: backupPath,
-		Force:      force,
-		DBConfig:   dbConnConfig(ctx.Project.Infrastructure.Database),
+		Site:          siteName,
+		BackupPath:    backupPath,
+		EncryptionKey: encKey,
+		Force:         force,
+		DBConfig:      dbConnConfig(ctx.Project.Infrastructure.Database),
 	})
 	if err != nil {
 		s.Stop("Failed")
@@ -332,6 +355,18 @@ func runBackupVerify(cmd *cobra.Command, args []string) error {
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
+
+// resolveEncryptionKey resolves the backup encryption key from (in order):
+// 1. --encryption-key CLI flag, 2. config backup.encryption_key, 3. MOCA_ENCRYPTION_KEY env var.
+func resolveEncryptionKey(cmd *cobra.Command, ctx *clicontext.CLIContext) string {
+	if key, _ := cmd.Flags().GetString("encryption-key"); key != "" {
+		return key
+	}
+	if ctx.Project != nil && ctx.Project.Backup.EncryptionKey != "" {
+		return ctx.Project.Backup.EncryptionKey
+	}
+	return os.Getenv("MOCA_ENCRYPTION_KEY")
+}
 
 // dbConnConfig maps internal config.DatabaseConfig to backup.DBConnConfig.
 func dbConnConfig(cfg config.DatabaseConfig) backup.DBConnConfig {
