@@ -2,13 +2,20 @@ package api
 
 import (
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/osama1998H/moca/pkg/auth"
+)
+
+const (
+	sessionCookieName = "moca_sid"
+	refreshCookieName = "moca_rid"
 )
 
 // AuthHandler provides login, logout, and token refresh HTTP endpoints.
@@ -75,6 +82,45 @@ type refreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type tokenResponse struct {
+	AccessToken string `json:"access_token"`
+	ExpiresIn   int64  `json:"expires_in"`
+}
+
+func responseTokenPair(pair *auth.TokenPair) tokenResponse {
+	return tokenResponse{
+		AccessToken: pair.AccessToken,
+		ExpiresIn:   pair.ExpiresIn,
+	}
+}
+
+func authCookie(name string, value string, maxAge int) *http.Cookie {
+	return &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   maxAge,
+	}
+}
+
+func refreshTokenFromRequest(r *http.Request) (string, error) {
+	var req refreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		return "", err
+	}
+
+	refreshToken := strings.TrimSpace(req.RefreshToken)
+	if refreshToken == "" {
+		if cookie, err := r.Cookie(refreshCookieName); err == nil {
+			refreshToken = strings.TrimSpace(cookie.Value)
+		}
+	}
+
+	return refreshToken, nil
+}
+
 func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -139,26 +185,20 @@ func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set session cookie.
-	http.SetCookie(w, &http.Cookie{
-		Name:     "moca_sid",
-		Value:    sid,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(24 * time.Hour / time.Second),
-	})
+	http.SetCookie(w, authCookie(sessionCookieName, sid, int(24*time.Hour/time.Second)))
+	http.SetCookie(w, authCookie(refreshCookieName, pair.RefreshToken, int(h.jwtCfg.RefreshTokenTTL/time.Second)))
 
 	h.logger.Info("login successful",
 		slog.String("user", user.Email),
 		slog.String("site", site.Name),
 	)
 
-	writeSuccess(w, http.StatusOK, pair)
+	writeSuccess(w, http.StatusOK, responseTokenPair(pair))
 }
 
 func (h *AuthHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	// Destroy session if cookie present.
-	if cookie, err := r.Cookie("moca_sid"); err == nil && cookie.Value != "" {
+	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
 		if err := h.sessions.Destroy(r.Context(), cookie.Value); err != nil {
 			h.logger.Warn("logout: session destroy failed",
 				slog.String("error", err.Error()),
@@ -167,31 +207,25 @@ func (h *AuthHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Clear cookie.
-	http.SetCookie(w, &http.Cookie{
-		Name:     "moca_sid",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   -1,
-	})
+	http.SetCookie(w, authCookie(sessionCookieName, "", -1))
+	http.SetCookie(w, authCookie(refreshCookieName, "", -1))
 
 	writeSuccess(w, http.StatusOK, map[string]string{"message": "logged out"})
 }
 
 func (h *AuthHandler) handleRefresh(w http.ResponseWriter, r *http.Request) {
-	var req refreshRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	refreshToken, err := refreshTokenFromRequest(r)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid request body")
 		return
 	}
-	if req.RefreshToken == "" {
+	if refreshToken == "" {
 		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "refresh_token is required")
 		return
 	}
 
 	// Validate refresh token.
-	claims, err := auth.ValidateRefreshToken(h.jwtCfg, req.RefreshToken)
+	claims, err := auth.ValidateRefreshToken(h.jwtCfg, refreshToken)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "AUTH_FAILED", "invalid or expired refresh token")
 		return
@@ -255,5 +289,7 @@ func (h *AuthHandler) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeSuccess(w, http.StatusOK, pair)
+	http.SetCookie(w, authCookie(refreshCookieName, pair.RefreshToken, int(h.jwtCfg.RefreshTokenTTL/time.Second)))
+
+	writeSuccess(w, http.StatusOK, responseTokenPair(pair))
 }
