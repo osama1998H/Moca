@@ -224,7 +224,7 @@ Encryption completes the "Defense in Depth" architecture (§13.3 of the system d
 
 - **Task ID:** MS-22-T3
 - **Title:** Email Sending (SMTP/SES), In-App Notifications, Event-Driven Dispatch
-- **Status:** Not Started
+- **Status:** Completed
 
 - **Description:**
   Build the full notification subsystem from the currently-stubbed `pkg/notify/` package.

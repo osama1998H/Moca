@@ -20,6 +20,7 @@ import (
 	"github.com/osama1998H/moca/pkg/hooks"
 	"github.com/osama1998H/moca/pkg/meta"
 	"github.com/osama1998H/moca/pkg/i18n"
+	"github.com/osama1998H/moca/pkg/notify"
 	"github.com/osama1998H/moca/pkg/observe"
 	"github.com/osama1998H/moca/pkg/orm"
 	"github.com/osama1998H/moca/pkg/queue"
@@ -101,7 +102,7 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	hookRegistry := hooks.NewHookRegistry()
 
 	// Initialize all apps that registered via init() (blank imports).
-	if err := apps.InitializeAll(controllers, hookRegistry); err != nil {
+	if err = apps.InitializeAll(controllers, hookRegistry); err != nil {
 		return nil, fmt.Errorf("init apps: %w", err)
 	}
 
@@ -112,6 +113,31 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	queueProducer := queue.NewProducer(redisClients.Queue, logger)
 	webhookDispatcher := api.NewWebhookDispatcher(queueProducer, dbManager, logger)
 	webhookDispatcher.RegisterHooks(hookRegistry)
+
+	// ── Notifications ───────────────────────────────────────────────────
+	inAppNotifier := notify.NewInAppNotifier(logger)
+	templateRenderer, err := notify.NewTemplateRenderer()
+	if err != nil {
+		return nil, fmt.Errorf("init notification templates: %w", err)
+	}
+	var emailSender notify.EmailSender
+	if cfg.Config != nil {
+		emailSender, err = notify.NewEmailSender(cfg.Config.Notification.Email)
+		if err != nil {
+			return nil, fmt.Errorf("init email sender: %w", err)
+		}
+	}
+	if emailSender != nil {
+		logger.Info("email sender configured",
+			slog.String("provider", cfg.Config.Notification.Email.Provider))
+	} else {
+		logger.Info("email sender not configured — in-app notifications only")
+	}
+	notifDispatcher := notify.NewNotificationDispatcher(
+		queueProducer, dbManager, inAppNotifier, templateRenderer,
+		redisClients.PubSub, emailSender, logger,
+	)
+	notifDispatcher.RegisterHooks(hookRegistry)
 
 	// ── Authentication ──────────────────────────────────────────────────
 	jwtCfg := auth.DefaultJWTConfig()
@@ -241,6 +267,9 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	dashboardHandler.SetDBManager(dbManager)
 	dashboardHandler.RegisterRoutes(gw.Mux(), "v1")
 
+	// Notification API endpoints.
+	notifHandler := api.NewNotificationHandler(inAppNotifier, dbManager, logger)
+	notifHandler.RegisterRoutes(gw.Mux(), "v1")
 
 	vr := api.NewVersionRouter(handler, logger)
 	gw.SetVersionRouter(vr)

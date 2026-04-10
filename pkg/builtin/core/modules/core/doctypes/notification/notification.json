@@ -1,0 +1,85 @@
+{
+  "name": "Notification",
+  "module": "Core",
+  "label": "Notification",
+  "description": "In-app notification for a user, created by the notification dispatcher on document events.",
+  "naming_rule": {
+    "rule": "uuid"
+  },
+  "sort_field": "creation",
+  "sort_order": "desc",
+  "fields": [
+    {
+      "name": "for_user",
+      "field_type": "Link",
+      "label": "For User",
+      "options": "User",
+      "required": true,
+      "in_list_view": true,
+      "in_filter": true,
+      "searchable": true,
+      "db_index": true
+    },
+    {
+      "name": "type",
+      "field_type": "Select",
+      "label": "Type",
+      "options": "info\nwarning\nerror\nsuccess",
+      "default": "info",
+      "in_list_view": true,
+      "in_filter": true
+    },
+    {
+      "name": "subject",
+      "field_type": "Data",
+      "label": "Subject",
+      "required": true,
+      "in_list_view": true
+    },
+    {
+      "name": "message",
+      "field_type": "Text",
+      "label": "Message"
+    },
+    {
+      "name": "document_type",
+      "field_type": "Data",
+      "label": "Document Type"
+    },
+    {
+      "name": "document_name",
+      "field_type": "Data",
+      "label": "Document Name"
+    },
+    {
+      "name": "read",
+      "field_type": "Check",
+      "label": "Read",
+      "default": 0,
+      "db_index": true
+    },
+    {
+      "name": "email_sent",
+      "field_type": "Check",
+      "label": "Email Sent",
+      "default": 0
+    }
+  ],
+  "api_config": {
+    "enabled": true,
+    "allow_get": true,
+    "allow_list": true,
+    "allow_create": false,
+    "allow_update": true,
+    "allow_delete": true,
+    "allow_count": true,
+    "default_page_size": 20,
+    "max_page_size": 100
+  },
+  "permissions": [
+    {
+      "role": "System Manager",
+      "doctype_perm": 63
+    }
+  ]
+}

@@ -4,13 +4,14 @@ package config
 // It maps 1:1 to the moca.yaml schema defined in MOCA_CLI_SYSTEM_DESIGN.md §3.1.
 type ProjectConfig struct {
 	Apps           map[string]AppConfig `yaml:"apps"`
+	Notification   NotificationConfig   `yaml:"notification,omitempty"`
 	Staging        StagingConfig        `yaml:"staging"`
-	Development    DevelopmentConfig    `yaml:"development"`
 	Project        ProjectInfo          `yaml:"project"`
 	Moca           string               `yaml:"moca"`
 	Production     ProductionConfig     `yaml:"production"`
 	Scheduler      SchedulerConfig      `yaml:"scheduler"`
 	Backup         BackupConfig         `yaml:"backup"`
+	Development    DevelopmentConfig    `yaml:"development"`
 	Infrastructure InfrastructureConfig `yaml:"infrastructure"`
 }
 
@@ -198,4 +199,44 @@ type BackupDestination struct {
 	// Prefix is the key prefix for backup objects.
 	// Supports ${ENV_VAR} interpolation.
 	Prefix string `yaml:"prefix,omitempty"`
+}
+
+// NotificationConfig holds notification delivery settings.
+type NotificationConfig struct {
+	Email EmailConfig `yaml:"email,omitempty"`
+}
+
+// EmailConfig holds email provider settings.
+type EmailConfig struct {
+	SES      SESConfig  `yaml:"ses,omitempty"`
+	Provider string     `yaml:"provider,omitempty"`
+	SMTP     SMTPConfig `yaml:"smtp,omitempty"`
+}
+
+// SMTPConfig holds SMTP connection settings for email delivery.
+type SMTPConfig struct {
+	// Host is the SMTP server hostname.
+	Host string `yaml:"host"`
+	// User is the SMTP authentication username.
+	// Supports ${ENV_VAR} interpolation.
+	User string `yaml:"user,omitempty"`
+	// Password is the SMTP authentication password.
+	// Supports ${ENV_VAR} interpolation.
+	Password string `yaml:"password,omitempty"`
+	// FromName is the display name in the From header.
+	FromName string `yaml:"from_name,omitempty"`
+	// FromAddr is the email address in the From header.
+	FromAddr string `yaml:"from_addr"`
+	// Port is the SMTP server port. Defaults to 587 if unset.
+	Port int `yaml:"port,omitempty"`
+	// UseTLS enables STARTTLS negotiation.
+	UseTLS bool `yaml:"use_tls,omitempty"`
+}
+
+// SESConfig holds AWS SES settings for email delivery.
+type SESConfig struct {
+	// Region is the AWS region (e.g. "us-east-1").
+	Region string `yaml:"region"`
+	// FromAddr is the verified sender email address.
+	FromAddr string `yaml:"from_addr"`
 }

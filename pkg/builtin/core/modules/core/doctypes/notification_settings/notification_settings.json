@@ -1,0 +1,87 @@
+{
+  "name": "NotificationSettings",
+  "module": "Core",
+  "label": "Notification Settings",
+  "description": "Defines which document events trigger notifications and to whom.",
+  "naming_rule": {
+    "rule": "uuid"
+  },
+  "sort_field": "creation",
+  "sort_order": "desc",
+  "fields": [
+    {
+      "name": "document_type",
+      "field_type": "Link",
+      "label": "Document Type",
+      "options": "DocType",
+      "required": true,
+      "in_list_view": true,
+      "in_filter": true,
+      "searchable": true,
+      "db_index": true
+    },
+    {
+      "name": "event",
+      "field_type": "Select",
+      "label": "Event",
+      "options": "on_create\non_update\non_submit\non_cancel",
+      "required": true,
+      "in_list_view": true,
+      "in_filter": true
+    },
+    {
+      "name": "recipients",
+      "field_type": "Data",
+      "label": "Recipients",
+      "description": "Comma-separated list of role names or email addresses."
+    },
+    {
+      "name": "subject_template",
+      "field_type": "Data",
+      "label": "Subject Template",
+      "description": "Go template string. Available: {{.DocType}}, {{.Name}}, {{.Event}}, and all document fields."
+    },
+    {
+      "name": "message_template",
+      "field_type": "Text",
+      "label": "Message Template",
+      "description": "Go template string for the notification message body."
+    },
+    {
+      "name": "send_email",
+      "field_type": "Check",
+      "label": "Send Email",
+      "default": 1
+    },
+    {
+      "name": "send_notification",
+      "field_type": "Check",
+      "label": "Send In-App Notification",
+      "default": 1
+    },
+    {
+      "name": "enabled",
+      "field_type": "Check",
+      "label": "Enabled",
+      "default": 1,
+      "in_list_view": true
+    }
+  ],
+  "api_config": {
+    "enabled": true,
+    "allow_get": true,
+    "allow_list": true,
+    "allow_create": true,
+    "allow_update": true,
+    "allow_delete": true,
+    "allow_count": true,
+    "default_page_size": 20,
+    "max_page_size": 50
+  },
+  "permissions": [
+    {
+      "role": "System Manager",
+      "doctype_perm": 63
+    }
+  ]
+}

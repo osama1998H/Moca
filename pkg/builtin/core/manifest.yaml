@@ -18,3 +18,5 @@ modules:
       - DocField
       - DocPerm
       - SSOProvider
+      - Notification
+      - NotificationSettings
