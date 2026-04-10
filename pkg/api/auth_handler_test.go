@@ -90,6 +90,64 @@ func newAuthHandlerTestEnv(t *testing.T) *authHandlerTestEnv {
 	}
 }
 
+func responseCookie(t *testing.T, rr *httptest.ResponseRecorder, name string) *http.Cookie {
+	t.Helper()
+	for _, c := range rr.Result().Cookies() {
+		if c.Name == name {
+			return c
+		}
+	}
+	t.Fatalf("expected cookie %q to be set", name)
+	return nil
+}
+
+func TestRefreshTokenFromRequest_UsesCookieFallback(t *testing.T) {
+	req := httptest.NewRequest("POST", "/api/v1/auth/refresh", http.NoBody)
+	req.AddCookie(&http.Cookie{Name: refreshCookieName, Value: "cookie-refresh-token"})
+
+	token, err := refreshTokenFromRequest(req)
+	if err != nil {
+		t.Fatalf("refreshTokenFromRequest: %v", err)
+	}
+	if token != "cookie-refresh-token" {
+		t.Fatalf("token = %q, want %q", token, "cookie-refresh-token")
+	}
+}
+
+func TestRefreshTokenFromRequest_InvalidJSON(t *testing.T) {
+	req := httptest.NewRequest("POST", "/api/v1/auth/refresh", strings.NewReader("{"))
+
+	_, err := refreshTokenFromRequest(req)
+	if err == nil {
+		t.Fatal("expected invalid JSON error")
+	}
+}
+
+func TestResponseTokenPair_ExcludesRefreshTokenFromJSON(t *testing.T) {
+	body, err := json.Marshal(responseTokenPair(&auth.TokenPair{
+		AccessToken:  "access-token",
+		RefreshToken: "refresh-token",
+		ExpiresIn:    900,
+	}))
+	if err != nil {
+		t.Fatalf("Marshal(responseTokenPair): %v", err)
+	}
+
+	if strings.Contains(string(body), "refresh_token") {
+		t.Fatalf("expected JSON body %s to omit refresh_token", body)
+	}
+}
+
+func TestAuthCookie_IsHttpOnly(t *testing.T) {
+	cookie := authCookie(refreshCookieName, "refresh-token", 60)
+	if !cookie.HttpOnly {
+		t.Fatal("expected auth cookie to be HttpOnly")
+	}
+	if cookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("SameSite = %v, want %v", cookie.SameSite, http.SameSiteLaxMode)
+	}
+}
+
 // serveWithSite wraps the mux to inject SiteContext into the request context.
 func (env *authHandlerTestEnv) serveWithSite(req *http.Request) *httptest.ResponseRecorder {
 	ctx := WithSite(req.Context(), env.site)
@@ -114,7 +172,11 @@ func TestLogin_ValidCredentials(t *testing.T) {
 	}
 
 	var resp struct {
-		Data auth.TokenPair `json:"data"`
+		Data struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token,omitempty"`
+			ExpiresIn    int64  `json:"expires_in"`
+		} `json:"data"`
 	}
 	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
@@ -123,27 +185,76 @@ func TestLogin_ValidCredentials(t *testing.T) {
 	if resp.Data.AccessToken == "" {
 		t.Error("expected non-empty access_token")
 	}
-	if resp.Data.RefreshToken == "" {
-		t.Error("expected non-empty refresh_token")
+	if resp.Data.RefreshToken != "" {
+		t.Error("refresh_token should not be returned in the login response body")
 	}
 	if resp.Data.ExpiresIn <= 0 {
 		t.Error("expected positive expires_in")
 	}
 
-	// Check cookie was set.
-	cookies := rr.Result().Cookies()
-	var found bool
-	for _, c := range cookies {
-		if c.Name == "moca_sid" {
-			found = true
-			if !c.HttpOnly {
-				t.Error("moca_sid cookie should be HttpOnly")
-			}
-			break
-		}
+	if sessionCookie := responseCookie(t, rr, sessionCookieName); !sessionCookie.HttpOnly {
+		t.Error("moca_sid cookie should be HttpOnly")
 	}
-	if !found {
-		t.Error("expected moca_sid cookie to be set")
+	refreshCookie := responseCookie(t, rr, refreshCookieName)
+	if !refreshCookie.HttpOnly {
+		t.Error("moca_rid cookie should be HttpOnly")
+	}
+	if refreshCookie.Value == "" {
+		t.Error("moca_rid cookie should carry the refresh token")
+	}
+}
+
+func TestRefresh_UsesCookieTokenWhenBodyMissing(t *testing.T) {
+	env := newAuthHandlerTestEnv(t)
+	ctx := context.Background()
+
+	user := &auth.User{Email: "admin@example.com", FullName: "Admin", Roles: []string{"Administrator"}}
+	pair, err := auth.IssueTokenPair(env.jwtCfg, user, "test-site")
+	if err != nil {
+		t.Fatalf("IssueTokenPair: %v", err)
+	}
+
+	claims, _ := auth.ValidateRefreshToken(env.jwtCfg, pair.RefreshToken)
+	if err := env.sessions.StoreRefreshTokenID(ctx, claims.ID, env.jwtCfg.RefreshTokenTTL); err != nil {
+		t.Fatalf("StoreRefreshTokenID: %v", err)
+	}
+
+	req := httptest.NewRequest("POST", "/api/v1/auth/refresh", http.NoBody)
+	req.AddCookie(&http.Cookie{Name: refreshCookieName, Value: pair.RefreshToken})
+
+	rr := env.serveWithSite(req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+
+	var resp struct {
+		Data struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token,omitempty"`
+			ExpiresIn    int64  `json:"expires_in"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Data.AccessToken == "" {
+		t.Error("expected non-empty access_token in refresh response")
+	}
+	if resp.Data.RefreshToken != "" {
+		t.Error("refresh_token should not be returned in the refresh response body")
+	}
+
+	rotatedCookie := responseCookie(t, rr, refreshCookieName)
+	if rotatedCookie.Value == "" {
+		t.Fatal("expected rotated refresh cookie value")
+	}
+	newClaims, err := auth.ValidateRefreshToken(env.jwtCfg, rotatedCookie.Value)
+	if err != nil {
+		t.Fatalf("ValidateRefreshToken(new cookie): %v", err)
+	}
+	if newClaims.ID == claims.ID {
+		t.Error("expected refresh token rotation to issue a new jti")
 	}
 }
 
@@ -207,7 +318,8 @@ func TestLogout_DestroysCookieAndSession(t *testing.T) {
 	}
 
 	req := httptest.NewRequest("POST", "/api/v1/auth/logout", nil)
-	req.AddCookie(&http.Cookie{Name: "moca_sid", Value: sid})
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: sid})
+	req.AddCookie(&http.Cookie{Name: refreshCookieName, Value: "stale-refresh-token"})
 
 	rr := env.serveWithSite(req)
 
@@ -216,14 +328,11 @@ func TestLogout_DestroysCookieAndSession(t *testing.T) {
 	}
 
 	// Cookie should be cleared.
-	cookies := rr.Result().Cookies()
-	for _, c := range cookies {
-		if c.Name == "moca_sid" {
-			if c.MaxAge != -1 {
-				t.Errorf("moca_sid MaxAge = %d, want -1", c.MaxAge)
-			}
-			break
-		}
+	if sessionCookie := responseCookie(t, rr, sessionCookieName); sessionCookie.MaxAge != -1 {
+		t.Errorf("moca_sid MaxAge = %d, want -1", sessionCookie.MaxAge)
+	}
+	if refreshCookie := responseCookie(t, rr, refreshCookieName); refreshCookie.MaxAge != -1 {
+		t.Errorf("moca_rid MaxAge = %d, want -1", refreshCookie.MaxAge)
 	}
 
 	// Session should be destroyed.
@@ -262,14 +371,24 @@ func TestRefresh_RotatesTokens(t *testing.T) {
 	}
 
 	var resp struct {
-		Data auth.TokenPair `json:"data"`
+		Data struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token,omitempty"`
+			ExpiresIn    int64  `json:"expires_in"`
+		} `json:"data"`
 	}
 	decErr := json.NewDecoder(rr.Body).Decode(&resp)
 	if decErr != nil {
 		t.Fatalf("decode: %v", decErr)
 	}
-	if resp.Data.AccessToken == "" || resp.Data.RefreshToken == "" {
-		t.Error("expected non-empty tokens in refresh response")
+	if resp.Data.AccessToken == "" {
+		t.Error("expected non-empty access_token in refresh response")
+	}
+	if resp.Data.RefreshToken != "" {
+		t.Error("refresh_token should not be returned in the refresh response body")
+	}
+	if refreshCookie := responseCookie(t, rr, refreshCookieName); refreshCookie.Value == "" {
+		t.Error("expected rotated refresh cookie in refresh response")
 	}
 
 	// Old jti should be revoked.
@@ -303,5 +422,17 @@ func TestRefresh_ReplayDetected(t *testing.T) {
 
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d; body: %s", rr.Code, http.StatusUnauthorized, rr.Body.String())
+	}
+}
+
+func TestRefresh_MissingTokenAndCookie(t *testing.T) {
+	env := newAuthHandlerTestEnv(t)
+
+	req := httptest.NewRequest("POST", "/api/v1/auth/refresh", http.NoBody)
+
+	rr := env.serveWithSite(req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body: %s", rr.Code, http.StatusBadRequest, rr.Body.String())
 	}
 }
