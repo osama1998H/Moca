@@ -215,8 +215,8 @@ func TestRefresh_UsesCookieTokenWhenBodyMissing(t *testing.T) {
 	}
 
 	claims, _ := auth.ValidateRefreshToken(env.jwtCfg, pair.RefreshToken)
-	if err := env.sessions.StoreRefreshTokenID(ctx, claims.ID, env.jwtCfg.RefreshTokenTTL); err != nil {
-		t.Fatalf("StoreRefreshTokenID: %v", err)
+	if storeErr := env.sessions.StoreRefreshTokenID(ctx, claims.ID, env.jwtCfg.RefreshTokenTTL); storeErr != nil {
+		t.Fatalf("StoreRefreshTokenID: %v", storeErr)
 	}
 
 	req := httptest.NewRequest("POST", "/api/v1/auth/refresh", http.NoBody)
@@ -235,8 +235,8 @@ func TestRefresh_UsesCookieTokenWhenBodyMissing(t *testing.T) {
 			ExpiresIn    int64  `json:"expires_in"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode: %v", err)
+	if decErr := json.NewDecoder(rr.Body).Decode(&resp); decErr != nil {
+		t.Fatalf("decode: %v", decErr)
 	}
 	if resp.Data.AccessToken == "" {
 		t.Error("expected non-empty access_token in refresh response")

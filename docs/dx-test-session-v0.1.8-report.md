@@ -153,20 +153,22 @@ The GraphQL playground is registered at `GET /api/graphql/playground`, but there
 | 8 | App go.mod missing `v` prefix | Blocker | **Fixed** (local, uncommitted) |
 | 9 | Scaffold missing `api_config` | Major | **Fixed** (local, uncommitted) |
 | 10 | Scaffold `title_field` invalid | Major | **Fixed** (local, uncommitted) |
-| 11 | App install doesn't seed `tab_doc_type` | Blocker | Open |
-| 12 | App install doesn't seed `tab_doc_perm` | Blocker | Open |
-| 13 | Core child doctypes missing permissions | Major | Open |
-| 14 | `setSite` not exported from desk package | Major | Open |
-| 15 | Scaffold `main.tsx` missing `siteName` | Major | Open |
-| 16 | Scaffold missing `desk/.env` | Major | Open |
-| 17 | OpenAPI spec has no HTTP endpoint | Minor | Open |
+| 11 | App install doesn't seed `tab_doc_type` | Blocker | **Fixed** — `seedDocTypeAndPermRecords()` added to `pkg/apps/installer.go` |
+| 12 | App install doesn't seed `tab_doc_perm` | Blocker | **Fixed** — combined with #11 |
+| 13 | Core child doctypes missing permissions | Major | **Fixed** — added `permissions` to DocField, DocPerm, HasRole JSON |
+| 14 | `setSite` not exported from desk package | Major | **Fixed** — re-exported from `desk/src/index.ts` |
+| 15 | Scaffold `main.tsx` missing `siteName` | Major | **Fixed** — `createDeskApp()` calls `setSite()` + scaffold passes `siteName` |
+| 16 | Scaffold missing `desk/.env` | Major | **Fixed** — `.env` template added to scaffold + `.gitignore` updated |
+| 17 | OpenAPI spec has no HTTP endpoint | Minor | **Fixed** — `GET /api/v1/openapi.json` + `GET /api/docs` (Swagger UI) |
 
-**3 fixed locally**, **7 open** (2 blockers, 4 major, 1 minor).
+**All 10 issues fixed** (3 previously, 7 in this batch).
 
 ## Recommended Fix Priority
 
-1. **Issue #11 + #12** (app install seeding) — Highest priority. These are blockers that break every new app install. Fix together in `pkg/apps/installer.go`.
-2. **Issue #13** (child doctype permissions) — Fix in `pkg/builtin/core/bootstrap.go` alongside #12.
-3. **Issue #14 + #15** (setSite export + createDeskApp wiring) — Fix together. Export `setSite` and call it inside `createDeskApp()`.
-4. **Issue #16** (scaffold .env) — Quick fix in `internal/scaffold/desk.go`.
-5. **Issue #17** (OpenAPI endpoint) — Low priority, additive feature.
+All issues have been resolved. Original priority order was:
+
+1. ~~**Issue #11 + #12** (app install seeding)~~ — Fixed in `pkg/apps/installer.go`
+2. ~~**Issue #13** (child doctype permissions)~~ — Fixed in child doctype JSON files
+3. ~~**Issue #14 + #15** (setSite export + createDeskApp wiring)~~ — Fixed in `desk/src/index.ts` + `desk/src/createApp.tsx`
+4. ~~**Issue #16** (scaffold .env)~~ — Fixed in `internal/scaffold/desk.go` + `desk_templates.go`
+5. ~~**Issue #17** (OpenAPI endpoint)~~ — Fixed in `pkg/api/openapi_handler.go` + `internal/serve/server.go`

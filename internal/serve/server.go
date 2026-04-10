@@ -282,6 +282,10 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	hc := observe.NewHealthChecker(dbManager.SystemPool(), redisClients, version, logger)
 	hc.RegisterRoutes(gw.Mux())
 
+	// OpenAPI spec and Swagger UI documentation handler.
+	openapiHandler := api.NewOpenAPIHandler(gw, version)
+	openapiHandler.RegisterRoutes(gw.Mux(), "v1")
+
 	// ── Desk frontend (dev proxy or static files) & WebSocket stub ──────
 	if cfg.Config != nil && cfg.Config.Development.DeskDevServer {
 		deskPort := cfg.Config.Development.DeskPort

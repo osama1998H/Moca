@@ -113,6 +113,7 @@ import "../.moca-extensions";
 import "./overrides";
 
 const app = createDeskApp({
+  siteName: import.meta.env.VITE_MOCA_SITE,
   // Project-level configuration
   // theme: { ... },
   // logo: "/path/to/logo.svg",
@@ -145,11 +146,16 @@ const deskOverridesThemeTmpl = `// Theme and branding overrides for this project
 export {};
 `
 
+const deskEnvTmpl = `VITE_MOCA_SITE=
+`
+
 const deskGitignoreTmpl = `node_modules/
 dist/
 .vite/
 *.tsbuildinfo
 .moca-extensions.ts
+.env
+.env.local
 `
 
 const deskNpmrcTmpl = `@osama1998h:registry=https://npm.pkg.github.com

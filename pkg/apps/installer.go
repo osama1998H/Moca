@@ -120,6 +120,17 @@ func (inst *AppInstaller) Install(ctx context.Context, site, appName, appsDir st
 		}
 	}
 
+	// Step 5b: Seed tab_doc_type and tab_doc_perm records so app doctypes
+	// appear in the resource API (desk sidebar) and pass permission checks.
+	inst.logger.InfoContext(ctx, "seeding DocType and DocPerm records", slog.String("app", appName))
+	pool, poolErr := inst.db.ForSite(ctx, site)
+	if poolErr != nil {
+		return fmt.Errorf("install app %q: get site pool: %w", appName, poolErr)
+	}
+	if seedErr := inst.seedDocTypeAndPermRecords(ctx, pool, metaTypes); seedErr != nil {
+		return fmt.Errorf("install app %q: seed doc records: %w", appName, seedErr)
+	}
+
 	// Step 6: Run app SQL migrations.
 	if len(app.Manifest.Migrations) > 0 {
 		inst.logger.InfoContext(ctx, "running app migrations", slog.String("app", appName))
@@ -225,6 +236,72 @@ func (inst *AppInstaller) ListInstalled(ctx context.Context, site string) ([]Ins
 		result = append(result, ia)
 	}
 	return result, rows.Err()
+}
+
+// seedDocTypeAndPermRecords inserts document records into tab_doc_type and
+// permission records into tab_doc_perm for each installed MetaType. This mirrors
+// SiteManager.seedDocTypeRecords (pkg/tenancy/manager.go) so that app doctypes
+// are visible in the resource API (desk sidebar) and pass permission checks.
+func (inst *AppInstaller) seedDocTypeAndPermRecords(ctx context.Context, pool *pgxpool.Pool, metaTypes []*meta.MetaType) error {
+	return orm.WithTransaction(ctx, pool, func(ctx context.Context, tx pgx.Tx) error {
+		permIdx := 0
+		for _, mt := range metaTypes {
+			tableName := meta.TableName(mt.Name)
+			// Skip if the document table doesn't exist yet.
+			var tableExists bool
+			if err := tx.QueryRow(ctx,
+				"SELECT EXISTS(SELECT 1 FROM pg_tables WHERE tablename = $1)",
+				tableName,
+			).Scan(&tableExists); err != nil {
+				return fmt.Errorf("check table %s: %w", tableName, err)
+			}
+			if !tableExists {
+				continue
+			}
+
+			// Insert the DocType document record.
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO tab_doc_type (
+					name, dt_module, dt_label, dt_description,
+					is_submittable, is_single, is_child_table, is_virtual,
+					dt_track_changes, dt_naming_rule,
+					docstatus, idx, owner, creation, modified, modified_by, _extra
+				) VALUES (
+					$1, $2, $3, $4,
+					$5, $6, $7, $8,
+					$9, $10,
+					0, 0, 'System', NOW(), NOW(), 'System', '{}'
+				) ON CONFLICT (name) DO NOTHING`,
+				mt.Name, mt.Module, mt.Label, mt.Description,
+				mt.IsSubmittable, mt.IsSingle, mt.IsChildTable, mt.IsVirtual,
+				mt.TrackChanges, string(mt.NamingRule.Rule),
+			); err != nil {
+				return fmt.Errorf("seed DocType record %q: %w", mt.Name, err)
+			}
+
+			// Seed DocPerm child records for this MetaType's permission rules.
+			for _, perm := range mt.Permissions {
+				permName := fmt.Sprintf("docperm-%s-%s-%d", mt.Name, perm.Role, permIdx)
+				if _, err := tx.Exec(ctx, `
+					INSERT INTO tab_doc_perm (
+						name, parent, parenttype, parentfield, idx,
+						role, doctype_perm, match_field, match_value,
+						owner, creation, modified, modified_by, _extra
+					) VALUES (
+						$1, $2, 'DocType', 'permissions', $3,
+						$4, $5, $6, $7,
+						'System', NOW(), NOW(), 'System', '{}'
+					) ON CONFLICT (name) DO NOTHING`,
+					permName, mt.Name, permIdx,
+					perm.Role, perm.DocTypePerm, perm.MatchField, perm.MatchValue,
+				); err != nil {
+					return fmt.Errorf("seed DocPerm for %q role %q: %w", mt.Name, perm.Role, err)
+				}
+				permIdx++
+			}
+		}
+		return nil
+	})
 }
 
 // ── private helpers ─────────────────────────────────────────────────────────
