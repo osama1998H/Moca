@@ -6,6 +6,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/coreos/go-oidc/v3 v3.18.0
 	github.com/crewjam/saml v0.5.1
+	github.com/expr-lang/expr v1.17.8
 	github.com/google/uuid v1.6.0
 	github.com/graph-gophers/dataloader/v7 v7.1.3
 	github.com/graphql-go/graphql v0.8.1
@@ -21,7 +22,6 @@ require (
 require (
 	github.com/beevik/etree v1.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/expr-lang/expr v1.17.8 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/jonboulle/clockwork v0.2.2 // indirect
