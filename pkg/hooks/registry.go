@@ -76,6 +76,27 @@ func (r *HookRegistry) RegisterGlobal(event document.DocEvent, handler Prioritiz
 	r.globalDocEvents[event] = append(r.globalDocEvents[event], handler)
 }
 
+// ResolveGlobal returns only the global handlers for the given event, sorted by
+// dependency order and priority. Per-doctype handlers are not included.
+//
+// Returns (nil, nil) when no global handlers are registered for the event.
+// Returns a *CircularDependencyError if the dependency graph has a cycle.
+// Safe to call concurrently.
+func (r *HookRegistry) ResolveGlobal(event document.DocEvent) ([]PrioritizedHandler, error) {
+	r.mu.RLock()
+	var global []PrioritizedHandler
+	if handlers, ok := r.globalDocEvents[event]; ok {
+		global = make([]PrioritizedHandler, len(handlers))
+		copy(global, handlers)
+	}
+	r.mu.RUnlock()
+
+	if len(global) == 0 {
+		return nil, nil
+	}
+	return resolveOrder(global)
+}
+
 // Resolve returns handlers for the given doctype and event, sorted by
 // dependency order and priority. Global and per-doctype handlers are merged
 // before sorting.
