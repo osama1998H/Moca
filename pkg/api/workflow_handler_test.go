@@ -42,6 +42,23 @@ func (m *mockDocLoader) Get(_ *document.DocContext, doctype, name string) (*docu
 	return doc, nil
 }
 
+// ── Mock DocSaver ──────────────────────────────────────────────────────────
+
+// mockDocSaver implements DocSaver for unit tests. It records the values passed
+// to Update keyed by "doctype:name".
+type mockDocSaver struct {
+	updated map[string]map[string]any
+}
+
+func newMockDocSaver() *mockDocSaver {
+	return &mockDocSaver{updated: make(map[string]map[string]any)}
+}
+
+func (m *mockDocSaver) Update(_ *document.DocContext, doctype, name string, values map[string]any) (*document.DynamicDoc, error) {
+	m.updated[doctype+":"+name] = values
+	return nil, nil
+}
+
 // ── Helper to build an authenticated request context ────────────────────────
 
 func workflowCtx(t *testing.T, siteName, email string, roles []string) context.Context {
@@ -70,7 +87,7 @@ func taskMetaType() *meta.MetaType {
 
 func TestWorkflowHandler_RegisterRoutes(t *testing.T) {
 	mux := http.NewServeMux()
-	h := NewWorkflowHandler(nil, nil, nil, nil, slog.Default())
+	h := NewWorkflowHandler(nil, nil, nil, nil, nil, slog.Default())
 	h.RegisterRoutes(mux, "v1")
 
 	routes := []struct{ method, path string }{
@@ -94,7 +111,7 @@ func TestWorkflowHandler_RegisterRoutes(t *testing.T) {
 func TestWorkflowHandler_HandleTransition_NoAuth(t *testing.T) {
 	engine := workflow.NewWorkflowEngine()
 	approvals := workflow.NewApprovalManager()
-	h := NewWorkflowHandler(engine, approvals, nil, nil, slog.Default())
+	h := NewWorkflowHandler(engine, approvals, nil, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -109,7 +126,7 @@ func TestWorkflowHandler_HandleTransition_NoAuth(t *testing.T) {
 }
 
 func TestWorkflowHandler_HandleGetState_NoAuth(t *testing.T) {
-	h := NewWorkflowHandler(nil, nil, nil, nil, slog.Default())
+	h := NewWorkflowHandler(nil, nil, nil, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -123,7 +140,7 @@ func TestWorkflowHandler_HandleGetState_NoAuth(t *testing.T) {
 }
 
 func TestWorkflowHandler_HandleGetHistory_NoAuth(t *testing.T) {
-	h := NewWorkflowHandler(nil, nil, nil, nil, slog.Default())
+	h := NewWorkflowHandler(nil, nil, nil, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -137,7 +154,7 @@ func TestWorkflowHandler_HandleGetHistory_NoAuth(t *testing.T) {
 }
 
 func TestWorkflowHandler_GetState_NoSite(t *testing.T) {
-	h := NewWorkflowHandler(nil, nil, nil, nil, slog.Default())
+	h := NewWorkflowHandler(nil, nil, nil, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -157,7 +174,7 @@ func TestWorkflowHandler_GetState_NoSite(t *testing.T) {
 func TestWorkflowHandler_HandleTransition_NoSite(t *testing.T) {
 	engine := workflow.NewWorkflowEngine()
 	approvals := workflow.NewApprovalManager()
-	h := NewWorkflowHandler(engine, approvals, nil, nil, slog.Default())
+	h := NewWorkflowHandler(engine, approvals, nil, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -178,7 +195,7 @@ func TestWorkflowHandler_HandleTransition_NoSite(t *testing.T) {
 // ── Pending (stub) ─────────────────────────────────────────────────────────
 
 func TestWorkflowHandler_HandleGetPending(t *testing.T) {
-	h := NewWorkflowHandler(nil, nil, nil, nil, slog.Default())
+	h := NewWorkflowHandler(nil, nil, nil, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -208,7 +225,7 @@ func TestWorkflowHandler_HandleGetPending(t *testing.T) {
 func TestWorkflowHandler_HandleTransition_InvalidJSON(t *testing.T) {
 	engine := workflow.NewWorkflowEngine()
 	approvals := workflow.NewApprovalManager()
-	h := NewWorkflowHandler(engine, approvals, nil, nil, slog.Default())
+	h := NewWorkflowHandler(engine, approvals, nil, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -226,7 +243,7 @@ func TestWorkflowHandler_HandleTransition_InvalidJSON(t *testing.T) {
 func TestWorkflowHandler_HandleTransition_MissingAction(t *testing.T) {
 	engine := workflow.NewWorkflowEngine()
 	approvals := workflow.NewApprovalManager()
-	h := NewWorkflowHandler(engine, approvals, nil, nil, slog.Default())
+	h := NewWorkflowHandler(engine, approvals, nil, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -245,7 +262,7 @@ func TestWorkflowHandler_HandleTransition_MissingAction(t *testing.T) {
 func TestWorkflowHandler_HandleTransition_NilDocLoader(t *testing.T) {
 	engine := workflow.NewWorkflowEngine()
 	approvals := workflow.NewApprovalManager()
-	h := NewWorkflowHandler(engine, approvals, nil, nil, slog.Default())
+	h := NewWorkflowHandler(engine, approvals, nil, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -268,7 +285,7 @@ func TestWorkflowHandler_HandleHistory_WithRecords(t *testing.T) {
 	approvals.RecordAction("Task", "T-001", "Open", "Approve", "", "admin@test.com", "Looks good")
 	approvals.RecordAction("Task", "T-001", "Approved", "Submit", "", "admin@test.com", "")
 
-	h := NewWorkflowHandler(nil, approvals, nil, nil, slog.Default())
+	h := NewWorkflowHandler(nil, approvals, nil, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -297,7 +314,7 @@ func TestWorkflowHandler_HandleHistory_WithRecords(t *testing.T) {
 
 func TestWorkflowHandler_HandleHistory_Empty(t *testing.T) {
 	approvals := workflow.NewApprovalManager()
-	h := NewWorkflowHandler(nil, approvals, nil, nil, slog.Default())
+	h := NewWorkflowHandler(nil, approvals, nil, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -358,7 +375,7 @@ func TestWorkflowHandler_FullTransitionFlow(t *testing.T) {
 	loader.Put("Task", "T-001", doc)
 
 	// 3. Build handler and mux.
-	h := NewWorkflowHandler(engine, approvals, loader, nil, slog.Default())
+	h := NewWorkflowHandler(engine, approvals, loader, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -422,6 +439,64 @@ func TestWorkflowHandler_FullTransitionFlow(t *testing.T) {
 	}
 }
 
+// TestWorkflowHandler_TransitionPersistsState verifies that the transition
+// endpoint calls DocSaver.Update with the new workflow_state.
+func TestWorkflowHandler_TransitionPersistsState(t *testing.T) {
+	wfRegistry := workflow.NewWorkflowRegistry()
+	wfRegistry.Set("site1", "Task", &meta.WorkflowMeta{
+		Name:     "Task Approval",
+		DocType:  "Task",
+		IsActive: true,
+		States: []meta.WorkflowState{
+			{Name: "Open", Style: "warning"},
+			{Name: "Approved", Style: "success", DocStatus: 1},
+		},
+		Transitions: []meta.Transition{
+			{From: "Open", To: "Approved", Action: "Approve"},
+		},
+	})
+
+	engine := workflow.NewWorkflowEngine(
+		workflow.WithRegistry(wfRegistry),
+		workflow.WithLogger(slog.Default()),
+	)
+	approvals := workflow.NewApprovalManager()
+
+	mt := taskMetaType()
+	doc := document.NewDynamicDoc(mt, nil, false)
+	_ = doc.Set("name", "T-001")
+	_ = doc.Set("workflow_state", "Open")
+
+	loader := newMockDocLoader()
+	loader.Put("Task", "T-001", doc)
+
+	saver := newMockDocSaver()
+
+	h := NewWorkflowHandler(engine, approvals, loader, saver, nil, slog.Default())
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, "v1")
+
+	ctx := workflowCtx(t, "site1", "manager@test.com", []string{"System Manager"})
+	body := `{"action":"Approve"}`
+	req := httptest.NewRequest("POST", "/api/v1/workflow/Task/T-001/transition", bytes.NewBufferString(body))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify that saver.Update was called with the correct values.
+	saved, ok := saver.updated["Task:T-001"]
+	if !ok {
+		t.Fatal("expected DocSaver.Update to be called for Task:T-001")
+	}
+	if saved["workflow_state"] != "Approved" {
+		t.Errorf("expected saved workflow_state 'Approved', got %v", saved["workflow_state"])
+	}
+}
+
 // ── Full Integration: Get State with Mock DocLoader ────────────────────────
 
 func TestWorkflowHandler_FullGetStateFlow(t *testing.T) {
@@ -452,7 +527,7 @@ func TestWorkflowHandler_FullGetStateFlow(t *testing.T) {
 	loader := newMockDocLoader()
 	loader.Put("Task", "T-002", doc)
 
-	h := NewWorkflowHandler(engine, workflow.NewApprovalManager(), loader, nil, slog.Default())
+	h := NewWorkflowHandler(engine, workflow.NewApprovalManager(), loader, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -528,7 +603,7 @@ func TestWorkflowHandler_TransitionError_NoWorkflow(t *testing.T) {
 	loader := newMockDocLoader()
 	loader.Put("Task", "T-003", doc)
 
-	h := NewWorkflowHandler(engine, approvals, loader, nil, slog.Default())
+	h := NewWorkflowHandler(engine, approvals, loader, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -574,7 +649,7 @@ func TestWorkflowHandler_TransitionError_InvalidAction(t *testing.T) {
 	loader := newMockDocLoader()
 	loader.Put("Task", "T-004", doc)
 
-	h := NewWorkflowHandler(engine, approvals, loader, nil, slog.Default())
+	h := NewWorkflowHandler(engine, approvals, loader, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -620,7 +695,7 @@ func TestWorkflowHandler_TransitionError_CommentRequired(t *testing.T) {
 	loader := newMockDocLoader()
 	loader.Put("Task", "T-005", doc)
 
-	h := NewWorkflowHandler(engine, approvals, loader, nil, slog.Default())
+	h := NewWorkflowHandler(engine, approvals, loader, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -666,7 +741,7 @@ func TestWorkflowHandler_TransitionError_NoPermission(t *testing.T) {
 	loader := newMockDocLoader()
 	loader.Put("Task", "T-006", doc)
 
-	h := NewWorkflowHandler(engine, approvals, loader, nil, slog.Default())
+	h := NewWorkflowHandler(engine, approvals, loader, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -692,7 +767,7 @@ func TestWorkflowHandler_TransitionError_DocNotFound(t *testing.T) {
 	// Empty loader -- doc does not exist.
 	loader := newMockDocLoader()
 
-	h := NewWorkflowHandler(engine, approvals, loader, nil, slog.Default())
+	h := NewWorkflowHandler(engine, approvals, loader, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 
@@ -741,7 +816,7 @@ func TestWorkflowHandler_MultiStepTransition(t *testing.T) {
 	loader := newMockDocLoader()
 	loader.Put("Task", "T-010", doc)
 
-	h := NewWorkflowHandler(engine, approvals, loader, nil, slog.Default())
+	h := NewWorkflowHandler(engine, approvals, loader, nil, nil, slog.Default())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, "v1")
 

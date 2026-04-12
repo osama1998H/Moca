@@ -54,12 +54,12 @@ func (d *DBSiteLister) ListActiveSites(ctx context.Context) ([]string, error) {
 
 // WatcherConfig configures the filesystem watcher for hot-reloading MetaType definitions.
 type WatcherConfig struct {
-	AppsDir  string        // root directory containing app directories (e.g., "./apps")
-	Debounce time.Duration // delay after last event before triggering reload; default 500ms
-
 	// OnReload is called after a successful hot-reload with the list of active sites.
 	// Use this to refresh downstream caches like the workflow registry.
 	OnReload func(ctx context.Context, sites []string)
+
+	AppsDir  string        // root directory containing app directories (e.g., "./apps")
+	Debounce time.Duration // delay after last event before triggering reload; default 500ms
 }
 
 // Watcher monitors doctype JSON files on disk and hot-reloads them into the

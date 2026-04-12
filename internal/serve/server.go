@@ -315,7 +315,7 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	wfBridge := workflow.NewWorkflowBridge(wfEngine)
 	wfBridge.Register(hookRegistry)
 	wfApprovals := workflow.NewApprovalManager()
-	workflowHandler := api.NewWorkflowHandler(wfEngine, wfApprovals, docManager, registry, logger)
+	workflowHandler := api.NewWorkflowHandler(wfEngine, wfApprovals, docManager, docManager, registry, logger)
 	workflowHandler.RegisterRoutes(gw.Mux(), "v1")
 
 	vr := api.NewVersionRouter(handler, logger)

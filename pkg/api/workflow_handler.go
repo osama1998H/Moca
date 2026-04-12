@@ -17,22 +17,31 @@ type DocLoader interface {
 	Get(ctx *document.DocContext, doctype, name string) (*document.DynamicDoc, error)
 }
 
+// DocSaver abstracts persisting a document update by doctype, name, and changed values.
+// *document.DocManager satisfies this interface via its Update method.
+type DocSaver interface {
+	Update(ctx *document.DocContext, doctype, name string, values map[string]any) (*document.DynamicDoc, error)
+}
+
 // WorkflowHandler serves workflow-related API endpoints including transitions,
 // state queries, history, and pending approvals.
 type WorkflowHandler struct {
 	engine    *workflow.WorkflowEngine
 	approvals *workflow.ApprovalManager
 	docs      DocLoader
+	saver     DocSaver
 	registry  *meta.Registry
 	logger    *slog.Logger
 }
 
 // NewWorkflowHandler creates a WorkflowHandler with the given dependencies.
 // docManager must implement DocLoader; *document.DocManager satisfies this.
+// docSaver persists workflow state changes; pass nil to skip persistence (test only).
 func NewWorkflowHandler(
 	engine *workflow.WorkflowEngine,
 	approvals *workflow.ApprovalManager,
 	docManager DocLoader,
+	docSaver DocSaver,
 	registry *meta.Registry,
 	logger *slog.Logger,
 ) *WorkflowHandler {
@@ -43,6 +52,7 @@ func NewWorkflowHandler(
 		engine:    engine,
 		approvals: approvals,
 		docs:      docManager,
+		saver:     docSaver,
 		registry:  registry,
 		logger:    logger,
 	}
@@ -136,6 +146,25 @@ func (h *WorkflowHandler) handleTransition(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		h.handleWorkflowError(w, err, doctype, name)
 		return
+	}
+
+	// Persist the workflow state change to the database.
+	if h.saver != nil {
+		updateVals := map[string]any{
+			"workflow_state": doc.Get("workflow_state"),
+		}
+		if ds := doc.Get("docstatus"); ds != nil {
+			updateVals["docstatus"] = ds
+		}
+		if _, saveErr := h.saver.Update(docCtx, doctype, name, updateVals); saveErr != nil {
+			h.logger.Error("workflow transition: persist state failed",
+				slog.String("doctype", doctype),
+				slog.String("name", name),
+				slog.String("error", saveErr.Error()),
+			)
+			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "transition succeeded but failed to persist state")
+			return
+		}
 	}
 
 	// Get the new state after transition.
