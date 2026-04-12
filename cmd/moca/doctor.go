@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -623,8 +622,8 @@ func (c *diskCheck) Run(ctx *clicontext.CLIContext) DoctorResult {
 		path = ctx.ProjectRoot
 	}
 
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(path, &stat); err != nil {
+	available, err := diskAvailableBytes(path)
+	if err != nil {
 		return DoctorResult{
 			Name:    c.Name(),
 			Status:  DoctorWarn,
@@ -632,8 +631,6 @@ func (c *diskCheck) Run(ctx *clicontext.CLIContext) DoctorResult {
 			Detail:  err.Error(),
 		}
 	}
-
-	available := int64(stat.Bavail) * int64(stat.Bsize) //nolint:unconvert
 	const (
 		gb100mb = 100 * 1024 * 1024
 		gb1     = 1024 * 1024 * 1024
