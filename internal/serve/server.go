@@ -26,6 +26,7 @@ import (
 	"github.com/osama1998H/moca/pkg/queue"
 	"github.com/osama1998H/moca/pkg/search"
 	"github.com/osama1998H/moca/pkg/storage"
+	"github.com/osama1998H/moca/pkg/workflow"
 )
 
 // shutdownTimeout is the maximum time to wait for in-flight requests to finish.
@@ -270,6 +271,20 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	// Notification API endpoints.
 	notifHandler := api.NewNotificationHandler(inAppNotifier, dbManager, logger)
 	notifHandler.RegisterRoutes(gw.Mux(), "v1")
+
+	// Workflow engine and API handler.
+	wfRegistry := workflow.NewWorkflowRegistry()
+	wfEvaluator := workflow.NewConditionEvaluator()
+	wfEngine := workflow.NewWorkflowEngine(
+		workflow.WithRegistry(wfRegistry),
+		workflow.WithEvaluator(wfEvaluator),
+		workflow.WithLogger(logger),
+	)
+	wfBridge := workflow.NewWorkflowBridge(wfEngine)
+	wfBridge.Register(hookRegistry)
+	wfApprovals := workflow.NewApprovalManager()
+	workflowHandler := api.NewWorkflowHandler(wfEngine, wfApprovals, docManager, registry, logger)
+	workflowHandler.RegisterRoutes(gw.Mux(), "v1")
 
 	vr := api.NewVersionRouter(handler, logger)
 	gw.SetVersionRouter(vr)
