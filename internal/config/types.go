@@ -4,12 +4,13 @@ package config
 // It maps 1:1 to the moca.yaml schema defined in MOCA_CLI_SYSTEM_DESIGN.md §3.1.
 type ProjectConfig struct {
 	Apps           map[string]AppConfig `yaml:"apps"`
-	Notification   NotificationConfig   `yaml:"notification,omitempty"`
 	Staging        StagingConfig        `yaml:"staging"`
 	Project        ProjectInfo          `yaml:"project"`
 	Moca           string               `yaml:"moca"`
 	Production     ProductionConfig     `yaml:"production"`
 	Scheduler      SchedulerConfig      `yaml:"scheduler"`
+	Notification   NotificationConfig   `yaml:"notification,omitempty"`
+	Observability  ObservabilityConfig  `yaml:"observability"`
 	Backup         BackupConfig         `yaml:"backup"`
 	Development    DevelopmentConfig    `yaml:"development"`
 	Infrastructure InfrastructureConfig `yaml:"infrastructure"`
@@ -123,6 +124,42 @@ type DevelopmentConfig struct {
 	DeskPort      int    `yaml:"desk_port,omitempty"`
 	AutoReload    bool   `yaml:"auto_reload,omitempty"`
 	DeskDevServer bool   `yaml:"desk_dev_server,omitempty"`
+	EnablePprof   bool   `yaml:"enable_pprof,omitempty"`
+}
+
+// ObservabilityConfig holds settings for metrics, tracing, and diagnostics.
+type ObservabilityConfig struct {
+	Metrics MetricsConfig `yaml:"metrics"`
+	Tracing TracingConfig `yaml:"tracing"`
+}
+
+// MetricsConfig controls Prometheus metrics exposure.
+type MetricsConfig struct {
+	Enabled *bool  `yaml:"enabled,omitempty"`
+	Path    string `yaml:"path,omitempty"`
+}
+
+func (m MetricsConfig) IsEnabled() bool {
+	if m.Enabled == nil {
+		return true
+	}
+	return *m.Enabled
+}
+
+// TracingConfig controls OpenTelemetry distributed tracing.
+type TracingConfig struct {
+	Insecure   *bool   `yaml:"insecure,omitempty"`
+	Exporter   string  `yaml:"exporter,omitempty"`
+	Endpoint   string  `yaml:"endpoint,omitempty"`
+	SampleRate float64 `yaml:"sample_rate,omitempty"`
+	Enabled    bool    `yaml:"enabled,omitempty"`
+}
+
+func (t TracingConfig) IsInsecure() bool {
+	if t.Insecure == nil {
+		return true
+	}
+	return *t.Insecure
 }
 
 // ProductionConfig holds settings for the production environment.

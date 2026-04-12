@@ -62,3 +62,19 @@ services:
       interval: 2s
       timeout: 5s
       retries: 20
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    container_name: moca-test-jaeger
+    ports:
+      - "4317:4317"
+      - "16686:16686"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --spider http://127.0.0.1:16686/ || exit 1"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      - /tmp

@@ -55,13 +55,19 @@ func NewRedisClients(cfg config.RedisConfig, logger *slog.Logger) *RedisClients 
 		})
 	}
 
-	return &RedisClients{
+	rc := &RedisClients{
 		Cache:   newClient(cfg.DbCache),
 		Queue:   newClient(cfg.DbQueue),
 		Session: newClient(cfg.DbSession),
 		PubSub:  newClient(cfg.DbPubSub),
 		logger:  logger,
 	}
+	hook := RedisTracingHook{}
+	rc.Cache.AddHook(hook)
+	rc.Queue.AddHook(hook)
+	rc.Session.AddHook(hook)
+	rc.PubSub.AddHook(hook)
+	return rc
 }
 
 // Ping verifies connectivity to all four Redis databases by issuing a PING

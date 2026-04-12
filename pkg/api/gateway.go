@@ -8,6 +8,7 @@ import (
 	"github.com/osama1998H/moca/internal/drivers"
 	"github.com/osama1998H/moca/pkg/document"
 	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/observe"
 	"github.com/osama1998H/moca/pkg/orm"
 	pkgsearch "github.com/osama1998H/moca/pkg/search"
 )
@@ -35,6 +36,7 @@ type Gateway struct {
 	methodRegistry     *MethodRegistry
 	reportRegistry     *ReportRegistry
 	dashboardRegistry  *DashboardRegistry
+	metrics            *observe.MetricsCollector
 	i18nMiddleware     Middleware
 	cors               CORSConfig
 }
@@ -76,9 +78,13 @@ func (g *Gateway) Handler() http.Handler {
 	if g.i18nMiddleware != nil {
 		h = g.i18nMiddleware(h)
 	}
+	if g.metrics != nil {
+		h = metricsMiddleware(g.metrics)(h)
+	}
 	h = authMiddleware(g.auth, g.apiKeyStore)(h)
 	h = tenantMiddleware(g.siteResolver)(h)
 	h = corsMiddleware(g.cors)(h)
+	h = tracingMiddleware()(h)
 	h = requestIDMiddleware(g.logger)(h)
 
 	return h
@@ -210,6 +216,14 @@ func WithHandlerRegistry(r *HandlerRegistry) GatewayOption {
 func WithMethodRegistry(r *MethodRegistry) GatewayOption {
 	return func(g *Gateway) { g.methodRegistry = r }
 }
+
+// WithMetricsCollector sets the Prometheus metrics collector.
+func WithMetricsCollector(mc *observe.MetricsCollector) GatewayOption {
+	return func(g *Gateway) { g.metrics = mc }
+}
+
+// MetricsCollector returns the gateway's metrics collector.
+func (g *Gateway) MetricsCollector() *observe.MetricsCollector { return g.metrics }
 
 // WithI18nMiddleware sets the i18n language negotiation middleware.
 func WithI18nMiddleware(mw Middleware) GatewayOption {

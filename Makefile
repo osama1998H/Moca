@@ -8,6 +8,7 @@ BUILD_DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS    := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(BUILD_DATE)
 
 GO := go
+COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 BENCH_PKGS := ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks
 
 .PHONY: build build-server build-worker build-scheduler build-moca build-outbox \
@@ -74,15 +75,15 @@ test:
 
 ## test-integration: Run integration tests against real PG + Redis (requires Docker)
 test-integration:
-	docker compose up -d --wait && \
+	$(COMPOSE) up -d --wait && \
 	$(GO) test -race -count=1 -tags=integration ./... ; \
-	docker compose down
+	$(COMPOSE) down
 
 ## test-api-integration: Run API integration tests against real PG + Redis
 test-api-integration:
-	docker compose up -d --wait && \
+	$(COMPOSE) up -d --wait && \
 	$(GO) test -race -count=1 -tags=integration ./pkg/api/... ; \
-	docker compose down
+	$(COMPOSE) down
 
 ## bench: Run Tier 1 benchmarks without Docker
 bench:
@@ -90,8 +91,8 @@ bench:
 
 ## bench-integration: Run Docker-backed Tier 1 integration benchmarks
 bench-integration:
-	bash -o pipefail -ec 'trap "docker compose down" EXIT; \
-		docker compose up -d --wait; \
+	bash -o pipefail -ec 'trap "$(COMPOSE) down" EXIT; \
+		$(COMPOSE) up -d --wait; \
 		$(GO) test -run=^$$ -tags=integration -bench=. -benchmem -count=10 -timeout=20m $(BENCH_PKGS) | tee bench-latest.txt'
 
 ## bench-compare: Compare current results against a saved baseline

@@ -262,6 +262,7 @@ func newPool(ctx context.Context, connStr string, maxConns int32, schema string)
 	}
 	cfg.MaxConns = maxConns
 	cfg.AfterConnect = makeSearchPathHook(schema)
+	cfg.ConnConfig.Tracer = &OTelQueryTracer{}
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

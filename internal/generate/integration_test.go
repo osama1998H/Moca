@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/osama1998H/moca/internal/dockerutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -94,8 +96,9 @@ func TestIntegration_GenerateDocker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composePath, "config")
-	out, err := cmd.CombinedOutput()
+	bin, args := dockerutil.ComposeArgs("-f", composePath, "config")
+	validateCmd := exec.CommandContext(ctx, bin, args...)
+	out, err := validateCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("docker compose config failed:\n%s\nerror: %v", out, err)
 	}

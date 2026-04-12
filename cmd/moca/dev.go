@@ -32,8 +32,8 @@ func NewDevCommand() *cobra.Command {
 		newSubcommand("shell", "Open a shell with Moca env vars set"),
 		newDevExecuteCmd(),
 		newDevRequestCmd(),
-		newSubcommand("bench", "Run microbenchmarks on queries/operations"),
-		newSubcommand("profile", "Profile a request or operation"),
+		newDevBenchCmd(),
+		newDevProfileCmd(),
 		newSubcommand("watch", "Watch and rebuild assets on change"),
 		newSubcommand("playground", "Start interactive API playground"),
 	)

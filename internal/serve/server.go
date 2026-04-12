@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/osama1998H/moca/pkg/search"
 	"github.com/osama1998H/moca/pkg/storage"
 	"github.com/osama1998H/moca/pkg/workflow"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 // shutdownTimeout is the maximum time to wait for in-flight requests to finish.
@@ -45,18 +47,20 @@ type ServerConfig struct {
 // Server owns all components of the Moca HTTP server. Its Run method matches
 // the process.Subsystem.Run signature so it can be used as a supervisor subsystem.
 type Server struct {
-	httpServer   *http.Server
-	gateway      *api.Gateway
-	registry     *meta.Registry
-	dbManager    *orm.DBManager
-	redisClients *drivers.RedisClients
-	docManager   *document.DocManager
-	hookRegistry *hooks.HookRegistry
-	fileStorage  storage.Storage
-	searchClient *search.Client
-	hub          *Hub
-	config       *config.ProjectConfig
-	logger       *slog.Logger
+	httpServer       *http.Server
+	gateway          *api.Gateway
+	registry         *meta.Registry
+	dbManager        *orm.DBManager
+	redisClients     *drivers.RedisClients
+	docManager       *document.DocManager
+	hookRegistry     *hooks.HookRegistry
+	fileStorage      storage.Storage
+	searchClient     *search.Client
+	metricsCollector *observe.MetricsCollector
+	tracerProvider   *sdktrace.TracerProvider
+	hub              *Hub
+	config           *config.ProjectConfig
+	logger           *slog.Logger
 }
 
 // NewServer constructs a fully-wired Moca HTTP server from the given config.
@@ -94,6 +98,31 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		}
 	}
 
+	// ── Metrics ─────────────────────────────────────────────────────────
+	var metricsCollector *observe.MetricsCollector
+	if cfg.Config.Observability.Metrics.IsEnabled() {
+		metricsCollector = observe.NewMetricsCollector()
+		logger.Info("prometheus metrics enabled")
+	}
+
+	// ── Tracing ─────────────────────────────────────────────────────────
+	var tracerProvider *sdktrace.TracerProvider
+	if cfg.Config.Observability.Tracing.Enabled {
+		version := cfg.Version
+		if version == "" {
+			version = "dev"
+		}
+		tp, tracingErr := observe.InitTracer(ctx, cfg.Config.Observability.Tracing, "moca", version)
+		if tracingErr != nil {
+			return nil, fmt.Errorf("init tracing: %w", tracingErr)
+		}
+		tracerProvider = tp
+		logger.Info("opentelemetry tracing enabled",
+			slog.String("exporter", cfg.Config.Observability.Tracing.Exporter),
+			slog.String("endpoint", cfg.Config.Observability.Tracing.Endpoint),
+		)
+	}
+
 	// ── Application layer ───────────────────────────────────────────────
 	registry := meta.NewRegistry(dbManager, redisClients.Cache, logger)
 
@@ -108,7 +137,8 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	}
 
 	docManager := document.NewDocManager(registry, dbManager, naming, validator, controllers, logger)
-	docManager.SetHookDispatcher(hooks.NewDocEventDispatcher(hookRegistry))
+	dispatcher := hooks.NewDocEventDispatcher(hookRegistry)
+	docManager.SetHookDispatcher(hooks.NewTracingDocEventDispatcher(dispatcher))
 
 	// Webhook dispatch engine — enqueues delivery jobs on document events.
 	queueProducer := queue.NewProducer(redisClients.Queue, logger)
@@ -218,6 +248,7 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		api.WithReportRegistry(reportRegistry),
 		api.WithDashboardRegistry(dashboardRegistry),
 		api.WithI18nMiddleware(i18n.I18nMiddleware()),
+		api.WithMetricsCollector(metricsCollector),
 	)
 
 	handler := api.NewResourceHandler(gw)
@@ -297,6 +328,26 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	hc := observe.NewHealthChecker(dbManager.SystemPool(), redisClients, version, logger)
 	hc.RegisterRoutes(gw.Mux())
 
+	// ── Metrics endpoint ────────────────────────────────────────────────
+	if metricsCollector != nil {
+		metricsPath := cfg.Config.Observability.Metrics.Path
+		if metricsPath == "" {
+			metricsPath = "/metrics"
+		}
+		gw.Mux().Handle("GET "+metricsPath, metricsCollector.Handler())
+		logger.Info("prometheus metrics endpoint registered", slog.String("path", metricsPath))
+	}
+
+	// ── pprof debug endpoints (dev mode only) ──────────────────────────
+	if cfg.Config != nil && cfg.Config.Development.EnablePprof {
+		gw.Mux().HandleFunc("GET /debug/pprof/", pprof.Index)
+		gw.Mux().HandleFunc("GET /debug/pprof/cmdline", pprof.Cmdline)
+		gw.Mux().HandleFunc("GET /debug/pprof/profile", pprof.Profile)
+		gw.Mux().HandleFunc("GET /debug/pprof/symbol", pprof.Symbol)
+		gw.Mux().HandleFunc("GET /debug/pprof/trace", pprof.Trace)
+		logger.Info("pprof debug endpoints enabled at /debug/pprof/")
+	}
+
 	// OpenAPI spec and Swagger UI documentation handler.
 	openapiHandler := api.NewOpenAPIHandler(gw, version)
 	openapiHandler.RegisterRoutes(gw.Mux(), "v1")
@@ -331,18 +382,20 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	}
 
 	return &Server{
-		httpServer:   srv,
-		gateway:      gw,
-		registry:     registry,
-		dbManager:    dbManager,
-		redisClients: redisClients,
-		docManager:   docManager,
-		hookRegistry: hookRegistry,
-		fileStorage:  stor,
-		searchClient: searchClient,
-		hub:          hub,
-		config:       cfg.Config,
-		logger:       logger,
+		httpServer:       srv,
+		gateway:          gw,
+		registry:         registry,
+		dbManager:        dbManager,
+		redisClients:     redisClients,
+		docManager:       docManager,
+		hookRegistry:     hookRegistry,
+		fileStorage:      stor,
+		searchClient:     searchClient,
+		metricsCollector: metricsCollector,
+		tracerProvider:   tracerProvider,
+		hub:              hub,
+		config:           cfg.Config,
+		logger:           logger,
 	}, nil
 }
 
@@ -400,6 +453,11 @@ func (s *Server) Run(ctx context.Context) error {
 
 	if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("server shutdown: %w", err)
+	}
+	if s.tracerProvider != nil {
+		if err := observe.ShutdownTracer(shutdownCtx, s.tracerProvider); err != nil {
+			s.logger.Warn("tracer shutdown error", slog.String("error", err.Error()))
+		}
 	}
 	s.logger.Info("server stopped")
 	return nil
