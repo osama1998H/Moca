@@ -20,29 +20,29 @@ type TransitionOpts struct {
 // WorkflowStatus describes the current state of a document's workflow,
 // including all active branches.
 type WorkflowStatus struct {
-	WorkflowName string
-	Branches     []BranchStatus
-	IsParallel   bool
+	WorkflowName string         `json:"workflow_name"`
+	Branches     []BranchStatus `json:"branches"`
+	IsParallel   bool           `json:"is_parallel"`
 }
 
 // BranchStatus describes the state of a single branch within a workflow.
 type BranchStatus struct {
-	EnteredAt    time.Time
-	SLADeadline  *time.Time
-	BranchName   string
-	CurrentState string
-	Style        string
-	IsActive     bool
+	EnteredAt    time.Time  `json:"entered_at"`
+	SLADeadline  *time.Time `json:"sla_deadline,omitempty"`
+	BranchName   string     `json:"branch_name"`
+	CurrentState string     `json:"current_state"`
+	Style        string     `json:"style"`
+	IsActive     bool       `json:"is_active"`
 }
 
 // AvailableAction describes a single action the current user can take
 // on a document in its current workflow state.
 type AvailableAction struct {
-	Action         string
-	ToState        string
-	BranchName     string
-	Style          string
-	RequireComment bool
+	Action         string `json:"action"`
+	ToState        string `json:"to_state"`
+	BranchName     string `json:"branch_name"`
+	Style          string `json:"style"`
+	RequireComment bool   `json:"require_comment"`
 }
 
 // AutoActionHandler is a callback invoked after a transition when the

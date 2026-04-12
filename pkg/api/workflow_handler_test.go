@@ -393,8 +393,8 @@ func TestWorkflowHandler_FullTransitionFlow(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected state to be object, got %T", dataMap["state"])
 	}
-	if stateObj["WorkflowName"] != "Task Approval" {
-		t.Errorf("expected WorkflowName 'Task Approval', got %v", stateObj["WorkflowName"])
+	if stateObj["workflow_name"] != "Task Approval" {
+		t.Errorf("expected workflow_name 'Task Approval', got %v", stateObj["workflow_name"])
 	}
 
 	// 8. Verify the document was actually updated.
@@ -480,16 +480,16 @@ func TestWorkflowHandler_FullGetStateFlow(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected state to be object, got %T", dataMap["state"])
 	}
-	branches, ok := stateObj["Branches"].([]any)
+	branches, ok := stateObj["branches"].([]any)
 	if !ok || len(branches) == 0 {
-		t.Fatalf("expected Branches array with at least 1 entry")
+		t.Fatalf("expected branches array with at least 1 entry")
 	}
 	branch, ok := branches[0].(map[string]any)
 	if !ok {
 		t.Fatalf("expected branch to be object, got %T", branches[0])
 	}
-	if branch["CurrentState"] != "Open" {
-		t.Errorf("expected CurrentState 'Open', got %v", branch["CurrentState"])
+	if branch["current_state"] != "Open" {
+		t.Errorf("expected current_state 'Open', got %v", branch["current_state"])
 	}
 
 	// Verify available actions.
@@ -504,11 +504,11 @@ func TestWorkflowHandler_FullGetStateFlow(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected action to be object, got %T", actionsRaw[0])
 	}
-	if actionObj["Action"] != "Approve" {
-		t.Errorf("expected Action 'Approve', got %v", actionObj["Action"])
+	if actionObj["action"] != "Approve" {
+		t.Errorf("expected action 'Approve', got %v", actionObj["action"])
 	}
-	if actionObj["ToState"] != "Approved" {
-		t.Errorf("expected ToState 'Approved', got %v", actionObj["ToState"])
+	if actionObj["to_state"] != "Approved" {
+		t.Errorf("expected to_state 'Approved', got %v", actionObj["to_state"])
 	}
 }
 
