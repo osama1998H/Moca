@@ -51,11 +51,10 @@ type WorkflowState struct {
 	AllowEdit   string `json:"allow_edit"`
 	UpdateField string `json:"update_field"`
 	UpdateValue string `json:"update_value"`
+	JoinTarget  string `json:"join_target,omitempty"`
+	BranchName  string `json:"branch_name,omitempty"`
 	DocStatus   int    `json:"doc_status"`
-	// Parallel workflow fields (MS-23).
-	IsFork     bool   `json:"is_fork,omitempty"`
-	JoinTarget string `json:"join_target,omitempty"`
-	BranchName string `json:"branch_name,omitempty"`
+	IsFork      bool   `json:"is_fork,omitempty"`
 }
 
 // Transition represents a directed edge between two workflow states.
@@ -69,10 +68,9 @@ type Transition struct {
 	Condition      string   `json:"condition"`
 	AutoAction     string   `json:"auto_action"`
 	AllowedRoles   []string `json:"allowed_roles"`
+	QuorumRoles    []string `json:"quorum_roles,omitempty"`
+	QuorumCount    int      `json:"quorum_count,omitempty"`
 	RequireComment bool     `json:"require_comment"`
-	// Quorum approval fields (MS-23).
-	QuorumCount int      `json:"quorum_count,omitempty"`
-	QuorumRoles []string `json:"quorum_roles,omitempty"`
 }
 
 // SLARule defines a deadline and escalation policy for a workflow state.

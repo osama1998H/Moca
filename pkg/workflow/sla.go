@@ -27,13 +27,13 @@ type SLATimer struct {
 type SLAEscalation struct {
 	Deadline    time.Time
 	BreachedAt  time.Time
-	BreachDelta time.Duration
 	Rule        *meta.SLARule
 	Site        string
 	DocType     string
 	DocName     string
 	BranchName  string
 	State       string
+	BreachDelta time.Duration
 }
 
 // SLAManager tracks SLA timers for document branches and detects deadline breaches.
@@ -41,10 +41,10 @@ type SLAEscalation struct {
 // to prompt breach checking at the deadline.
 type SLAManager struct {
 	producer *queue.Producer
+	logger   *slog.Logger
 	// timers maps "doctype:docname:branch" -> *SLATimer.
 	timers map[string]*SLATimer
 	mu     sync.RWMutex
-	logger *slog.Logger
 }
 
 // NewSLAManager constructs an SLAManager. producer may be nil.
@@ -93,10 +93,10 @@ func (s *SLAManager) StartTimer(ctx context.Context, site, doctype, docname stri
 			RunAfter:   &deadline,
 			MaxRetries: 3,
 			Payload: map[string]any{
-				"doctype":  doctype,
-				"docname":  docname,
-				"branch":   tracker.BranchName,
-				"state":    tracker.CurrentState,
+				"doctype": doctype,
+				"docname": docname,
+				"branch":  tracker.BranchName,
+				"state":   tracker.CurrentState,
 			},
 		}
 		if _, err := s.producer.Enqueue(ctx, site, queue.QueueCritical, job); err != nil {
