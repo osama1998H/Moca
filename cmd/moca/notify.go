@@ -162,7 +162,7 @@ func runNotifyConfig(cmd *cobra.Command, _ []string) error {
 
 // notifyConfigRead displays the current notification configuration.
 func notifyConfigRead(cmd *cobra.Command, w *output.Writer, ctx *clicontext.CLIContext) error {
-	cfgMap, err := config.ConfigToMap(ctx.Project)
+	cfgMap, err := config.LoadProjectConfigMap(ctx.ProjectRoot)
 	if err != nil {
 		return output.NewCLIError("Failed to read configuration").WithErr(err)
 	}
