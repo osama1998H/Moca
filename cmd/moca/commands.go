@@ -41,5 +41,6 @@ func allCommands() []*cobra.Command {
 		NewTranslateCommand(),
 		NewLogCommand(),
 		NewMonitorCommand(),
+		NewNotifyCommand(),
 	}
 }

@@ -322,7 +322,7 @@ Encryption completes the "Defense in Depth" architecture (§13.3 of the system d
 
 - **Task ID:** MS-22-T4
 - **Title:** CLI Notify Commands, Complete Server Wiring, End-to-End Tests
-- **Status:** Not Started
+- **Status:** Completed
 
 - **Description:**
   Wire everything together, add CLI commands, and verify end-to-end.

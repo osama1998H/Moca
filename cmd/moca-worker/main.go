@@ -15,6 +15,7 @@ import (
 	"github.com/osama1998H/moca/internal/process"
 	"github.com/osama1998H/moca/pkg/api"
 	"github.com/osama1998H/moca/pkg/meta"
+	"github.com/osama1998H/moca/pkg/notify"
 	"github.com/osama1998H/moca/pkg/observe"
 	"github.com/osama1998H/moca/pkg/orm"
 	"github.com/osama1998H/moca/pkg/queue"
@@ -107,6 +108,22 @@ func run() error {
 		logger,
 	)
 	wp.Handle(api.JobTypeWebhookDelivery, webhookDispatcher.DeliveryHandler)
+
+	// Email delivery handler for notification system.
+	emailSender, emailErr := notify.NewEmailSender(cfg.Notification.Email)
+	if emailErr != nil {
+		logger.Warn("email delivery handler disabled",
+			slog.String("error", emailErr.Error()),
+		)
+	} else if emailSender != nil {
+		emailDispatcher := notify.NewNotificationDispatcher(
+			nil, nil, nil, nil, nil, emailSender, logger,
+		)
+		wp.Handle(notify.JobTypeEmailDelivery, emailDispatcher.EmailDeliveryHandler)
+		logger.Info("email delivery handler registered")
+	} else {
+		logger.Info("email not configured — email delivery handler not registered")
+	}
 
 	// Register a default logging handler for unhandled job types.
 	// Real handlers will be registered by T5 when integrating with the app system.
