@@ -514,6 +514,9 @@ func TestTableName(t *testing.T) {
 		{"", "tab_"},
 		{"already_snake", "tab_already_snake"},
 		{"SalesOrderItem", "tab_sales_order_item"},
+		{"Library Management", "tab_library_management"},
+		{"Sales Order", "tab_sales_order"},
+		{"my-doctype", "tab_my_doctype"},
 	}
 
 	for _, tc := range cases {

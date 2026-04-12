@@ -20,6 +20,9 @@ func TestToSnakeCase(t *testing.T) {
 		{"simple", "simple"},
 		{"HTMLEditor", "h_t_m_l_editor"},
 		{"", ""},
+		{"Library Management", "library_management"},
+		{"Sales-Order", "sales_order"},
+		{"Multi Word Name", "multi_word_name"},
 	}
 
 	for _, tt := range tests {

@@ -399,15 +399,20 @@ func findDoctypeInApps(appsDir, doctype string) (*meta.MetaType, error) {
 }
 
 // doctypeToSnake converts a PascalCase or camelCase name to snake_case.
+// Spaces and dashes are converted to underscores.
 func doctypeToSnake(s string) string {
+	runes := []rune(s)
 	var result strings.Builder
-	for i, r := range s {
-		if r >= 'A' && r <= 'Z' {
-			if i > 0 {
+	for i, r := range runes {
+		switch {
+		case r >= 'A' && r <= 'Z':
+			if i > 0 && runes[i-1] != ' ' && runes[i-1] != '-' && runes[i-1] != '_' {
 				result.WriteByte('_')
 			}
 			result.WriteRune(r + ('a' - 'A'))
-		} else {
+		case r == ' ' || r == '-':
+			result.WriteByte('_')
+		default:
 			result.WriteRune(r)
 		}
 	}

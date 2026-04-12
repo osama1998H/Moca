@@ -411,6 +411,10 @@ func TestToSnakeCase(t *testing.T) {
 		{"HrManagement", "hr_management"},
 		{"", ""},
 		{"already_snake", "already_snake"},
+		{"Library Management", "library_management"},
+		{"Multi Word Name", "multi_word_name"},
+		{"my-app", "my_app"},
+		{"Sales Order", "sales_order"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.input, func(t *testing.T) {

@@ -216,7 +216,7 @@ func toSnakeCase(s string) string {
 		if unicode.IsUpper(r) {
 			if i > 0 {
 				prev := runes[i-1]
-				if prev != '_' {
+				if prev != '_' && prev != ' ' && prev != '-' {
 					if unicode.IsUpper(prev) {
 						// We are inside a consecutive uppercase run (e.g., "HTTP").
 						// Insert underscore only when this uppercase letter begins a
@@ -233,6 +233,8 @@ func toSnakeCase(s string) string {
 				}
 			}
 			b.WriteRune(unicode.ToLower(r))
+		} else if r == ' ' || r == '-' {
+			b.WriteRune('_')
 		} else {
 			b.WriteRune(r)
 		}

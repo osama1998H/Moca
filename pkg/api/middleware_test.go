@@ -1,8 +1,10 @@
 package api
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -385,4 +387,62 @@ func TestTenantMiddleware_ResolutionPriority(t *testing.T) {
 		req.Host = "subdomain-site.example.com"
 		handler.ServeHTTP(rr, req)
 	})
+}
+
+// --- statusRecorder: http.Hijacker ---
+
+// hijackableWriter is a test double that implements both http.ResponseWriter
+// and http.Hijacker for verifying statusRecorder delegation.
+type hijackableWriter struct {
+	httptest.ResponseRecorder
+	hijacked bool
+}
+
+func (h *hijackableWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h.hijacked = true
+	// Return a pipe connection for testing purposes.
+	server, client := net.Pipe()
+	br := bufio.NewReader(client)
+	bw := bufio.NewWriter(client)
+	_ = server // caller is responsible for closing
+	return client, bufio.NewReadWriter(br, bw), nil
+}
+
+func TestStatusRecorder_ImplementsHijacker(t *testing.T) {
+	inner := &hijackableWriter{}
+	rec := &statusRecorder{ResponseWriter: inner, status: http.StatusOK}
+
+	// Verify the interface is satisfied via http.ResponseWriter.
+	var w http.ResponseWriter = rec
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		t.Fatal("statusRecorder should implement http.Hijacker")
+	}
+
+	conn, buf, err := hijacker.Hijack()
+	if err != nil {
+		t.Fatalf("Hijack() returned error: %v", err)
+	}
+	if conn == nil {
+		t.Fatal("Hijack() returned nil conn")
+	}
+	if buf == nil {
+		t.Fatal("Hijack() returned nil bufio.ReadWriter")
+	}
+	_ = conn.Close()
+
+	if !inner.hijacked {
+		t.Error("expected Hijack() to delegate to underlying writer")
+	}
+}
+
+func TestStatusRecorder_HijackFailsGracefully(t *testing.T) {
+	// httptest.ResponseRecorder does NOT implement http.Hijacker.
+	inner := httptest.NewRecorder()
+	rec := &statusRecorder{ResponseWriter: inner, status: http.StatusOK}
+
+	_, _, err := rec.Hijack()
+	if err == nil {
+		t.Fatal("expected error from Hijack() on non-hijackable writer")
+	}
 }
