@@ -120,7 +120,7 @@ jobs:
 
   desk-publish:
     name: Publish @osama1998h/desk
-    needs: desk-validate
+    needs: [desk-validate, build]
     runs-on: ubuntu-latest
     permissions:
       packages: write
