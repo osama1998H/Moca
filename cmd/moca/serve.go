@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -88,6 +89,12 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	}
 	defer srv.Close()
 
+	// ── Sync workflow definitions from MetaTypes ────────────────────────
+	siteLister := &meta.DBSiteLister{DB: srv.DBManager()}
+	if sites, err := siteLister.ListActiveSites(cmd.Context()); err == nil {
+		srv.SyncWorkflows(cmd.Context(), sites)
+	}
+
 	// ── Supervisor ──────────────────────────────────────────────────────
 	sup := process.NewSupervisor(logger, process.WithShutdownTimeout(30*time.Second))
 
@@ -124,7 +131,12 @@ func runServe(cmd *cobra.Command, _ []string) error {
 			srv.Registry(),
 			&meta.DBSiteLister{DB: srv.DBManager()},
 			logger,
-			meta.WatcherConfig{AppsDir: filepath.Join(projectRoot, "apps")},
+			meta.WatcherConfig{
+				AppsDir: filepath.Join(projectRoot, "apps"),
+				OnReload: func(ctx context.Context, sites []string) {
+					srv.SyncWorkflows(ctx, sites)
+				},
+			},
 		)
 		sup.Add(process.Subsystem{Name: "watcher", Run: watcher.Run})
 	}

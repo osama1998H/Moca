@@ -59,6 +59,7 @@ type Server struct {
 	metricsCollector *observe.MetricsCollector
 	tracerProvider   *sdktrace.TracerProvider
 	hub              *Hub
+	wfRegistry       *workflow.WorkflowRegistry
 	config           *config.ProjectConfig
 	logger           *slog.Logger
 }
@@ -394,6 +395,7 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		metricsCollector: metricsCollector,
 		tracerProvider:   tracerProvider,
 		hub:              hub,
+		wfRegistry:       wfRegistry,
 		config:           cfg.Config,
 		logger:           logger,
 	}, nil
@@ -476,6 +478,32 @@ func (s *Server) Registry() *meta.Registry {
 // DBManager returns the database manager for use by the file watcher.
 func (s *Server) DBManager() *orm.DBManager {
 	return s.dbManager
+}
+
+// WfRegistry returns the workflow registry so the watcher can refresh it.
+func (s *Server) WfRegistry() *workflow.WorkflowRegistry {
+	return s.wfRegistry
+}
+
+// SyncWorkflows loads workflow definitions from all MetaTypes on active sites
+// into the WorkflowRegistry. Safe to call at startup and after hot-reload.
+func (s *Server) SyncWorkflows(ctx context.Context, sites []string) {
+	if s.wfRegistry == nil {
+		return
+	}
+	for _, site := range sites {
+		mts, err := s.registry.ListAll(ctx, site)
+		if err != nil {
+			s.logger.Warn("sync workflows: list metatypes failed", "site", site, "error", err)
+			continue
+		}
+		for _, mt := range mts {
+			if mt.Workflow != nil && mt.Workflow.IsActive {
+				s.wfRegistry.Set(site, mt.Name, mt.Workflow)
+				s.logger.Info("workflow registered", "site", site, "doctype", mt.Name, "workflow", mt.Workflow.Name)
+			}
+		}
+	}
 }
 
 // RedisClients returns the Redis client set for use by subsystems.
