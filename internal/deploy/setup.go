@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/osama1998H/moca/internal/config"
+	"github.com/osama1998H/moca/internal/dockerutil"
 	"github.com/osama1998H/moca/internal/generate"
 	"github.com/osama1998H/moca/pkg/backup"
 )
@@ -397,7 +398,8 @@ func stepStartServices(ctx context.Context, opts SetupOptions, _ *config.Project
 		return err
 	case "docker":
 		composePath := filepath.Join(opts.ProjectRoot, "config", "docker", "docker-compose.yml")
-		_, err := cmd.Run(ctx, "docker", "compose", "-f", composePath, "up", "-d")
+		bin, args := dockerutil.ComposeArgs("-f", composePath, "up", "-d")
+		_, err := cmd.Run(ctx, bin, args...)
 		return err
 	default:
 		return fmt.Errorf("unsupported process manager: %s", opts.Process)

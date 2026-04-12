@@ -26,8 +26,26 @@ func LoadAndResolve(path string) (*ProjectConfig, error) {
 	}
 
 	ResolveInheritance(cfg)
+	setObservabilityDefaults(cfg)
 
 	return cfg, nil
+}
+
+// setObservabilityDefaults fills in zero-value defaults for the observability
+// configuration section. Called after inheritance resolution.
+func setObservabilityDefaults(cfg *ProjectConfig) {
+	if cfg.Observability.Metrics.Path == "" {
+		cfg.Observability.Metrics.Path = "/metrics"
+	}
+	if cfg.Observability.Tracing.Exporter == "" {
+		cfg.Observability.Tracing.Exporter = "otlp"
+	}
+	if cfg.Observability.Tracing.Endpoint == "" {
+		cfg.Observability.Tracing.Endpoint = "localhost:4317"
+	}
+	if cfg.Observability.Tracing.SampleRate == 0 {
+		cfg.Observability.Tracing.SampleRate = 1.0
+	}
 }
 
 // ValidationErrors wraps a slice of ValidationError values so that the

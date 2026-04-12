@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/osama1998H/moca/internal/config"
+	"github.com/osama1998H/moca/internal/dockerutil"
 	"github.com/osama1998H/moca/pkg/backup"
 )
 
@@ -130,7 +131,8 @@ func restartServices(ctx context.Context, processMgr, projectRoot string, cmd Co
 		return err
 	case "docker":
 		composePath := filepath.Join(projectRoot, "config", "docker", "docker-compose.yml")
-		_, err := cmd.Run(ctx, "docker", "compose", "-f", composePath, "up", "-d", "--force-recreate")
+		bin, args := dockerutil.ComposeArgs("-f", composePath, "up", "-d", "--force-recreate")
+		_, err := cmd.Run(ctx, bin, args...)
 		return err
 	default:
 		return fmt.Errorf("unsupported process manager: %s", processMgr)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/osama1998H/moca/internal/config"
+	"github.com/osama1998H/moca/internal/dockerutil"
 	"github.com/osama1998H/moca/pkg/backup"
 	"github.com/osama1998H/moca/pkg/storage"
 )
@@ -265,7 +266,8 @@ func phaseActivate(ctx context.Context, opts UpdateOptions, cfg *config.ProjectC
 			}
 		case "docker":
 			composePath := filepath.Join(opts.ProjectRoot, "config", "docker", "docker-compose.yml")
-			if _, err := cmd.Run(ctx, "docker", "compose", "-f", composePath, "up", "-d", "--force-recreate"); err != nil {
+			bin, cArgs := dockerutil.ComposeArgs("-f", composePath, "up", "-d", "--force-recreate")
+			if _, err := cmd.Run(ctx, bin, cArgs...); err != nil {
 				return results, fmt.Errorf("restart docker services: %w", err)
 			}
 		}
