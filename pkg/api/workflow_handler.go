@@ -11,21 +11,28 @@ import (
 	"github.com/osama1998H/moca/pkg/workflow"
 )
 
+// DocLoader abstracts loading a single document by doctype and name.
+// *document.DocManager satisfies this interface via its Get method.
+type DocLoader interface {
+	Get(ctx *document.DocContext, doctype, name string) (*document.DynamicDoc, error)
+}
+
 // WorkflowHandler serves workflow-related API endpoints including transitions,
 // state queries, history, and pending approvals.
 type WorkflowHandler struct {
-	engine     *workflow.WorkflowEngine
-	approvals  *workflow.ApprovalManager
-	docManager *document.DocManager
-	registry   *meta.Registry
-	logger     *slog.Logger
+	engine    *workflow.WorkflowEngine
+	approvals *workflow.ApprovalManager
+	docs      DocLoader
+	registry  *meta.Registry
+	logger    *slog.Logger
 }
 
 // NewWorkflowHandler creates a WorkflowHandler with the given dependencies.
+// docManager must implement DocLoader; *document.DocManager satisfies this.
 func NewWorkflowHandler(
 	engine *workflow.WorkflowEngine,
 	approvals *workflow.ApprovalManager,
-	docManager *document.DocManager,
+	docManager DocLoader,
 	registry *meta.Registry,
 	logger *slog.Logger,
 ) *WorkflowHandler {
@@ -33,11 +40,11 @@ func NewWorkflowHandler(
 		logger = slog.Default()
 	}
 	return &WorkflowHandler{
-		engine:     engine,
-		approvals:  approvals,
-		docManager: docManager,
-		registry:   registry,
-		logger:     logger,
+		engine:    engine,
+		approvals: approvals,
+		docs:      docManager,
+		registry:  registry,
+		logger:    logger,
 	}
 }
 
@@ -99,12 +106,12 @@ func (h *WorkflowHandler) handleTransition(w http.ResponseWriter, r *http.Reques
 	docCtx := newDocContext(r.Context(), site, user)
 
 	// Load the document.
-	if h.docManager == nil {
-		h.logger.Error("workflow transition failed: docManager is nil")
+	if h.docs == nil {
+		h.logger.Error("workflow transition failed: doc loader is nil")
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "document manager not configured")
 		return
 	}
-	doc, err := h.docManager.Get(docCtx, doctype, name)
+	doc, err := h.docs.Get(docCtx, doctype, name)
 	if err != nil {
 		h.logger.Error("workflow transition: load document failed",
 			slog.String("doctype", doctype),
@@ -173,12 +180,12 @@ func (h *WorkflowHandler) handleGetState(w http.ResponseWriter, r *http.Request)
 	docCtx := newDocContext(r.Context(), site, user)
 
 	// Load the document.
-	if h.docManager == nil {
-		h.logger.Error("workflow get state failed: docManager is nil")
+	if h.docs == nil {
+		h.logger.Error("workflow get state failed: doc loader is nil")
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "document manager not configured")
 		return
 	}
-	doc, err := h.docManager.Get(docCtx, doctype, name)
+	doc, err := h.docs.Get(docCtx, doctype, name)
 	if err != nil {
 		h.logger.Error("workflow get state: load document failed",
 			slog.String("doctype", doctype),
