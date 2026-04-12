@@ -82,7 +82,11 @@ func TestMain(m *testing.M) {
 			"document_name" TEXT NOT NULL DEFAULT '',
 			"read"          BOOLEAN NOT NULL DEFAULT false,
 			"email_sent"    BOOLEAN NOT NULL DEFAULT false,
-			"creation"      TIMESTAMPTZ NOT NULL DEFAULT now()
+			"owner"         TEXT NOT NULL DEFAULT '',
+			"creation"      TIMESTAMPTZ NOT NULL DEFAULT now(),
+			"modified"      TIMESTAMPTZ NOT NULL DEFAULT now(),
+			"modified_by"   TEXT NOT NULL DEFAULT '',
+			"docstatus"     SMALLINT NOT NULL DEFAULT 0
 		)`, pgx.Identifier{notifyTestSchema, "tab_notification"}.Sanitize()),
 		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 			"name"             TEXT PRIMARY KEY,
