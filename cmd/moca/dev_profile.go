@@ -106,7 +106,16 @@ func runDevProfile(cmd *cobra.Command, _ []string) error {
 
 	// Fetch profile from server with a generous timeout.
 	client := &http.Client{Timeout: duration + 30*time.Second}
-	resp, err := client.Get(pprofURL)
+	req, err := http.NewRequest("GET", pprofURL, nil)
+	if err != nil {
+		return output.NewCLIError("Invalid pprof URL").WithErr(err)
+	}
+	// Pprof endpoints go through the full middleware chain — add a site header
+	// so tenant resolution doesn't reject the request.
+	if cliCtx.Site != "" {
+		req.Header.Set("X-Moca-Site", cliCtx.Site)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return output.NewCLIError("Cannot fetch profile").
 			WithErr(err).

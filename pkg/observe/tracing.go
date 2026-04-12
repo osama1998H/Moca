@@ -11,8 +11,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/osama1998H/moca/internal/config"
 )
@@ -32,16 +30,15 @@ func InitTracer(ctx context.Context, cfg config.TracingConfig, serviceName, vers
 		sampleRate = 1.0
 	}
 
-	// Build gRPC dial options.
-	dialOpts := []grpc.DialOption{}
+	// Build exporter options.
+	exporterOpts := []otlptracegrpc.Option{
+		otlptracegrpc.WithEndpoint(endpoint),
+	}
 	if cfg.IsInsecure() {
-		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		exporterOpts = append(exporterOpts, otlptracegrpc.WithInsecure())
 	}
 
-	exporter, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithEndpoint(endpoint),
-		otlptracegrpc.WithDialOption(dialOpts...),
-	)
+	exporter, err := otlptracegrpc.New(ctx, exporterOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("create OTLP trace exporter: %w", err)
 	}
