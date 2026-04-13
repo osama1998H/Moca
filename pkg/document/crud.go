@@ -759,6 +759,9 @@ func (m *DocManager) Insert(ctx *DocContext, doctype string, values map[string]a
 	if err != nil {
 		return nil, fmt.Errorf("crud: Insert %q: %w", doctype, err)
 	}
+	if mt.IsVirtual && m.virtualSources != nil {
+		return m.insertVirtual(ctx, mt, values)
+	}
 
 	// 2. Create document and apply incoming values.
 	doc := NewDynamicDoc(mt, childMetas, true)
@@ -911,6 +914,14 @@ func (m *DocManager) Insert(ctx *DocContext, doctype string, values map[string]a
 //	BeforeValidate → controller.Validate → field validation → BeforeSave →
 //	OnUpdate → [TX: UPDATE] → AfterSave → OnChange (logged)
 func (m *DocManager) Update(ctx *DocContext, doctype, name string, values map[string]any) (*DynamicDoc, error) {
+	mt, err := m.registry.Get(ctx, ctx.Site.Name, doctype)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Update %q: load MetaType: %w", doctype, err)
+	}
+	if mt.IsVirtual && m.virtualSources != nil {
+		return m.updateVirtual(ctx, mt, name, values)
+	}
+
 	pool, err := sitePool(ctx)
 	if err != nil {
 		return nil, err
@@ -1077,6 +1088,14 @@ func (m *DocManager) Update(ctx *DocContext, doctype, name string, values map[st
 //
 //	OnTrash → [TX: DELETE] → AfterDelete (logged)
 func (m *DocManager) Delete(ctx *DocContext, doctype, name string) error {
+	mt, err := m.registry.Get(ctx, ctx.Site.Name, doctype)
+	if err != nil {
+		return fmt.Errorf("crud: Delete %q: load MetaType: %w", doctype, err)
+	}
+	if mt.IsVirtual && m.virtualSources != nil {
+		return m.deleteVirtual(ctx, mt, name)
+	}
+
 	pool, err := sitePool(ctx)
 	if err != nil {
 		return err
@@ -1150,19 +1169,127 @@ func (m *DocManager) Delete(ctx *DocContext, doctype, name string) error {
 	return nil
 }
 
+// ─── Virtual routing helpers ─────────────────────────────────────────────────
+
+// getVirtual retrieves a document from a VirtualSource.
+func (m *DocManager) getVirtual(ctx *DocContext, mt *meta.MetaType, name string) (*DynamicDoc, error) {
+	src, ok := m.virtualSources.Get(mt.Name)
+	if !ok {
+		return nil, fmt.Errorf("crud: Get virtual %q: no source registered", mt.Name)
+	}
+	values, err := src.GetOne(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Get virtual %q %q: %w", mt.Name, name, err)
+	}
+	if values == nil {
+		return nil, &DocNotFoundError{Doctype: mt.Name, Name: name}
+	}
+	childMetas, err := m.resolveChildMetas(ctx, ctx.Site.Name, mt)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Get virtual %q: %w", mt.Name, err)
+	}
+	doc := NewDynamicDoc(mt, childMetas, false)
+	if applyErr := applyValues(doc, values); applyErr != nil {
+		return nil, fmt.Errorf("crud: Get virtual %q: apply values: %w", mt.Name, applyErr)
+	}
+	doc.markPersisted()
+	doc.resetDirtyState()
+	return doc, nil
+}
+
+// getListVirtual retrieves documents from a VirtualSource.
+func (m *DocManager) getListVirtual(ctx *DocContext, mt *meta.MetaType, opts ListOptions) ([]*DynamicDoc, int, error) {
+	src, ok := m.virtualSources.Get(mt.Name)
+	if !ok {
+		return nil, 0, fmt.Errorf("crud: GetList virtual %q: no source registered", mt.Name)
+	}
+	results, total, err := src.GetList(ctx, opts)
+	if err != nil {
+		return nil, 0, fmt.Errorf("crud: GetList virtual %q: %w", mt.Name, err)
+	}
+	childMetas, err := m.resolveChildMetas(ctx, ctx.Site.Name, mt)
+	if err != nil {
+		return nil, 0, fmt.Errorf("crud: GetList virtual %q: %w", mt.Name, err)
+	}
+	docs := make([]*DynamicDoc, 0, len(results))
+	for _, values := range results {
+		doc := NewDynamicDoc(mt, childMetas, false)
+		if applyErr := applyValues(doc, values); applyErr != nil {
+			return nil, 0, fmt.Errorf("crud: GetList virtual %q: apply values: %w", mt.Name, applyErr)
+		}
+		doc.markPersisted()
+		doc.resetDirtyState()
+		docs = append(docs, doc)
+	}
+	return docs, total, nil
+}
+
+// insertVirtual creates a document via a VirtualSource.
+func (m *DocManager) insertVirtual(ctx *DocContext, mt *meta.MetaType, values map[string]any) (*DynamicDoc, error) {
+	src, ok := m.virtualSources.Get(mt.Name)
+	if !ok {
+		return nil, fmt.Errorf("crud: Insert virtual %q: no source registered", mt.Name)
+	}
+	name, err := src.Insert(ctx, values)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert virtual %q: %w", mt.Name, err)
+	}
+	values["name"] = name
+	childMetas, err := m.resolveChildMetas(ctx, ctx.Site.Name, mt)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Insert virtual %q: %w", mt.Name, err)
+	}
+	doc := NewDynamicDoc(mt, childMetas, false)
+	if applyErr := applyValues(doc, values); applyErr != nil {
+		return nil, fmt.Errorf("crud: Insert virtual %q: apply values: %w", mt.Name, applyErr)
+	}
+	doc.markPersisted()
+	doc.resetDirtyState()
+	return doc, nil
+}
+
+// updateVirtual updates a document via a VirtualSource.
+func (m *DocManager) updateVirtual(ctx *DocContext, mt *meta.MetaType, name string, values map[string]any) (*DynamicDoc, error) {
+	src, ok := m.virtualSources.Get(mt.Name)
+	if !ok {
+		return nil, fmt.Errorf("crud: Update virtual %q: no source registered", mt.Name)
+	}
+	if err := src.Update(ctx, name, values); err != nil {
+		return nil, fmt.Errorf("crud: Update virtual %q %q: %w", mt.Name, name, err)
+	}
+	// Re-fetch to get the current state.
+	return m.getVirtual(ctx, mt, name)
+}
+
+// deleteVirtual deletes a document via a VirtualSource.
+func (m *DocManager) deleteVirtual(ctx *DocContext, mt *meta.MetaType, name string) error {
+	src, ok := m.virtualSources.Get(mt.Name)
+	if !ok {
+		return fmt.Errorf("crud: Delete virtual %q: no source registered", mt.Name)
+	}
+	if err := src.Delete(ctx, name); err != nil {
+		return fmt.Errorf("crud: Delete virtual %q %q: %w", mt.Name, name, err)
+	}
+	return nil
+}
+
 // Get retrieves a document by doctype and name. Returns *DocNotFoundError if
 // no document with that name exists. Child table rows are eagerly loaded for
 // all Table fields.
 func (m *DocManager) Get(ctx *DocContext, doctype, name string) (*DynamicDoc, error) {
+	mt, err := m.registry.Get(ctx, ctx.Site.Name, doctype)
+	if err != nil {
+		return nil, fmt.Errorf("crud: Get %q: load MetaType: %w", doctype, err)
+	}
+	if mt.IsVirtual && m.virtualSources != nil {
+		return m.getVirtual(ctx, mt, name)
+	}
+
 	pool, err := sitePool(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	mt, err := m.registry.Get(ctx, ctx.Site.Name, doctype)
-	if err != nil {
-		return nil, fmt.Errorf("crud: Get %q: load MetaType: %w", doctype, err)
-	}
 	childMetas, err := m.resolveChildMetas(ctx, ctx.Site.Name, mt)
 	if err != nil {
 		return nil, fmt.Errorf("crud: Get %q: %w", doctype, err)
@@ -1279,14 +1406,17 @@ func (m *DocManager) loadChildRows(ctx context.Context, pool *pgxpool.Pool, chil
 // Filter keys are validated against the MetaType's known columns to prevent
 // SQL injection. Values are always parameterised.
 func (m *DocManager) GetList(ctx *DocContext, doctype string, opts ListOptions) ([]*DynamicDoc, int, error) {
-	pool, err := sitePool(ctx)
-	if err != nil {
-		return nil, 0, err
-	}
-
 	mt, err := m.registry.Get(ctx, ctx.Site.Name, doctype)
 	if err != nil {
 		return nil, 0, fmt.Errorf("crud: GetList %q: load MetaType: %w", doctype, err)
+	}
+	if mt.IsVirtual && m.virtualSources != nil {
+		return m.getListVirtual(ctx, mt, opts)
+	}
+
+	pool, err := sitePool(ctx)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	// Merge legacy equality filters and advanced filters.
