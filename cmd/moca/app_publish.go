@@ -177,8 +177,8 @@ func createAppTarball(srcDir, destPath, prefix string) error {
 		}
 		header.Name = filepath.Join(prefix, relPath)
 
-		if err := tw.WriteHeader(header); err != nil {
-			return err
+		if whErr := tw.WriteHeader(header); whErr != nil {
+			return whErr
 		}
 		if info.IsDir() {
 			return nil

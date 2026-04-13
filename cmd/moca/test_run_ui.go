@@ -59,7 +59,7 @@ func runTestRunUI(cmd *cobra.Command, _ []string) error {
 	updateSnapshots, _ := cmd.Flags().GetBool("update-snapshots")
 
 	// 1. Check prerequisites.
-	if _, err := exec.LookPath("npx"); err != nil {
+	if _, lookErr := exec.LookPath("npx"); lookErr != nil {
 		return output.NewCLIError("npx not found").
 			WithFix("Install Node.js and run: npm init playwright@latest")
 	}
@@ -240,8 +240,8 @@ type pwTest struct {
 
 type pwResult struct {
 	Status   string  `json:"status"`
-	Duration int     `json:"duration"`
 	Error    pwError `json:"error"`
+	Duration int     `json:"duration"`
 }
 
 type pwError struct {

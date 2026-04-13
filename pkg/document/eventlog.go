@@ -11,11 +11,11 @@ import (
 
 // EventLogQueryOpts configures event log queries.
 type EventLogQueryOpts struct {
-	Limit     int
-	Offset    int
 	Since     time.Time // zero = no lower bound
 	Until     time.Time // zero = no upper bound
 	EventType string    // empty = all
+	Limit     int
+	Offset    int
 }
 
 // GetHistory returns the ordered event stream for a specific document.

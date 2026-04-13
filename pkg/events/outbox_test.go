@@ -317,9 +317,9 @@ func TestOutboxPollerNoCDCFanOutWhenProviderNil(t *testing.T) {
 
 // topicFailProducer is a fakeProducer that returns an error for a specific topic.
 type topicFailProducer struct {
-	fakeProducer
-	failTopic string
 	failErr   error
+	failTopic string
+	fakeProducer
 }
 
 func (p *topicFailProducer) Publish(ctx context.Context, topic string, event DocumentEvent) error {

@@ -583,15 +583,15 @@ func insertOutbox(ctx context.Context, tx pgx.Tx, event events.DocumentEvent) er
 // MetaType has EventSourcing enabled. It stores a full event envelope so
 // the event store can be replayed independently of the transactional outbox.
 type EventLogRow struct {
-	ID        int64           `json:"id"`
 	DocType   string          `json:"doctype"`
 	DocName   string          `json:"docname"`
 	EventType string          `json:"event_type"`
-	Payload   json.RawMessage `json:"payload"`
-	PrevData  json.RawMessage `json:"prev_data,omitempty"`
 	UserID    string          `json:"user_id"`
 	RequestID string          `json:"request_id"`
 	CreatedAt time.Time       `json:"created_at"`
+	Payload   json.RawMessage `json:"payload"`
+	PrevData  json.RawMessage `json:"prev_data,omitempty"`
+	ID        int64           `json:"id"`
 }
 
 // insertEventLog writes a canonical event-log row inside an active transaction.

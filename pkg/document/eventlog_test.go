@@ -39,4 +39,10 @@ func TestEventLogQueryOpts_WithValues(t *testing.T) {
 	if opts.EventType != "doc.created" {
 		t.Errorf("EventType: got %q, want doc.created", opts.EventType)
 	}
+	if !opts.Since.Equal(now.Add(-time.Hour)) {
+		t.Errorf("Since: got %v, want %v", opts.Since, now.Add(-time.Hour))
+	}
+	if !opts.Until.Equal(now) {
+		t.Errorf("Until: got %v, want %v", opts.Until, now)
+	}
 }

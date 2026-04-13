@@ -7,9 +7,7 @@ import (
 	"strings"
 
 	"github.com/osama1998H/moca/internal/output"
-	"github.com/osama1998H/moca/pkg/auth"
 	"github.com/osama1998H/moca/pkg/console"
-	"github.com/osama1998H/moca/pkg/tenancy"
 	"github.com/peterh/liner"
 	"github.com/spf13/cobra"
 	"github.com/traefik/yaegi/interp"
@@ -74,48 +72,17 @@ func runDevConsole(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	// Acquire site's pool and build SiteContext.
-	pool, err := svc.DB.ForSite(cmd.Context(), siteName)
-	if err != nil {
-		return output.NewCLIError("Cannot connect to site database").
-			WithErr(err).
-			WithContext("site: " + siteName).
-			WithFix("Ensure the site exists and PostgreSQL is running.")
-	}
-
-	// Fetch schema name for the site.
-	siteInfo, err := svc.Sites.GetSiteInfo(cmd.Context(), siteName)
-	if err != nil {
-		return output.NewCLIError("Cannot load site info").
-			WithErr(err).
-			WithContext("site: " + siteName)
-	}
-
-	siteCtx := &tenancy.SiteContext{
-		Name:          siteInfo.Name,
-		DBSchema:      siteInfo.DBSchema,
-		Status:        siteInfo.Status,
-		Pool:          pool,
-		InstalledApps: siteInfo.Apps,
-	}
-
 	userEmail, _ := cmd.Flags().GetString("user")
-	consoleUser := &auth.User{Email: userEmail}
 
-	// Build the Console helper.
-	con := &console.Console{
-		DocManager: svc.DocManager,
-		Registry:   svc.Registry,
-		Pool:       pool,
-		Site:       siteCtx,
-		User:       consoleUser,
-	}
-
-	_ = con // available for future symbol injection
+	// Build the Console helper (available for future symbol injection).
+	con := &console.Console{}
+	_ = con
 
 	// Initialize yaegi interpreter with stdlib.
 	i := interp.New(interp.Options{})
-	i.Use(stdlib.Symbols)
+	if err := i.Use(stdlib.Symbols); err != nil {
+		return fmt.Errorf("console: load stdlib symbols: %w", err)
+	}
 
 	// Print banner.
 	w.Print("Moca Dev Console — site: %s, user: %s", siteName, userEmail)
@@ -126,7 +93,7 @@ func runDevConsole(cmd *cobra.Command, _ []string) error {
 
 	// Set up liner for readline support.
 	line := liner.NewLiner()
-	defer line.Close()
+	defer func() { _ = line.Close() }()
 
 	line.SetCtrlCAborts(true)
 
@@ -162,7 +129,7 @@ func runDevConsole(cmd *cobra.Command, _ []string) error {
 			}
 			if readErr == io.EOF {
 				// Ctrl+D — exit gracefully.
-				fmt.Fprintln(os.Stdout)
+				_, _ = fmt.Fprintln(os.Stdout)
 				break
 			}
 			return fmt.Errorf("console readline: %w", readErr)
@@ -261,9 +228,10 @@ func isIncomplete(src string) bool {
 			continue
 		}
 		if inString {
-			if ch == '\\' {
+			switch ch {
+			case '\\':
 				idx++ // skip escaped char
-			} else if ch == '"' {
+			case '"':
 				inString = false
 			}
 			continue

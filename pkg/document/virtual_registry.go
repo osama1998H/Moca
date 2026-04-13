@@ -8,8 +8,8 @@ import (
 // VirtualSourceRegistry maps doctype names to their VirtualSource implementations.
 // Thread-safe for concurrent registration and lookup.
 type VirtualSourceRegistry struct {
-	mu      sync.RWMutex
 	sources map[string]VirtualSource
+	mu      sync.RWMutex
 }
 
 func NewVirtualSourceRegistry() *VirtualSourceRegistry {
