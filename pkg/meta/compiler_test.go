@@ -494,6 +494,349 @@ func TestCompile_EmptyInput(t *testing.T) {
 	t.Logf("empty input error: %v", err)
 }
 
+// ── dual-format compiler: tree-native tests ─────────────────────────────────
+
+func TestCompile_TreeNativeFormat(t *testing.T) {
+	data := []byte(`{
+		"name": "Book",
+		"module": "Library",
+		"layout": {
+			"tabs": [{
+				"label": "Details",
+				"sections": [{
+					"columns": [{"width": 1, "fields": ["title", "isbn"]}]
+				}]
+			}]
+		},
+		"fields": {
+			"title": {"field_type": "Data", "label": "Title", "required": true},
+			"isbn":  {"field_type": "Data", "label": "ISBN"}
+		}
+	}`)
+
+	mt, err := meta.Compile(data)
+	assertNoError(t, err)
+
+	// Layout is set.
+	if mt.Layout == nil {
+		t.Fatal("expected Layout to be set for tree-native input")
+	}
+	if len(mt.Layout.Tabs) != 1 {
+		t.Fatalf("expected 1 tab; got %d", len(mt.Layout.Tabs))
+	}
+	if mt.Layout.Tabs[0].Label != "Details" {
+		t.Errorf("tab label: got %q, want %q", mt.Layout.Tabs[0].Label, "Details")
+	}
+
+	// FieldsMap has entries.
+	if mt.FieldsMap == nil {
+		t.Fatal("expected FieldsMap to be populated")
+	}
+	if len(mt.FieldsMap) != 2 {
+		t.Errorf("FieldsMap length: got %d, want 2", len(mt.FieldsMap))
+	}
+	if _, ok := mt.FieldsMap["title"]; !ok {
+		t.Error("FieldsMap missing key 'title'")
+	}
+	if _, ok := mt.FieldsMap["isbn"]; !ok {
+		t.Error("FieldsMap missing key 'isbn'")
+	}
+
+	// Flat Fields derived in layout order.
+	if len(mt.Fields) != 2 {
+		t.Fatalf("Fields length: got %d, want 2", len(mt.Fields))
+	}
+	if mt.Fields[0].Name != "title" {
+		t.Errorf("Fields[0].Name: got %q, want %q", mt.Fields[0].Name, "title")
+	}
+	if mt.Fields[1].Name != "isbn" {
+		t.Errorf("Fields[1].Name: got %q, want %q", mt.Fields[1].Name, "isbn")
+	}
+
+	// Field properties preserved.
+	if !mt.Fields[0].Required {
+		t.Error("expected title field to have Required=true")
+	}
+	if mt.Fields[0].Label != "Title" {
+		t.Errorf("Fields[0].Label: got %q, want %q", mt.Fields[0].Label, "Title")
+	}
+
+	t.Logf("tree-native Book compiled: %d fields, layout with %d tabs",
+		len(mt.Fields), len(mt.Layout.Tabs))
+}
+
+func TestCompile_TreeNative_FieldNameFromMapKey(t *testing.T) {
+	data := []byte(`{
+		"name": "Widget",
+		"module": "core",
+		"layout": {
+			"tabs": [{
+				"label": "Main",
+				"sections": [{
+					"columns": [{"fields": ["my_field"]}]
+				}]
+			}]
+		},
+		"fields": {
+			"my_field": {"field_type": "Data", "label": "My Field"}
+		}
+	}`)
+
+	mt, err := meta.Compile(data)
+	assertNoError(t, err)
+
+	// Verify field Name comes from the map key, not from inside the JSON value.
+	if len(mt.Fields) != 1 {
+		t.Fatalf("Fields length: got %d, want 1", len(mt.Fields))
+	}
+	if mt.Fields[0].Name != "my_field" {
+		t.Errorf("expected field name from map key %q; got %q", "my_field", mt.Fields[0].Name)
+	}
+	if fd, ok := mt.FieldsMap["my_field"]; !ok {
+		t.Error("FieldsMap missing key 'my_field'")
+	} else if fd.Name != "my_field" {
+		t.Errorf("FieldsMap entry Name: got %q, want %q", fd.Name, "my_field")
+	}
+}
+
+func TestCompile_LegacyFlat_StillWorks(t *testing.T) {
+	// Ensure legacy flat JSON still works and now also populates Layout + FieldsMap.
+	data := []byte(`{
+		"name": "Customer",
+		"module": "crm",
+		"fields": [
+			{"name": "full_name", "field_type": "Data", "label": "Full Name", "required": true},
+			{"name": "email", "field_type": "Data", "label": "Email"}
+		]
+	}`)
+
+	mt, err := meta.Compile(data)
+	assertNoError(t, err)
+
+	// Fields present (existing behavior).
+	if len(mt.Fields) != 2 {
+		t.Fatalf("Fields length: got %d, want 2", len(mt.Fields))
+	}
+	if mt.Fields[0].Name != "full_name" {
+		t.Errorf("Fields[0].Name: got %q, want %q", mt.Fields[0].Name, "full_name")
+	}
+
+	// Layout auto-generated.
+	if mt.Layout == nil {
+		t.Fatal("expected Layout to be auto-generated for flat input")
+	}
+	if len(mt.Layout.Tabs) == 0 {
+		t.Fatal("expected at least one tab in auto-generated Layout")
+	}
+
+	// FieldsMap populated.
+	if mt.FieldsMap == nil {
+		t.Fatal("expected FieldsMap to be populated for flat input")
+	}
+	if len(mt.FieldsMap) != 2 {
+		t.Errorf("FieldsMap length: got %d, want 2", len(mt.FieldsMap))
+	}
+	if fd, ok := mt.FieldsMap["full_name"]; !ok {
+		t.Error("FieldsMap missing key 'full_name'")
+	} else if !fd.Required {
+		t.Error("expected full_name field to have Required=true in FieldsMap")
+	}
+}
+
+func TestCompile_TreeNative_ValidationErrors(t *testing.T) {
+	// Tree-native with invalid field type should produce CompileErrors.
+	data := []byte(`{
+		"name": "Bad",
+		"module": "core",
+		"layout": {
+			"tabs": [{
+				"label": "Main",
+				"sections": [{
+					"columns": [{"fields": ["broken"]}]
+				}]
+			}]
+		},
+		"fields": {
+			"broken": {"field_type": "FakeType", "label": "Broken"}
+		}
+	}`)
+
+	_, err := meta.Compile(data)
+	if err == nil {
+		t.Fatal("expected compile error for invalid field type in tree-native format")
+	}
+
+	var ce *meta.CompileErrors
+	if !errors.As(err, &ce) {
+		t.Fatalf("expected *meta.CompileErrors; got %T: %v", err, err)
+	}
+
+	assertCompileError(t, err, "fields[0].field_type")
+	t.Logf("tree-native validation error: %v", err)
+}
+
+func TestCompile_TreeNative_LayoutValidation(t *testing.T) {
+	t.Run("empty_tabs", func(t *testing.T) {
+		data := []byte(`{
+			"name": "EmptyTabs",
+			"module": "core",
+			"layout": {
+				"tabs": []
+			},
+			"fields": {}
+		}`)
+		_, err := meta.Compile(data)
+		assertCompileError(t, err, "layout.tabs")
+	})
+
+	t.Run("missing_sections", func(t *testing.T) {
+		data := []byte(`{
+			"name": "NoSections",
+			"module": "core",
+			"layout": {
+				"tabs": [{"label": "Empty", "sections": []}]
+			},
+			"fields": {}
+		}`)
+		_, err := meta.Compile(data)
+		assertCompileError(t, err, "layout.tabs[0].sections")
+	})
+
+	t.Run("negative_column_width", func(t *testing.T) {
+		data := []byte(`{
+			"name": "NegWidth",
+			"module": "core",
+			"layout": {
+				"tabs": [{
+					"label": "Main",
+					"sections": [{
+						"columns": [{"width": -1, "fields": ["x"]}]
+					}]
+				}]
+			},
+			"fields": {
+				"x": {"field_type": "Data", "label": "X"}
+			}
+		}`)
+		_, err := meta.Compile(data)
+		assertCompileError(t, err, "layout.tabs[0].sections[0].columns[0].width")
+	})
+}
+
+func TestCompile_TreeNative_InAPIDefault(t *testing.T) {
+	// Verify InAPI defaults to true for storable fields in tree-native format.
+	data := []byte(`{
+		"name": "Thing",
+		"module": "core",
+		"layout": {
+			"tabs": [{
+				"label": "Main",
+				"sections": [{
+					"columns": [{"fields": ["value"]}]
+				}]
+			}]
+		},
+		"fields": {
+			"value": {"field_type": "Data", "label": "Value"}
+		}
+	}`)
+
+	mt, err := meta.Compile(data)
+	assertNoError(t, err)
+
+	if !mt.Fields[0].InAPI {
+		t.Fatal("expected omitted in_api to default to true for storable field in tree-native format")
+	}
+	// Verify FieldsMap is also synced with the defaulted value.
+	if fd, ok := mt.FieldsMap["value"]; !ok {
+		t.Fatal("FieldsMap missing key 'value'")
+	} else if !fd.InAPI {
+		t.Fatal("expected FieldsMap entry to also have InAPI=true after defaulting")
+	}
+}
+
+func TestCompile_TreeNative_InAPIExplicitFalse(t *testing.T) {
+	// Verify explicit in_api=false is preserved in tree-native format.
+	data := []byte(`{
+		"name": "Secret",
+		"module": "core",
+		"layout": {
+			"tabs": [{
+				"label": "Main",
+				"sections": [{
+					"columns": [{"fields": ["hidden_val"]}]
+				}]
+			}]
+		},
+		"fields": {
+			"hidden_val": {"field_type": "Data", "label": "Hidden", "in_api": false}
+		}
+	}`)
+
+	mt, err := meta.Compile(data)
+	assertNoError(t, err)
+
+	if mt.Fields[0].InAPI {
+		t.Fatal("expected explicit in_api=false to remain false in tree-native format")
+	}
+	// Verify FieldsMap is also synced.
+	if fd, ok := mt.FieldsMap["hidden_val"]; !ok {
+		t.Fatal("FieldsMap missing key 'hidden_val'")
+	} else if fd.InAPI {
+		t.Fatal("expected FieldsMap entry to also have InAPI=false for explicit in_api=false")
+	}
+}
+
+func TestCompile_TreeNative_MultipleTabsAndSections(t *testing.T) {
+	data := []byte(`{
+		"name": "Employee",
+		"module": "hr",
+		"layout": {
+			"tabs": [
+				{
+					"label": "Personal",
+					"sections": [{
+						"label": "Name",
+						"columns": [
+							{"width": 6, "fields": ["first_name"]},
+							{"width": 6, "fields": ["last_name"]}
+						]
+					}]
+				},
+				{
+					"label": "Employment",
+					"sections": [{
+						"columns": [{"fields": ["department"]}]
+					}]
+				}
+			]
+		},
+		"fields": {
+			"first_name":  {"field_type": "Data", "label": "First Name", "required": true},
+			"last_name":   {"field_type": "Data", "label": "Last Name"},
+			"department":  {"field_type": "Data", "label": "Department"}
+		}
+	}`)
+
+	mt, err := meta.Compile(data)
+	assertNoError(t, err)
+
+	if len(mt.Layout.Tabs) != 2 {
+		t.Fatalf("expected 2 tabs; got %d", len(mt.Layout.Tabs))
+	}
+	if len(mt.Fields) != 3 {
+		t.Fatalf("expected 3 fields; got %d", len(mt.Fields))
+	}
+
+	// Fields should be in layout order: first_name, last_name, department.
+	expectedOrder := []string{"first_name", "last_name", "department"}
+	for i, want := range expectedOrder {
+		if mt.Fields[i].Name != want {
+			t.Errorf("Fields[%d].Name: got %q, want %q", i, mt.Fields[i].Name, want)
+		}
+	}
+}
+
 // ── TableName ─────────────────────────────────────────────────────────────────
 
 func TestTableName(t *testing.T) {
