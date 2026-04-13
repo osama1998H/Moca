@@ -13,7 +13,7 @@ func NewTestCommand() *cobra.Command {
 
 	cmd.AddCommand(
 		newTestRunCmd(),
-		newSubcommand("run-ui", "Run frontend/Playwright tests"),
+		newTestRunUICmd(),
 		newTestCoverageCmd(),
 		newSubcommand("fixtures", "Load test fixture data"),
 		newTestFactoryCmd(),
