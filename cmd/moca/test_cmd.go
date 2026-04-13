@@ -12,11 +12,11 @@ func NewTestCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		newSubcommand("run", "Run tests (Go tests + framework tests)"),
+		newTestRunCmd(),
 		newSubcommand("run-ui", "Run frontend/Playwright tests"),
-		newSubcommand("coverage", "Generate test coverage report"),
+		newTestCoverageCmd(),
 		newSubcommand("fixtures", "Load test fixture data"),
-		newSubcommand("factory", "Generate test data from MetaType definitions"),
+		newTestFactoryCmd(),
 	)
 
 	return cmd
