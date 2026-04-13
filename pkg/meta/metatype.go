@@ -56,4 +56,6 @@ type MetaType struct {
 	IsChildTable  bool           `json:"is_child_table"`
 	TrackChanges  bool           `json:"track_changes"`
 	IsSingle      bool           `json:"is_single"`
+	EventSourcing bool           `json:"event_sourcing"`
+	CDCEnabled    bool           `json:"cdc_enabled"`
 }

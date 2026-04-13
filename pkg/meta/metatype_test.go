@@ -1,6 +1,7 @@
 package meta_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/osama1998H/moca/pkg/meta"
@@ -97,4 +98,30 @@ func TestNamingStrategy_ZeroValue(t *testing.T) {
 		t.Errorf("NamingStrategy zero value: optional fields should be empty")
 	}
 	t.Logf("NamingStrategy zero value is well-formed")
+}
+
+func TestMetaType_EventSourcingAndCDCFields(t *testing.T) {
+	mt := meta.MetaType{
+		Name:          "SalesOrder",
+		Module:        "selling",
+		EventSourcing: true,
+		CDCEnabled:    true,
+	}
+
+	data, err := json.Marshal(mt)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var decoded meta.MetaType
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if !decoded.EventSourcing {
+		t.Error("expected EventSourcing=true after round-trip")
+	}
+	if !decoded.CDCEnabled {
+		t.Error("expected CDCEnabled=true after round-trip")
+	}
 }
