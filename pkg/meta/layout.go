@@ -23,9 +23,10 @@ type SectionDef struct {
 	CollapsedByDefault bool        `json:"collapsed_by_default,omitempty"`
 }
 
-// ColumnDef represents a column within a section. Width is a grid span
-// hint (e.g., 6 for half-width in a 12-column grid). Fields contains
-// field names in display order.
+// ColumnDef represents a column within a section. Width is a relative
+// proportional value (like CSS flex). Sibling column widths are summed
+// to compute each column's fraction (e.g., widths [2,1] render as 2/3 + 1/3).
+// Fields contains field names in display order.
 type ColumnDef struct {
 	Fields []string `json:"fields"`
 	Width  int      `json:"width,omitempty"`
@@ -162,6 +163,9 @@ func DefaultLayout(fields []FieldDef) (*LayoutTree, map[string]FieldDef) {
 // order and returns a flat slice of FieldDefs. Fields present in the tree but
 // missing from fieldsMap are silently skipped.
 func ExtractFieldsOrdered(layout *LayoutTree, fieldsMap map[string]FieldDef) []FieldDef {
+	if layout == nil {
+		return nil
+	}
 	var result []FieldDef
 	for _, tab := range layout.Tabs {
 		for _, sec := range tab.Sections {
