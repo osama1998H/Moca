@@ -42,5 +42,6 @@ func allCommands() []*cobra.Command {
 		NewLogCommand(),
 		NewMonitorCommand(),
 		NewNotifyCommand(),
+		NewDocgenCommand(),
 	}
 }

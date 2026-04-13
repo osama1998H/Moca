@@ -15,6 +15,7 @@ BENCH_PKGS := ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks
         test test-integration test-api-integration lint clean release-local \
         bench bench-integration bench-compare bench-save-baseline bench-profile \
         spike-pg spike-redis spike-gowork spike-meili spike-cobra \
+        docs-generate docs-generate-cli docs-generate-api \
         help
 
 ## help: Show available targets
@@ -44,6 +45,10 @@ help:
 	@echo "  spike-gowork     Run Go workspace composition spike (MS-00-T4)"
 	@echo "  spike-meili      Run Meilisearch tenant isolation spike (MS-00-T5)"
 	@echo "  spike-cobra      Run Cobra CLI extension spike (MS-00-T4)"
+	@echo ""
+	@echo "  docs-generate    Generate CLI + API reference into wiki/"
+	@echo "  docs-generate-cli Generate CLI reference only"
+	@echo "  docs-generate-api Generate API reference only"
 	@echo ""
 	@echo "Override build vars: make build VERSION=0.1.0"
 
@@ -131,6 +136,18 @@ clean:
 ## release-local: Build release archives locally using GoReleaser (snapshot mode)
 release-local:
 	goreleaser build --snapshot --clean
+
+## docs-generate: Generate CLI + API reference into wiki/
+docs-generate:
+	$(GO) run ./cmd/moca docgen all --wiki-dir wiki/
+
+## docs-generate-cli: Generate CLI reference only
+docs-generate-cli:
+	$(GO) run ./cmd/moca docgen cli --wiki-dir wiki/
+
+## docs-generate-api: Generate API reference only
+docs-generate-api:
+	$(GO) run ./cmd/moca docgen api --wiki-dir wiki/
 
 ## spike-pg: Run the PostgreSQL schema-per-tenant spike
 spike-pg:
