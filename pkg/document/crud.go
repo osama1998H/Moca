@@ -393,6 +393,7 @@ type DocManager struct {
 	hookDispatcher      HookDispatcher      // nil = no hooks
 	permResolver        PermResolver        // nil = no row-level filtering
 	postLoadTransformer PostLoadTransformer // nil = no transform
+	virtualSources      *VirtualSourceRegistry
 	logger              *slog.Logger
 }
 
@@ -415,6 +416,11 @@ func (m *DocManager) SetPostLoadTransformer(t PostLoadTransformer) {
 // Pass nil to disable row-level filtering.
 func (m *DocManager) SetPermResolver(r PermResolver) {
 	m.permResolver = r
+}
+
+// SetVirtualSourceRegistry configures the registry for virtual doctypes.
+func (m *DocManager) SetVirtualSourceRegistry(r *VirtualSourceRegistry) {
+	m.virtualSources = r
 }
 
 // resolveRowLevelFilters returns ORM filters for row-level permission matching.
