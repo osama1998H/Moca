@@ -100,6 +100,88 @@ func TestNamingStrategy_ZeroValue(t *testing.T) {
 	t.Logf("NamingStrategy zero value is well-formed")
 }
 
+func TestMetaType_LayoutAndFieldsMap(t *testing.T) {
+	layout := &meta.LayoutTree{
+		Tabs: []meta.TabDef{
+			{
+				Label: "Details",
+				Sections: []meta.SectionDef{
+					{
+						Columns: []meta.ColumnDef{
+							{Fields: []string{"title", "status"}},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	fieldsMap := map[string]meta.FieldDef{
+		"title":  {Name: "title", Label: "Title", FieldType: meta.FieldTypeData},
+		"status": {Name: "status", Label: "Status", FieldType: meta.FieldTypeSelect},
+	}
+
+	mt := meta.MetaType{
+		Name:      "SalesOrder",
+		Module:    "selling",
+		Layout:    layout,
+		FieldsMap: fieldsMap,
+	}
+
+	// Layout field must be set and preserve structure.
+	if mt.Layout == nil {
+		t.Fatal("expected Layout to be non-nil")
+	}
+	if len(mt.Layout.Tabs) != 1 {
+		t.Errorf("expected 1 tab, got %d", len(mt.Layout.Tabs))
+	}
+	if mt.Layout.Tabs[0].Label != "Details" {
+		t.Errorf("expected tab label %q, got %q", "Details", mt.Layout.Tabs[0].Label)
+	}
+
+	// FieldsMap must be set and accessible by key.
+	if mt.FieldsMap == nil {
+		t.Fatal("expected FieldsMap to be non-nil")
+	}
+	if len(mt.FieldsMap) != 2 {
+		t.Errorf("expected 2 entries in FieldsMap, got %d", len(mt.FieldsMap))
+	}
+	if fd, ok := mt.FieldsMap["title"]; !ok || fd.Label != "Title" {
+		t.Errorf("FieldsMap[\"title\"] not found or wrong: %+v", fd)
+	}
+
+	// FieldsMap must NOT appear in JSON output (json:"-").
+	data, err := json.Marshal(mt)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	jsonStr := string(data)
+	if contains := func(s, sub string) bool {
+		for i := 0; i+len(sub) <= len(s); i++ {
+			if s[i:i+len(sub)] == sub {
+				return true
+			}
+		}
+		return false
+	}; contains(jsonStr, `"fields_map"`) || contains(jsonStr, `"FieldsMap"`) {
+		t.Errorf("FieldsMap should not appear in JSON output, got: %s", jsonStr)
+	}
+
+	// Layout MUST appear in JSON output (json:"layout,omitempty").
+	if !func(s, sub string) bool {
+		for i := 0; i+len(sub) <= len(s); i++ {
+			if s[i:i+len(sub)] == sub {
+				return true
+			}
+		}
+		return false
+	}(jsonStr, `"layout"`) {
+		t.Errorf("Layout should appear in JSON output, got: %s", jsonStr)
+	}
+
+	t.Logf("MetaType.Layout and MetaType.FieldsMap are correctly defined and behave as expected")
+}
+
 func TestMetaType_EventSourcingAndCDCFields(t *testing.T) {
 	mt := meta.MetaType{
 		Name:          "SalesOrder",

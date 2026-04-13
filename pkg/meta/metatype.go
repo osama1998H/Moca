@@ -49,8 +49,10 @@ type MetaType struct {
 	Module        string         `json:"module"`
 	SearchFields  []string       `json:"search_fields"`
 	Permissions   []PermRule     `json:"permissions"`
-	Fields        []FieldDef     `json:"fields"`
-	Version       int            `json:"version"`
+	Fields        []FieldDef          `json:"fields"`
+	Layout        *LayoutTree         `json:"layout,omitempty"`
+	FieldsMap     map[string]FieldDef `json:"-"`
+	Version       int                 `json:"version"`
 	IsSubmittable bool           `json:"is_submittable"`
 	IsVirtual     bool           `json:"is_virtual"`
 	IsChildTable  bool           `json:"is_child_table"`
