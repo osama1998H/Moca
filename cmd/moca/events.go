@@ -231,12 +231,13 @@ func listTopicsRedis(w *output.Writer) error {
 
 func newEventsTailCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "tail TOPIC",
+		Use:   "tail [TOPIC]",
 		Short: "Tail events from a topic in real-time",
 		Long: `Subscribe to an event topic and stream events as they arrive.
 Kafka mode: consumes from the topic with a temporary consumer group.
-Redis mode: subscribes to the pub/sub channel (no historical replay).`,
-		Args: cobra.ExactArgs(1),
+Redis mode: subscribes to the pub/sub channel (no historical replay).
+Use --cdc with --site and --doctype to tail CDC events without specifying the topic.`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: runEventsTail,
 	}
 
@@ -246,12 +247,12 @@ Redis mode: subscribes to the pub/sub channel (no historical replay).`,
 	f.String("event", "", "Filter events by event type (e.g. doc.created)")
 	f.String("format", "short", "Output format: short or json")
 	f.String("since", "", "Start from offset (e.g. 1h, 30m) — Kafka only")
+	f.Bool("cdc", false, "Tail the CDC topic for a doctype (requires --doctype and --site)")
 
 	return cmd
 }
 
 func runEventsTail(cmd *cobra.Command, args []string) error {
-	topic := args[0]
 	w := output.NewWriter(cmd)
 
 	ctx, err := requireProject(cmd)
@@ -261,6 +262,24 @@ func runEventsTail(cmd *cobra.Command, args []string) error {
 
 	site, _ := cmd.Flags().GetString("site")
 	doctype, _ := cmd.Flags().GetString("doctype")
+
+	var topic string
+	if len(args) > 0 {
+		topic = args[0]
+	}
+
+	cdc, _ := cmd.Flags().GetBool("cdc")
+	if cdc {
+		if site == "" || doctype == "" {
+			return output.NewCLIError("--cdc requires both --site and --doctype").
+				WithFix("Usage: moca events tail --cdc --site mysite --doctype SalesOrder")
+		}
+		topic = events.CDCTopic(site, doctype)
+	}
+	if topic == "" {
+		return output.NewCLIError("TOPIC argument is required unless using --cdc").
+			WithFix("Usage: moca events tail moca.doc.events OR moca events tail --cdc --site X --doctype Y")
+	}
 	eventFilter, _ := cmd.Flags().GetString("event")
 	format, _ := cmd.Flags().GetString("format")
 	since, _ := cmd.Flags().GetString("since")
