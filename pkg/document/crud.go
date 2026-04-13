@@ -573,6 +573,59 @@ func insertOutbox(ctx context.Context, tx pgx.Tx, event events.DocumentEvent) er
 	return nil
 }
 
+// EventLogRow represents a single row written to tab_event_log when a
+// MetaType has EventSourcing enabled. It stores a full event envelope so
+// the event store can be replayed independently of the transactional outbox.
+type EventLogRow struct {
+	ID        int64           `json:"id"`
+	DocType   string          `json:"doctype"`
+	DocName   string          `json:"docname"`
+	EventType string          `json:"event_type"`
+	Payload   json.RawMessage `json:"payload"`
+	PrevData  json.RawMessage `json:"prev_data,omitempty"`
+	UserID    string          `json:"user_id"`
+	RequestID string          `json:"request_id"`
+	CreatedAt time.Time       `json:"created_at"`
+}
+
+// insertEventLog writes a canonical event-log row inside an active transaction.
+func insertEventLog(ctx context.Context, tx pgx.Tx, row EventLogRow) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO tab_event_log ("doctype","docname","event_type","payload","prev_data","user_id","request_id","created_at")
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		row.DocType, row.DocName, row.EventType, row.Payload, row.PrevData, row.UserID, row.RequestID, row.CreatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("crud: insert event_log (doctype=%q docname=%q): %w", row.DocType, row.DocName, err)
+	}
+	return nil
+}
+
+// buildEventLogRow constructs an EventLogRow from a DocumentEvent envelope.
+func buildEventLogRow(event events.DocumentEvent) (EventLogRow, error) {
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return EventLogRow{}, fmt.Errorf("crud: marshal event log payload: %w", err)
+	}
+	var prevData json.RawMessage
+	if event.PrevData != nil {
+		prevData, err = json.Marshal(event.PrevData)
+		if err != nil {
+			return EventLogRow{}, fmt.Errorf("crud: marshal event log prev_data: %w", err)
+		}
+	}
+	return EventLogRow{
+		DocType:   event.DocType,
+		DocName:   event.DocName,
+		EventType: event.EventType,
+		Payload:   payload,
+		PrevData:  prevData,
+		UserID:    event.User,
+		RequestID: event.RequestID,
+		CreatedAt: event.Timestamp,
+	}, nil
+}
+
 // insertAuditLog writes a single audit record inside an active transaction.
 // action is one of "Create", "Update", "Delete".
 // changes is a JSONB-encoded diff (may be nil for Create/Delete).
@@ -790,6 +843,15 @@ func (m *DocManager) Insert(ctx *DocContext, doctype string, values map[string]a
 		if txErr != nil {
 			return txErr
 		}
+		if mt.EventSourcing {
+			elRow, elErr := buildEventLogRow(outboxEvent)
+			if elErr != nil {
+				return elErr
+			}
+			if elErr = insertEventLog(txCtx, tx, elRow); elErr != nil {
+				return elErr
+			}
+		}
 		if mt.TrackChanges {
 			if txErr = insertVersion(txCtx, tx, doctype, name, uid, nil, doc.AsMap()); txErr != nil {
 				return txErr
@@ -958,6 +1020,15 @@ func (m *DocManager) Update(ctx *DocContext, doctype, name string, values map[st
 		if err := insertOutbox(txCtx, tx, outboxEvent); err != nil {
 			return err
 		}
+		if doc.Meta().EventSourcing {
+			elRow, elErr := buildEventLogRow(outboxEvent)
+			if elErr != nil {
+				return elErr
+			}
+			if elErr = insertEventLog(txCtx, tx, elRow); elErr != nil {
+				return elErr
+			}
+		}
 		if doc.Meta().TrackChanges {
 			versionDiff := buildVersionDiff(doc, modifiedBeforeHooks)
 			if err := insertVersion(txCtx, tx, doctype, name, uid, versionDiff, doc.AsMap()); err != nil {
@@ -1044,6 +1115,15 @@ func (m *DocManager) Delete(ctx *DocContext, doctype, name string) error {
 		}
 		if err := insertOutbox(txCtx, tx, outboxEvent); err != nil {
 			return err
+		}
+		if doc.Meta().EventSourcing {
+			elRow, elErr := buildEventLogRow(outboxEvent)
+			if elErr != nil {
+				return elErr
+			}
+			if elErr = insertEventLog(txCtx, tx, elRow); elErr != nil {
+				return elErr
+			}
 		}
 		return insertAuditLog(txCtx, tx, doctype, name, "Delete", uid, nil)
 	})

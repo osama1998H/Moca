@@ -1,9 +1,11 @@
 package document
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/osama1998H/moca/pkg/meta"
 )
@@ -584,4 +586,39 @@ func itoa(n int) string {
 			}
 			return string(b)
 		}(), "00", "", 1), "0", "", 1), "0")
+}
+
+// ─── EventLogRow tests ────────────────────────────────────────────────────────
+
+func TestEventLogRow_JSONRoundTrip(t *testing.T) {
+	row := EventLogRow{
+		DocType:   "SalesOrder",
+		DocName:   "SO-001",
+		EventType: "doc.created",
+		Payload:   json.RawMessage(`{"name":"SO-001"}`),
+		PrevData:  nil,
+		UserID:    "admin@test.com",
+		RequestID: "req-123",
+		CreatedAt: time.Now().UTC().Truncate(time.Millisecond),
+	}
+
+	data, err := json.Marshal(row)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var decoded EventLogRow
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if decoded.DocType != row.DocType {
+		t.Errorf("DocType: got %q, want %q", decoded.DocType, row.DocType)
+	}
+	if decoded.EventType != row.EventType {
+		t.Errorf("EventType: got %q, want %q", decoded.EventType, row.EventType)
+	}
+	if decoded.UserID != row.UserID {
+		t.Errorf("UserID: got %q, want %q", decoded.UserID, row.UserID)
+	}
 }
