@@ -284,6 +284,28 @@ WHERE "status" IS NULL OR ("status" = 'pending' AND COALESCE("processed", false)
 			Comment: "create pending index idx_outbox_pending on tab_outbox",
 		},
 		{
+			SQL: `CREATE TABLE IF NOT EXISTS tab_event_log (
+	"id"           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	"doctype"      TEXT NOT NULL,
+	"docname"      TEXT NOT NULL,
+	"event_type"   TEXT NOT NULL,
+	"payload"      JSONB NOT NULL,
+	"prev_data"    JSONB,
+	"user_id"      TEXT NOT NULL,
+	"request_id"   TEXT,
+	"created_at"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
+			Comment: "create system table tab_event_log",
+		},
+		{
+			SQL:     `CREATE INDEX IF NOT EXISTS idx_event_log_doctype_name ON tab_event_log ("doctype", "docname", "created_at")`,
+			Comment: "create index idx_event_log_doctype_name on tab_event_log",
+		},
+		{
+			SQL:     `CREATE INDEX IF NOT EXISTS idx_event_log_created_at ON tab_event_log ("created_at")`,
+			Comment: "create index idx_event_log_created_at on tab_event_log",
+		},
+		{
 			// tab_migration_log tracks applied SQL migrations per app. Each row
 			// records one migration's UP/DOWN SQL so that rollback can reverse it.
 			// Migrations are grouped into batches (one Apply call = one batch) for

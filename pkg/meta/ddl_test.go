@@ -279,8 +279,8 @@ func TestGenerateSystemTablesDDL_AllTablesPresent(t *testing.T) {
 
 	// The base system tables plus outbox compatibility alters / indexes must
 	// all be present.
-	if len(stmts) != 23 {
-		t.Errorf("GenerateSystemTablesDDL() returned %d statements; want 23", len(stmts))
+	if len(stmts) != 26 {
+		t.Errorf("GenerateSystemTablesDDL() returned %d statements; want 26", len(stmts))
 		for i, s := range stmts {
 			t.Logf("  [%d] %s", i, s.Comment)
 		}
@@ -301,6 +301,9 @@ func TestGenerateSystemTablesDDL_AllTablesPresent(t *testing.T) {
 		"processed column to tab_outbox",
 		"backfill outbox status",
 		"idx_outbox_pending",
+		"tab_event_log",
+		"idx_event_log_doctype_name",
+		"idx_event_log_created_at",
 		"tab_migration_log",
 		"idx_migration_log_batch",
 		"tab_webhook_log",
@@ -383,6 +386,25 @@ func TestGenerateSystemTablesDDL_OutboxPresent(t *testing.T) {
 	}
 	if !strings.Contains(lc, "jsonb") {
 		t.Errorf("tab_outbox payload column should be JSONB; SQL:\n%s", s.SQL)
+	}
+}
+
+func TestGenerateSystemTablesDDL_EventLogPresent(t *testing.T) {
+	stmts := meta.GenerateSystemTablesDDL()
+
+	s, ok := findStmtByComment(stmts, "tab_event_log")
+	if !ok {
+		t.Fatal("tab_event_log DDL not found in GenerateSystemTablesDDL()")
+	}
+
+	lc := strings.ToLower(s.SQL)
+	for _, col := range []string{"doctype", "docname", "event_type", "payload", "prev_data", "user_id", "request_id", "created_at"} {
+		if !strings.Contains(lc, col) {
+			t.Errorf("tab_event_log DDL missing expected column %q;\nSQL:\n%s", col, s.SQL)
+		}
+	}
+	if !strings.Contains(lc, "jsonb") {
+		t.Errorf("tab_event_log payload column should be JSONB; SQL:\n%s", s.SQL)
 	}
 }
 

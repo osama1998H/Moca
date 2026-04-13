@@ -340,7 +340,7 @@ func TestEnsureMetaTables_AllSystemTables(t *testing.T) {
 		t.Fatalf("EnsureMetaTables: %v", err)
 	}
 
-	for _, tbl := range []string{"tab_doctype", "tab_singles", "tab_version", "tab_audit_log", "tab_outbox", "tab_migration_log"} {
+	for _, tbl := range []string{"tab_doctype", "tab_singles", "tab_version", "tab_audit_log", "tab_outbox", "tab_event_log", "tab_migration_log"} {
 		if !tableExists(ctx, t, tbl) {
 			t.Errorf("system table %q was not created", tbl)
 		}
