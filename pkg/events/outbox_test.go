@@ -213,6 +213,170 @@ func TestOutboxPollerRecordsRetryAndFailureState(t *testing.T) {
 	}
 }
 
+// mockCDCMetaProvider implements CDCMetaProvider for testing.
+type mockCDCMetaProvider struct {
+	cdcEnabled map[string]bool
+}
+
+func (m *mockCDCMetaProvider) IsCDCEnabled(_ context.Context, _, doctype string) bool {
+	return m.cdcEnabled[doctype]
+}
+
+func TestOutboxPollerCDCFanOut(t *testing.T) {
+	store := &fakeOutboxStore{
+		rows: map[string][]OutboxRow{
+			"testsite": {
+				{
+					ID:        1,
+					EventType: EventTypeDocCreated,
+					Topic:     TopicDocumentEvents,
+					Payload:   []byte(`{"event_type":"doc.created","site":"testsite","doctype":"SalesOrder","docname":"SO-1","data":{"name":"SO-1"}}`),
+				},
+			},
+		},
+		published: make(map[string][]int64),
+	}
+	producer := &fakeProducer{}
+	cdcProvider := &mockCDCMetaProvider{
+		cdcEnabled: map[string]bool{"SalesOrder": true},
+	}
+
+	poller, err := NewOutboxPoller(OutboxPollerConfig{
+		Store:           store,
+		Sites:           fakeSiteLister{sites: []string{"testsite"}},
+		Producer:        producer,
+		Logger:          slog.Default(),
+		CDCMetaProvider: cdcProvider,
+	})
+	if err != nil {
+		t.Fatalf("NewOutboxPoller: %v", err)
+	}
+
+	if err := poller.pollOnce(context.Background()); err != nil {
+		t.Fatalf("pollOnce: %v", err)
+	}
+
+	// Expect two publishes: primary TopicDocumentEvents and CDC topic.
+	if got := len(producer.topics); got != 2 {
+		t.Fatalf("published topic count = %d, want 2", got)
+	}
+
+	expectedCDCTopic := CDCTopic("testsite", "SalesOrder")
+	if producer.topics[0] != TopicDocumentEvents {
+		t.Fatalf("first publish topic = %q, want %q", producer.topics[0], TopicDocumentEvents)
+	}
+	if producer.topics[1] != expectedCDCTopic {
+		t.Fatalf("second publish topic = %q, want %q", producer.topics[1], expectedCDCTopic)
+	}
+
+	// The row should be marked published.
+	if got, want := store.published["testsite"], []int64{1}; !slices.Equal(got, want) {
+		t.Fatalf("published[testsite] = %v, want %v", got, want)
+	}
+}
+
+func TestOutboxPollerNoCDCFanOutWhenProviderNil(t *testing.T) {
+	store := &fakeOutboxStore{
+		rows: map[string][]OutboxRow{
+			"testsite": {
+				{
+					ID:        1,
+					EventType: EventTypeDocCreated,
+					Topic:     TopicDocumentEvents,
+					Payload:   []byte(`{"event_type":"doc.created","site":"testsite","doctype":"SalesOrder","docname":"SO-1","data":{"name":"SO-1"}}`),
+				},
+			},
+		},
+		published: make(map[string][]int64),
+	}
+	producer := &fakeProducer{}
+
+	poller, err := NewOutboxPoller(OutboxPollerConfig{
+		Store:    store,
+		Sites:    fakeSiteLister{sites: []string{"testsite"}},
+		Producer: producer,
+		Logger:   slog.Default(),
+		// CDCMetaProvider is nil — no CDC fan-out expected.
+	})
+	if err != nil {
+		t.Fatalf("NewOutboxPoller: %v", err)
+	}
+
+	if err := poller.pollOnce(context.Background()); err != nil {
+		t.Fatalf("pollOnce: %v", err)
+	}
+
+	// Only one publish: the primary TopicDocumentEvents.
+	if got := len(producer.topics); got != 1 {
+		t.Fatalf("published topic count = %d, want 1 (no CDC fan-out)", got)
+	}
+	if producer.topics[0] != TopicDocumentEvents {
+		t.Fatalf("publish topic = %q, want %q", producer.topics[0], TopicDocumentEvents)
+	}
+}
+
+// topicFailProducer is a fakeProducer that returns an error for a specific topic.
+type topicFailProducer struct {
+	fakeProducer
+	failTopic string
+	failErr   error
+}
+
+func (p *topicFailProducer) Publish(ctx context.Context, topic string, event DocumentEvent) error {
+	if topic == p.failTopic {
+		return p.failErr
+	}
+	return p.fakeProducer.Publish(ctx, topic, event)
+}
+
+func TestOutboxPollerCDCFanOutFailureRecorded(t *testing.T) {
+	store := &fakeOutboxStore{
+		rows: map[string][]OutboxRow{
+			"testsite": {
+				{
+					ID:        1,
+					EventType: EventTypeDocCreated,
+					Topic:     TopicDocumentEvents,
+					Payload:   []byte(`{"event_type":"doc.created","site":"testsite","doctype":"SalesOrder","docname":"SO-1","data":{"name":"SO-1"}}`),
+				},
+			},
+		},
+		published: make(map[string][]int64),
+	}
+
+	producer := &topicFailProducer{
+		failTopic: CDCTopic("testsite", "SalesOrder"),
+		failErr:   errors.New("cdc publish failed"),
+	}
+	cdcProvider := &mockCDCMetaProvider{
+		cdcEnabled: map[string]bool{"SalesOrder": true},
+	}
+
+	poller, err := NewOutboxPoller(OutboxPollerConfig{
+		Store:           store,
+		Sites:           fakeSiteLister{sites: []string{"testsite"}},
+		Producer:        producer,
+		Logger:          slog.Default(),
+		CDCMetaProvider: cdcProvider,
+	})
+	if err != nil {
+		t.Fatalf("NewOutboxPoller: %v", err)
+	}
+
+	if err := poller.pollOnce(context.Background()); err != nil {
+		t.Fatalf("pollOnce: %v", err)
+	}
+
+	// Primary publish succeeded, CDC publish failed — row must NOT be marked published.
+	if got := store.published["testsite"]; len(got) != 0 {
+		t.Fatalf("published[testsite] = %v, want empty (CDC failure should prevent marking published)", got)
+	}
+	// Failure should be recorded.
+	if len(store.failures) != 1 || store.failures[0].ID != 1 {
+		t.Fatalf("failures = %v, want exactly one failure for row 1", store.failures)
+	}
+}
+
 func TestOutboxPollerRunStopsOnContextCancellation(t *testing.T) {
 	poller, err := NewOutboxPoller(OutboxPollerConfig{
 		Store:    &fakeOutboxStore{rows: map[string][]OutboxRow{}, published: make(map[string][]int64)},

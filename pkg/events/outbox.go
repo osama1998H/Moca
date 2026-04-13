@@ -46,6 +46,12 @@ type OutboxStore interface {
 // AfterPublishHook runs only after the event has been published successfully.
 type AfterPublishHook func(ctx context.Context, event DocumentEvent) error
 
+// CDCMetaProvider checks whether a doctype has CDC enabled.
+// Implemented by the MetaType registry to look up MetaType.CDCEnabled.
+type CDCMetaProvider interface {
+	IsCDCEnabled(ctx context.Context, site, doctype string) bool
+}
+
 type normalizedOutboxRow struct {
 	Topic string
 	Event DocumentEvent
@@ -53,27 +59,29 @@ type normalizedOutboxRow struct {
 
 // OutboxPollerConfig configures the polling loop.
 type OutboxPollerConfig struct {
-	Store        OutboxStore
-	Sites        ActiveSiteLister
-	Producer     Producer
-	Logger       *slog.Logger
-	AfterPublish AfterPublishHook
-	PollInterval time.Duration
-	BatchSize    int
-	MaxRetries   int
+	Store           OutboxStore
+	Sites           ActiveSiteLister
+	Producer        Producer
+	Logger          *slog.Logger
+	AfterPublish    AfterPublishHook
+	CDCMetaProvider CDCMetaProvider // nil = no CDC fan-out
+	PollInterval    time.Duration
+	BatchSize       int
+	MaxRetries      int
 }
 
 // OutboxPoller reads committed outbox rows, publishes them, and advances their
 // lifecycle state to published or failed.
 type OutboxPoller struct {
-	store        OutboxStore
-	sites        ActiveSiteLister
-	producer     Producer
-	logger       *slog.Logger
-	afterPublish AfterPublishHook
-	pollInterval time.Duration
-	batchSize    int
-	maxRetries   int
+	store           OutboxStore
+	sites           ActiveSiteLister
+	producer        Producer
+	logger          *slog.Logger
+	afterPublish    AfterPublishHook
+	cdcMetaProvider CDCMetaProvider
+	pollInterval    time.Duration
+	batchSize       int
+	maxRetries      int
 }
 
 // NewOutboxPoller constructs an outbox poller with sensible defaults.
@@ -101,14 +109,15 @@ func NewOutboxPoller(cfg OutboxPollerConfig) (*OutboxPoller, error) {
 	}
 
 	return &OutboxPoller{
-		store:        cfg.Store,
-		sites:        cfg.Sites,
-		producer:     cfg.Producer,
-		logger:       cfg.Logger,
-		pollInterval: cfg.PollInterval,
-		batchSize:    cfg.BatchSize,
-		maxRetries:   cfg.MaxRetries,
-		afterPublish: cfg.AfterPublish,
+		store:           cfg.Store,
+		sites:           cfg.Sites,
+		producer:        cfg.Producer,
+		logger:          cfg.Logger,
+		pollInterval:    cfg.PollInterval,
+		batchSize:       cfg.BatchSize,
+		maxRetries:      cfg.MaxRetries,
+		afterPublish:    cfg.AfterPublish,
+		cdcMetaProvider: cfg.CDCMetaProvider,
 	}, nil
 }
 
@@ -170,6 +179,14 @@ func (p *OutboxPoller) processSite(ctx context.Context, site string) error {
 		if err := p.producer.Publish(ctx, normalized.Topic, normalized.Event); err != nil {
 			p.recordFailure(ctx, site, row, err)
 			continue
+		}
+		// CDC fan-out: if the doctype has CDC enabled, also publish to the per-doctype topic.
+		if p.cdcMetaProvider != nil && p.cdcMetaProvider.IsCDCEnabled(ctx, site, normalized.Event.DocType) {
+			cdcTopic := CDCTopic(site, normalized.Event.DocType)
+			if err := p.producer.Publish(ctx, cdcTopic, normalized.Event); err != nil {
+				p.recordFailure(ctx, site, row, err)
+				continue
+			}
 		}
 		if p.afterPublish != nil {
 			if err := p.afterPublish(ctx, normalized.Event); err != nil {
