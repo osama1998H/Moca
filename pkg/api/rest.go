@@ -77,6 +77,7 @@ func (h *ResourceHandler) RegisterRoutes(mux *http.ServeMux, version string) {
 	mux.HandleFunc("PUT "+p+"/resource/{doctype}/{name}", h.handleUpdate)
 	mux.HandleFunc("DELETE "+p+"/resource/{doctype}/{name}", h.handleDelete)
 	mux.HandleFunc("GET "+p+"/resource/{doctype}/{name}/versions", h.handleVersions)
+	mux.HandleFunc("GET "+p+"/resource/{doctype}/{name}/events", h.handleGetEvents)
 	mux.HandleFunc("GET "+p+"/meta/{doctype}", h.handleMeta)
 }
 
