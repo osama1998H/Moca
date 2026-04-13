@@ -28,7 +28,7 @@ func NewDevCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		newSubcommand("console", "Interactive Go REPL with framework loaded"),
+		newDevConsoleCmd(),
 		newSubcommand("shell", "Open a shell with Moca env vars set"),
 		newDevExecuteCmd(),
 		newDevRequestCmd(),
