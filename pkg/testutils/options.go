@@ -13,8 +13,8 @@ type envConfig struct {
 	userEmail    string
 	userFullName string
 	userRoles    []string
-	bootstrap    bool
 	apps         []string
+	bootstrap    bool
 }
 
 func defaultEnvConfig(t testing.TB) *envConfig {

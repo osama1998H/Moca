@@ -71,9 +71,9 @@ func runTestRun(cmd *cobra.Command, _ []string) error {
 		AdminEmail:    "test@moca.dev",
 		AdminPassword: "TestPass123!",
 	}
-	if err := svc.Sites.CreateSite(ctx, siteConfig); err != nil {
+	if createErr := svc.Sites.CreateSite(ctx, siteConfig); createErr != nil {
 		return output.NewCLIError("Failed to create test site").
-			WithErr(err).
+			WithErr(createErr).
 			WithFix("Ensure PostgreSQL is running and accessible.")
 	}
 

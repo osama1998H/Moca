@@ -148,9 +148,9 @@ func runTestFactory(cmd *cobra.Command, args []string) error {
 
 // cliInsertEnv adapts CLI services to the factory.InsertEnv interface.
 type cliInsertEnv struct {
-	siteName   string
 	docManager *document.DocManager
 	site       *tenancy.SiteContext
+	siteName   string
 }
 
 func (e *cliInsertEnv) GetDocManager() *document.DocManager { return e.docManager }

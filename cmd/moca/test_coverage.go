@@ -57,7 +57,7 @@ func runTestCoverage(cmd *cobra.Command, _ []string) error {
 	coverFile := filepath.Join(projectRoot, "coverage.out")
 	defer func() {
 		if outputFmt != "html" {
-			os.Remove(coverFile)
+			_ = os.Remove(coverFile)
 		}
 	}()
 
@@ -76,11 +76,11 @@ func runTestCoverage(cmd *cobra.Command, _ []string) error {
 	goCmd.Stdout = os.Stdout
 	goCmd.Stderr = os.Stderr
 
-	if err := goCmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+	if runErr := goCmd.Run(); runErr != nil {
+		if exitErr, ok := runErr.(*exec.ExitError); ok {
 			w.Print("WARNING: Some tests failed (exit code %d), generating coverage anyway.", exitErr.ExitCode())
 		} else {
-			return output.NewCLIError("Failed to run tests").WithErr(err)
+			return output.NewCLIError("Failed to run tests").WithErr(runErr)
 		}
 	}
 
@@ -106,17 +106,18 @@ func runTestCoverage(cmd *cobra.Command, _ []string) error {
 		w.Print("HTML coverage report: %s", htmlFile)
 
 	case "json":
-		fmt.Fprintln(cmd.OutOrStdout(), "[")
+		out := cmd.OutOrStdout()
+		_, _ = fmt.Fprintln(out, "[")
 		for i, s := range stats {
 			comma := ","
 			if i == len(stats)-1 {
 				comma = ""
 			}
-			fmt.Fprintf(cmd.OutOrStdout(),
+			_, _ = fmt.Fprintf(out,
 				`  {"package": %q, "statements": %d, "covered": %d, "coverage": %.1f}%s`+"\n",
 				s.pkg, s.stmts, s.covered, s.pct, comma)
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), "]")
+		_, _ = fmt.Fprintln(out, "]")
 
 	default: // text
 		w.Print("")
@@ -176,7 +177,7 @@ func parseCoverageProfile(path string) ([]coverageStat, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	type pkgAccum struct {
 		stmts   int

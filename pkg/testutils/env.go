@@ -50,14 +50,14 @@ type TestEnv struct {
 	Redis     *redis.Client
 	Site      *tenancy.SiteContext
 	User      *auth.User
-	SiteName  string
-	Schema    string
 
 	registry    *meta.Registry
 	migrator    *meta.Migrator
 	docManager  *document.DocManager
 	siteManager *tenancy.SiteManager
 	cfg         *envConfig
+	SiteName    string
+	Schema      string
 }
 
 // NewTestEnv provisions a unique tenant schema, DB manager, optional Redis

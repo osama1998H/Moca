@@ -58,8 +58,8 @@ func WithChildCount(min, max int) GenOption {
 
 // FieldOverride allows per-field generator customization.
 type FieldOverride struct {
-	FieldName string
 	Value     any
+	FieldName string
 }
 
 // fieldGenContext holds runtime state for generating a single field value.

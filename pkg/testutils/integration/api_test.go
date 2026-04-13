@@ -4,7 +4,6 @@ package integration
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,10 +21,9 @@ func TestRESTCreate(t *testing.T) {
 	bundle := env.NewGatewayBundle(t, nil)
 
 	body := `{"customer_name":"API Customer","status":"Open","grand_total":100.50}`
-	req := httptest.NewRequest(http.MethodPost,
-		fmt.Sprintf("/api/v1/resource/%s/%s", env.SiteName, "APIOrder"),
-		strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/resource/APIOrder", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Moca-Site", env.SiteName)
 	req.Header.Set("X-Moca-User", env.User.Email)
 
 	w := httptest.NewRecorder()
@@ -54,14 +52,12 @@ func TestRESTGet(t *testing.T) {
 	mt := factory.SimpleDocType("APIGetOrder")
 	env.RegisterMetaType(t, mt)
 
-	// Create a document directly.
 	doc := env.NewTestDoc(t, "APIGetOrder", factory.SimpleDocValues(1))
 
 	bundle := env.NewGatewayBundle(t, nil)
 
-	req := httptest.NewRequest(http.MethodGet,
-		fmt.Sprintf("/api/v1/resource/%s/%s/%s", env.SiteName, "APIGetOrder", doc.Name()),
-		nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/resource/APIGetOrder/"+doc.Name(), nil)
+	req.Header.Set("X-Moca-Site", env.SiteName)
 	req.Header.Set("X-Moca-User", env.User.Email)
 
 	w := httptest.NewRecorder()
@@ -86,16 +82,14 @@ func TestRESTList(t *testing.T) {
 	mt := factory.SimpleDocType("APIListOrder")
 	env.RegisterMetaType(t, mt)
 
-	// Create 3 documents.
 	for i := 1; i <= 3; i++ {
 		env.NewTestDoc(t, "APIListOrder", factory.SimpleDocValues(i))
 	}
 
 	bundle := env.NewGatewayBundle(t, nil)
 
-	req := httptest.NewRequest(http.MethodGet,
-		fmt.Sprintf("/api/v1/resource/%s/%s", env.SiteName, "APIListOrder"),
-		nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/resource/APIListOrder", nil)
+	req.Header.Set("X-Moca-Site", env.SiteName)
 	req.Header.Set("X-Moca-User", env.User.Email)
 
 	w := httptest.NewRecorder()
@@ -115,9 +109,8 @@ func TestRESTDelete(t *testing.T) {
 
 	bundle := env.NewGatewayBundle(t, nil)
 
-	req := httptest.NewRequest(http.MethodDelete,
-		fmt.Sprintf("/api/v1/resource/%s/%s/%s", env.SiteName, "APIDelOrder", doc.Name()),
-		nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/resource/APIDelOrder/"+doc.Name(), nil)
+	req.Header.Set("X-Moca-Site", env.SiteName)
 	req.Header.Set("X-Moca-User", env.User.Email)
 
 	w := httptest.NewRecorder()
@@ -133,17 +126,14 @@ func TestRESTPagination(t *testing.T) {
 	mt := factory.SimpleDocType("APIPageOrder")
 	env.RegisterMetaType(t, mt)
 
-	// Create 10 documents.
 	for i := 1; i <= 10; i++ {
 		env.NewTestDoc(t, "APIPageOrder", factory.SimpleDocValues(i))
 	}
 
 	bundle := env.NewGatewayBundle(t, nil)
 
-	// Request page with limit 3.
-	req := httptest.NewRequest(http.MethodGet,
-		fmt.Sprintf("/api/v1/resource/%s/%s?limit=3&offset=0", env.SiteName, "APIPageOrder"),
-		nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/resource/APIPageOrder?limit=3&offset=0", nil)
+	req.Header.Set("X-Moca-Site", env.SiteName)
 	req.Header.Set("X-Moca-User", env.User.Email)
 
 	w := httptest.NewRecorder()
