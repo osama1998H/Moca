@@ -1,46 +1,4 @@
 {
-  "name": "SystemSettings",
-  "module": "Core",
-  "label": "System Settings",
-  "description": "Global system configuration for a Moca site.",
-  "is_single": true,
-  "fields": [
-    {
-      "name": "site_name",
-      "field_type": "Data",
-      "label": "Site Name"
-    },
-    {
-      "name": "default_language",
-      "field_type": "Data",
-      "label": "Default Language"
-    },
-    {
-      "name": "time_zone",
-      "field_type": "Data",
-      "label": "Time Zone"
-    },
-    {
-      "name": "date_format",
-      "field_type": "Data",
-      "label": "Date Format"
-    },
-    {
-      "name": "enable_password_policy",
-      "field_type": "Check",
-      "label": "Enable Password Policy"
-    },
-    {
-      "name": "password_min_length",
-      "field_type": "Int",
-      "label": "Password Minimum Length"
-    },
-    {
-      "name": "session_expiry",
-      "field_type": "Int",
-      "label": "Session Expiry (hours)"
-    }
-  ],
   "api_config": {
     "enabled": true,
     "allow_get": true,
@@ -52,6 +10,191 @@
     "default_page_size": 20,
     "max_page_size": 100
   },
+  "description": "Global system configuration for a Moca site.",
+  "fields": {
+    "date_format": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": false,
+      "in_preview": false,
+      "label": "Date Format",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "default_language": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": false,
+      "in_preview": false,
+      "label": "Default Language",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "enable_password_policy": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Check",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": false,
+      "in_preview": false,
+      "label": "Enable Password Policy",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "password_min_length": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Int",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": false,
+      "in_preview": false,
+      "label": "Password Minimum Length",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "session_expiry": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Int",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": false,
+      "in_preview": false,
+      "label": "Session Expiry (hours)",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "site_name": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": false,
+      "in_preview": false,
+      "label": "Site Name",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "time_zone": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": false,
+      "in_preview": false,
+      "label": "Time Zone",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    }
+  },
+  "is_single": true,
+  "label": "System Settings",
+  "layout": {
+    "tabs": [
+      {
+        "label": "Details",
+        "sections": [
+          {
+            "columns": [
+              {
+                "fields": [
+                  "site_name",
+                  "default_language",
+                  "time_zone",
+                  "date_format",
+                  "enable_password_policy",
+                  "password_min_length",
+                  "session_expiry"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "module": "Core",
+  "name": "SystemSettings",
   "permissions": [
     {
       "role": "System Manager",

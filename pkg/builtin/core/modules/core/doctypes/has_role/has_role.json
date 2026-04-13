@@ -1,19 +1,4 @@
 {
-  "name": "HasRole",
-  "module": "Core",
-  "label": "Has Role",
-  "description": "Child table linking a User to a Role.",
-  "is_child_table": true,
-  "fields": [
-    {
-      "name": "role",
-      "field_type": "Link",
-      "label": "Role",
-      "options": "Role",
-      "required": true,
-      "in_list_view": true
-    }
-  ],
   "api_config": {
     "enabled": true,
     "allow_get": true,
@@ -25,6 +10,53 @@
     "default_page_size": 20,
     "max_page_size": 100
   },
+  "description": "Child table linking a User to a Role.",
+  "fields": {
+    "role": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Link",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "Role",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "Role",
+      "read_only": false,
+      "required": true,
+      "searchable": false,
+      "unique": false
+    }
+  },
+  "is_child_table": true,
+  "label": "Has Role",
+  "layout": {
+    "tabs": [
+      {
+        "label": "Details",
+        "sections": [
+          {
+            "columns": [
+              {
+                "fields": [
+                  "role"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "module": "Core",
+  "name": "HasRole",
   "permissions": [
     {
       "role": "System Manager",

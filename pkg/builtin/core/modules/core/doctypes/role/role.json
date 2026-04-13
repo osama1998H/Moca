@@ -1,31 +1,4 @@
 {
-  "name": "Role",
-  "module": "Core",
-  "label": "Role",
-  "description": "A named role that can be assigned to users for permission control.",
-  "naming_rule": {
-    "rule": "field",
-    "field_name": "role_name"
-  },
-  "sort_field": "creation",
-  "sort_order": "asc",
-  "fields": [
-    {
-      "name": "role_name",
-      "field_type": "Data",
-      "label": "Role Name",
-      "required": true,
-      "unique": true,
-      "in_list_view": true,
-      "searchable": true
-    },
-    {
-      "name": "disabled",
-      "field_type": "Check",
-      "label": "Disabled",
-      "in_list_view": true
-    }
-  ],
   "api_config": {
     "enabled": true,
     "allow_get": true,
@@ -37,10 +10,85 @@
     "default_page_size": 20,
     "max_page_size": 100
   },
+  "description": "A named role that can be assigned to users for permission control.",
+  "fields": {
+    "disabled": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Check",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "Disabled",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "role_name": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "Role Name",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": true,
+      "searchable": true,
+      "unique": true
+    }
+  },
+  "label": "Role",
+  "layout": {
+    "tabs": [
+      {
+        "label": "Details",
+        "sections": [
+          {
+            "columns": [
+              {
+                "fields": [
+                  "role_name",
+                  "disabled"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "module": "Core",
+  "name": "Role",
+  "naming_rule": {
+    "rule": "field",
+    "field_name": "role_name"
+  },
   "permissions": [
     {
       "role": "System Manager",
       "doctype_perm": 63
     }
-  ]
+  ],
+  "sort_field": "creation",
+  "sort_order": "asc"
 }

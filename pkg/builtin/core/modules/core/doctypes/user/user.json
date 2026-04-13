@@ -1,72 +1,4 @@
 {
-  "name": "User",
-  "module": "Core",
-  "label": "User",
-  "description": "System user account with authentication credentials and role assignments.",
-  "naming_rule": {
-    "rule": "field",
-    "field_name": "email"
-  },
-  "title_field": "full_name",
-  "sort_field": "creation",
-  "sort_order": "desc",
-  "search_fields": ["email", "full_name"],
-  "track_changes": true,
-  "fields": [
-    {
-      "name": "email",
-      "field_type": "Data",
-      "label": "Email",
-      "required": true,
-      "unique": true,
-      "in_list_view": true,
-      "searchable": true
-    },
-    {
-      "name": "full_name",
-      "field_type": "Data",
-      "label": "Full Name",
-      "in_list_view": true,
-      "searchable": true
-    },
-    {
-      "name": "password",
-      "field_type": "Password",
-      "label": "Password",
-      "hidden": true
-    },
-    {
-      "name": "enabled",
-      "field_type": "Check",
-      "label": "Enabled",
-      "default": 1,
-      "in_list_view": true
-    },
-    {
-      "name": "language",
-      "field_type": "Data",
-      "label": "Language"
-    },
-    {
-      "name": "time_zone",
-      "field_type": "Data",
-      "label": "Time Zone"
-    },
-    {
-      "name": "user_type",
-      "field_type": "Select",
-      "label": "User Type",
-      "options": "System\nWebsite",
-      "in_list_view": true,
-      "in_filter": true
-    },
-    {
-      "name": "roles",
-      "field_type": "Table",
-      "label": "Roles",
-      "options": "HasRole"
-    }
-  ],
   "api_config": {
     "enabled": true,
     "allow_get": true,
@@ -77,12 +9,234 @@
     "allow_count": true,
     "default_page_size": 20,
     "max_page_size": 100,
-    "exclude_fields": ["password"]
+    "exclude_fields": [
+      "password"
+    ]
+  },
+  "description": "System user account with authentication credentials and role assignments.",
+  "fields": {
+    "email": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "Email",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": true,
+      "searchable": true,
+      "unique": true
+    },
+    "enabled": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "default": 1,
+      "depends_on": "",
+      "field_type": "Check",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "Enabled",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "full_name": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "Full Name",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": true,
+      "unique": false
+    },
+    "language": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": false,
+      "in_preview": false,
+      "label": "Language",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "password": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Password",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": true,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": false,
+      "in_preview": false,
+      "label": "Password",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "roles": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Table",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": false,
+      "in_preview": false,
+      "label": "Roles",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "HasRole",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "time_zone": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": false,
+      "in_preview": false,
+      "label": "Time Zone",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "user_type": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Select",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": true,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "User Type",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "System\nWebsite",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    }
+  },
+  "label": "User",
+  "layout": {
+    "tabs": [
+      {
+        "label": "Details",
+        "sections": [
+          {
+            "columns": [
+              {
+                "fields": [
+                  "email",
+                  "full_name",
+                  "password",
+                  "enabled",
+                  "language",
+                  "time_zone",
+                  "user_type",
+                  "roles"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "module": "Core",
+  "name": "User",
+  "naming_rule": {
+    "rule": "field",
+    "field_name": "email"
   },
   "permissions": [
     {
       "role": "System Manager",
       "doctype_perm": 63
     }
-  ]
+  ],
+  "search_fields": [
+    "email",
+    "full_name"
+  ],
+  "sort_field": "creation",
+  "sort_order": "desc",
+  "title_field": "full_name",
+  "track_changes": true
 }

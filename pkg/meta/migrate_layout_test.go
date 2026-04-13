@@ -268,3 +268,41 @@ func TestMigrateFile_PreservesProperties(t *testing.T) {
 	t.Logf("Invoice migrated: %d fields, naming_rule=%q, perms=%d, api_config.enabled=%v",
 		len(mt.Fields), mt.NamingRule.Rule, len(mt.Permissions), mt.APIConfig.Enabled)
 }
+
+// TestMigrate_AllBuiltins migrates all builtin DocType JSON files from flat
+// format to tree-native format and verifies each one compiles after migration.
+// Running this test is the mechanism that actually performs the migration on
+// the real files in the repository.
+func TestMigrate_AllBuiltins(t *testing.T) {
+	root := filepath.Join("..", "..", "pkg", "builtin", "core", "modules", "core", "doctypes")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Skipf("builtin dir not found: %v", err)
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		jsonPath := filepath.Join(root, e.Name(), e.Name()+".json")
+		if _, statErr := os.Stat(jsonPath); statErr != nil {
+			continue
+		}
+
+		migrated, migrateErr := meta.MigrateFileToTree(jsonPath)
+		if migrateErr != nil {
+			t.Errorf("migrate %s: %v", e.Name(), migrateErr)
+			continue
+		}
+		t.Logf("%s: migrated=%v", e.Name(), migrated)
+
+		// Verify migrated file compiles.
+		data, readErr := os.ReadFile(jsonPath)
+		if readErr != nil {
+			t.Errorf("read %s after migration: %v", e.Name(), readErr)
+			continue
+		}
+		if _, compileErr := meta.Compile(data); compileErr != nil {
+			t.Errorf("compile %s after migration: %v", e.Name(), compileErr)
+		}
+	}
+}
