@@ -1,0 +1,327 @@
+package api
+
+import (
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
+
+	"github.com/osama1998H/moca/pkg/meta"
+)
+
+// DevHandler serves dev-mode API endpoints for creating/editing DocType
+// definition files on disk. Only available when developer mode is enabled.
+type DevHandler struct {
+	registry *meta.Registry
+	logger   *slog.Logger
+	appsDir  string
+}
+
+// NewDevHandler creates a DevHandler that reads/writes DocType files
+// under the given apps directory.
+func NewDevHandler(appsDir string, registry *meta.Registry, logger *slog.Logger) *DevHandler {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &DevHandler{appsDir: appsDir, registry: registry, logger: logger}
+}
+
+// RegisterDevRoutes registers dev-mode routes on the given mux.
+func (h *DevHandler) RegisterDevRoutes(mux *http.ServeMux, version string) {
+	p := "/api/" + version + "/dev"
+	mux.HandleFunc("GET "+p+"/apps", h.HandleListApps)
+	mux.HandleFunc("POST "+p+"/doctype", h.HandleCreateDocType)
+	mux.HandleFunc("PUT "+p+"/doctype/{name}", h.HandleUpdateDocType)
+	mux.HandleFunc("GET "+p+"/doctype/{name}", h.HandleGetDocType)
+	mux.HandleFunc("DELETE "+p+"/doctype/{name}", h.HandleDeleteDocType)
+}
+
+// HandleListApps returns the list of installed apps (subdirectories
+// containing a manifest.yaml file).
+func (h *DevHandler) HandleListApps(w http.ResponseWriter, r *http.Request) {
+	entries, err := os.ReadDir(h.appsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeJSON(w, http.StatusOK, map[string]any{"data": []string{}})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	apps := make([]string, 0)
+	for _, e := range entries {
+		if e.IsDir() {
+			mPath := filepath.Join(h.appsDir, e.Name(), "manifest.yaml")
+			if _, err := os.Stat(mPath); err == nil {
+				apps = append(apps, e.Name())
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": apps})
+}
+
+// DevDocTypeRequest is the request body for creating/updating a DocType.
+type DevDocTypeRequest struct {
+	Fields      map[string]meta.FieldDef `json:"fields"`
+	Name        string                   `json:"name"`
+	App         string                   `json:"app"`
+	Module      string                   `json:"module"`
+	Layout      meta.LayoutTree          `json:"layout"`
+	Permissions []meta.PermRule          `json:"permissions"`
+	Settings    DevDocTypeSettings       `json:"settings"`
+}
+
+// DevDocTypeSettings holds DocType configuration flags and metadata.
+type DevDocTypeSettings struct {
+	NamingRule    meta.NamingStrategy `json:"naming_rule"`
+	TitleField    string              `json:"title_field"`
+	SortField     string              `json:"sort_field"`
+	SortOrder     string              `json:"sort_order"`
+	ImageField    string              `json:"image_field"`
+	SearchFields  []string            `json:"search_fields"`
+	IsSubmittable bool                `json:"is_submittable"`
+	IsSingle      bool                `json:"is_single"`
+	IsChildTable  bool                `json:"is_child_table"`
+	IsVirtual     bool                `json:"is_virtual"`
+	TrackChanges  bool                `json:"track_changes"`
+}
+
+// HandleCreateDocType creates a new DocType definition on disk.
+func (h *DevHandler) HandleCreateDocType(w http.ResponseWriter, r *http.Request) {
+	var req DevDocTypeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+		return
+	}
+
+	if err := ValidateDocTypeName(req.Name); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	if req.App == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "app is required"})
+		return
+	}
+	if req.Module == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "module is required"})
+		return
+	}
+
+	// Validate field names
+	for name := range req.Fields {
+		if err := ValidateFieldName(name); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+	}
+
+	// Build the tree-native JSON document for disk
+	docDef := buildDocTypeJSON(req)
+
+	// Create directory structure: {appsDir}/{app}/modules/{module_snake}/doctypes/{dt_snake}/
+	moduleSnake := toSnakeCaseDev(req.Module)
+	dtSnake := toSnakeCaseDev(req.Name)
+	dtDir := filepath.Join(h.appsDir, req.App, "modules", moduleSnake, "doctypes", dtSnake)
+	if err := os.MkdirAll(dtDir, 0o755); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create directory: " + err.Error()})
+		return
+	}
+
+	// Write {dt_snake}.json with tree-native format
+	jsonPath := filepath.Join(dtDir, dtSnake+".json")
+	data, err := json.MarshalIndent(docDef, "", "  ")
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "marshal: " + err.Error()})
+		return
+	}
+	if err := os.WriteFile(jsonPath, data, 0o644); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "write: " + err.Error()})
+		return
+	}
+
+	// Write controller stub only if it doesn't already exist
+	goPath := filepath.Join(dtDir, dtSnake+".go")
+	if _, err := os.Stat(goPath); os.IsNotExist(err) {
+		stub := fmt.Sprintf("package %s\n\n// %s controller.\n// Add lifecycle hooks here.\ntype %s struct{}\n", dtSnake, req.Name, req.Name)
+		if err := os.WriteFile(goPath, []byte(stub), 0o644); err != nil {
+			h.logger.Warn("failed to write controller stub", "error", err)
+		}
+	}
+
+	// Register in registry if available
+	if h.registry != nil {
+		if _, err := h.registry.Register(r.Context(), siteFromContext(r), data); err != nil {
+			h.logger.Warn("registry registration failed (non-fatal)", "error", err)
+		}
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{"data": docDef})
+}
+
+// HandleUpdateDocType updates an existing DocType JSON file on disk.
+// It does NOT overwrite the .go controller file (preserves developer code).
+func (h *DevHandler) HandleUpdateDocType(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	var req DevDocTypeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+		return
+	}
+	req.Name = name
+
+	for fieldName := range req.Fields {
+		if err := ValidateFieldName(fieldName); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+	}
+
+	docDef := buildDocTypeJSON(req)
+	moduleSnake := toSnakeCaseDev(req.Module)
+	dtSnake := toSnakeCaseDev(req.Name)
+	jsonPath := filepath.Join(h.appsDir, req.App, "modules", moduleSnake, "doctypes", dtSnake, dtSnake+".json")
+
+	if _, err := os.Stat(jsonPath); os.IsNotExist(err) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "doctype not found at " + jsonPath})
+		return
+	}
+
+	data, err := json.MarshalIndent(docDef, "", "  ")
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "marshal: " + err.Error()})
+		return
+	}
+	if err := os.WriteFile(jsonPath, data, 0o644); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "write: " + err.Error()})
+		return
+	}
+
+	if h.registry != nil {
+		if _, err := h.registry.Register(r.Context(), siteFromContext(r), data); err != nil {
+			h.logger.Warn("registry re-registration failed", "error", err)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"data": docDef})
+}
+
+// HandleGetDocType reads a DocType definition from disk by searching
+// all apps for a matching doctype name. Returns the JSON content with
+// _app and _module_dir metadata.
+func (h *DevHandler) HandleGetDocType(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	entries, _ := os.ReadDir(h.appsDir)
+	for _, app := range entries {
+		if !app.IsDir() {
+			continue
+		}
+		modulesDir := filepath.Join(h.appsDir, app.Name(), "modules")
+		modules, _ := os.ReadDir(modulesDir)
+		for _, mod := range modules {
+			if !mod.IsDir() {
+				continue
+			}
+			dtSnake := toSnakeCaseDev(name)
+			jsonPath := filepath.Join(modulesDir, mod.Name(), "doctypes", dtSnake, dtSnake+".json")
+			data, err := os.ReadFile(jsonPath)
+			if err != nil {
+				continue
+			}
+			var docDef map[string]any
+			if err := json.Unmarshal(data, &docDef); err != nil {
+				continue
+			}
+			docDef["_app"] = app.Name()
+			docDef["_module_dir"] = mod.Name()
+			writeJSON(w, http.StatusOK, map[string]any{"data": docDef})
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"error": "doctype not found: " + name})
+}
+
+// HandleDeleteDocType removes a DocType directory from disk.
+func (h *DevHandler) HandleDeleteDocType(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	entries, _ := os.ReadDir(h.appsDir)
+	for _, app := range entries {
+		if !app.IsDir() {
+			continue
+		}
+		modulesDir := filepath.Join(h.appsDir, app.Name(), "modules")
+		modules, _ := os.ReadDir(modulesDir)
+		for _, mod := range modules {
+			if !mod.IsDir() {
+				continue
+			}
+			dtSnake := toSnakeCaseDev(name)
+			dtDir := filepath.Join(modulesDir, mod.Name(), "doctypes", dtSnake)
+			if _, err := os.Stat(dtDir); err == nil {
+				if err := os.RemoveAll(dtDir); err != nil {
+					writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+					return
+				}
+				writeJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
+				return
+			}
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"error": "doctype not found: " + name})
+}
+
+// buildDocTypeJSON converts a DevDocTypeRequest into the tree-native
+// JSON document that gets persisted to disk.
+func buildDocTypeJSON(req DevDocTypeRequest) map[string]any {
+	fieldsObj := make(map[string]any, len(req.Fields))
+	for name, fd := range req.Fields {
+		fieldsObj[name] = fd
+	}
+	return map[string]any{
+		"name":           req.Name,
+		"module":         req.Module,
+		"layout":         req.Layout,
+		"fields":         fieldsObj,
+		"naming_rule":    req.Settings.NamingRule,
+		"title_field":    req.Settings.TitleField,
+		"sort_field":     req.Settings.SortField,
+		"sort_order":     req.Settings.SortOrder,
+		"search_fields":  req.Settings.SearchFields,
+		"image_field":    req.Settings.ImageField,
+		"is_submittable": req.Settings.IsSubmittable,
+		"is_single":      req.Settings.IsSingle,
+		"is_child_table": req.Settings.IsChildTable,
+		"is_virtual":     req.Settings.IsVirtual,
+		"track_changes":  req.Settings.TrackChanges,
+		"permissions":    req.Permissions,
+	}
+}
+
+// writeJSON writes a JSON response with the given status code and value.
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v) //nolint:errcheck
+}
+
+// siteFromContext extracts the site identifier from the request context,
+// falling back to "default" if not set by tenant middleware.
+func siteFromContext(r *http.Request) string {
+	if site, ok := r.Context().Value("site").(string); ok {
+		return site
+	}
+	return "default"
+}
+
+// toSnakeCaseDev converts a PascalCase name to snake_case by reusing
+// meta.TableName and stripping the "tab_" prefix.
+func toSnakeCaseDev(s string) string {
+	if s == "" {
+		return ""
+	}
+	tn := meta.TableName(s) // "tab_sales_order"
+	return tn[4:]           // "sales_order"
+}
