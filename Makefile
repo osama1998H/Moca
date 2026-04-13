@@ -12,7 +12,7 @@ COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compos
 BENCH_PKGS := ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks
 
 .PHONY: build build-server build-worker build-scheduler build-moca build-outbox \
-        test test-integration test-api-integration lint clean \
+        test test-integration test-api-integration lint clean release-local \
         bench bench-integration bench-compare bench-save-baseline bench-profile \
         spike-pg spike-redis spike-gowork spike-meili spike-cobra \
         help
@@ -37,6 +37,7 @@ help:
 	@echo "  bench-profile    Capture CPU and memory profiles for a benchmark"
 	@echo "  lint             Run golangci-lint"
 	@echo "  clean            Remove build artifacts"
+	@echo "  release-local    Build release archives locally (GoReleaser snapshot)"
 	@echo ""
 	@echo "  spike-pg         Run PostgreSQL tenant isolation spike (MS-00-T2)"
 	@echo "  spike-redis      Run Redis Streams consumer group spike (MS-00-T3)"
@@ -126,6 +127,10 @@ lint:
 clean:
 	rm -rf bin/
 	$(GO) clean -cache -testcache
+
+## release-local: Build release archives locally using GoReleaser (snapshot mode)
+release-local:
+	goreleaser build --snapshot --clean
 
 ## spike-pg: Run the PostgreSQL schema-per-tenant spike
 spike-pg:
