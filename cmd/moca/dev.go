@@ -35,7 +35,7 @@ func NewDevCommand() *cobra.Command {
 		newDevBenchCmd(),
 		newDevProfileCmd(),
 		newSubcommand("watch", "Watch and rebuild assets on change"),
-		newSubcommand("playground", "Start interactive API playground"),
+		newDevPlaygroundCmd(),
 	)
 
 	return cmd
