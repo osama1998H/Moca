@@ -5,6 +5,128 @@ All notable changes to the Moca framework will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - Unreleased
+
+### Added
+
+#### Documentation & Packaging (MS-26)
+- Apache-2.0 `LICENSE` file
+- `CONTRIBUTING.md` with links to wiki guides (Development Setup, Code Conventions, Testing Guide, CI/CD Pipeline)
+- `.goreleaser.yml` for cross-compilation of all 5 binaries (linux/darwin/windows, amd64/arm64)
+- `Makefile` `release-local` target for local GoReleaser snapshot builds
+- Multi-arch Docker images for `moca-server`, `moca-worker`, `moca-scheduler`, `moca-outbox`
+- Auto-generated CLI reference docs (`moca docs generate`)
+- Deployment guides (bare-metal, Docker Compose, Kubernetes)
+- Wiki updates covering all milestones MS-00 through MS-26
+
+## [0.4.0-rc] - 2026-04-13
+
+### Added
+
+#### Observability (MS-24)
+- Prometheus metrics exporter with 13 custom metrics (request latency, queue depth, cache hit rate, search index lag, tenant count, and more)
+- OpenTelemetry OTLP trace exporter with span propagation across HTTP, queue, and scheduler boundaries
+- `moca doctor` extended with live infra health checks (PG replication lag, Redis memory, Meilisearch index health)
+- `moca monitor metrics` command with real-time Prometheus scrape output
+- `moca dev bench` command for local benchmark execution against live services
+- `moca dev profile` command for CPU/memory profiling with pprof HTTP endpoint
+- Jaeger-compatible trace export via OTLP HTTP
+
+#### Testing Framework (MS-25)
+- `moca test run` command with parallel test execution, build-tag filtering, and structured JSON output
+- Fixture generation (`moca test fixture`) producing deterministic seed data from MetaType definitions
+- Coverage report aggregation and HTML export (`moca test coverage`)
+- Test data factory system with relationship-aware generation for all 35 FieldTypes
+- Integration test helpers: `IntegrationSuite`, `WithTenant`, `WithFixtures` composable test builders
+- Benchmarking helpers in `internal/testutil/bench/` with warm-up, cooldown, and stats reporting
+
+## [0.3.0-beta] - 2026-04-07
+
+### Added
+
+#### React Desk Foundation (MS-17)
+- React 19 + TypeScript app shell with Vite build pipeline served at `/desk/`
+- `MetaProvider` context supplying live MetaType definitions to all child components
+- `FormView` auto-rendered from MetaType field definitions with full validation
+- `ListView` with server-side filtering, sorting, and pagination
+- 29 field type components covering all storable FieldTypes (Text, Int, Float, Date, DateTime, Link, Select, MultiSelect, Table, Attach, etc.)
+- `@moca/desk` npm package for embedding the Desk UI in external React apps
+
+#### API Extensions (MS-18)
+- API key management: create, rotate, revoke with per-key permission scopes
+- Webhook system with HMAC-SHA256 signatures, retry with exponential backoff, and dead-letter queue
+- Custom endpoint registration via `AppManifest` (`endpoints:` section)
+- `APIConfig` per-tenant rate limit and CORS overrides
+
+#### Realtime & Customization (MS-19)
+- WebSocket event bus (`/desk/ws`) broadcasting document lifecycle events to subscribed clients
+- Custom field overlay system: add/remove fields on any DocType without modifying the base MetaType
+- Document version tracking with full diff storage and `moca doc versions` CLI command
+
+#### Platform Capabilities (MS-20)
+- GraphQL schema auto-generated from MetaType definitions with DataLoader batching
+- Dashboard engine with configurable card/chart widgets persisted as `DashboardDef` documents
+- Report builder UI and `ReportDef` execution API with CSV/XLSX export
+- i18n translation layer with per-tenant locale overrides stored in Redis
+- File storage adapter (S3/MinIO) with presigned URL generation and virus-scan hook
+
+#### Developer Tooling (MS-21)
+- `moca generate` with 7 generators: `doctype`, `controller`, `hook`, `migration`, `report`, `dashboard`, `api-endpoint`
+- `moca deploy` with 6 sub-commands: `push`, `migrate`, `seed`, `rollback`, `status`, `diff`
+- Backup automation: scheduled site backups to S3 with retention policy and `moca backup restore`
+
+#### Auth & Notifications (MS-22)
+- OAuth2 provider (Authorization Code + PKCE) with per-tenant client registry
+- SAML 2.0 and OIDC identity provider connectors
+- Field-level encryption for sensitive data at rest (AES-256-GCM, key rotation)
+- Notification engine with Email, SMS, and in-app channels; template rendering via Go `text/template`
+
+#### Workflow Engine (MS-23)
+- State machine core: `WorkflowDef`, `StateTransition`, guard conditions, and side-effect hooks
+- SLA timer management with Redis-backed deadlines and escalation callbacks
+- Approval chain support: sequential/parallel approvers, delegate, and bulk-approve APIs
+- `moca workflow` CLI: `list`, `advance`, `history`, `retry`, `cancel` sub-commands
+
+## [0.2.0-alpha] - 2026-04-01
+
+### Added
+
+#### CLI Operational Commands (MS-11)
+- `moca db migrate/rollback/diff` with `DependsOn` ordering, `--dry-run`, and `tab_migration_log` version tracking
+- `moca backup create/restore/list` with gzip compression and S3-compatible upload
+- `moca config get/set/list/reset` with live config reload without server restart
+
+#### Multitenancy (MS-12)
+- Schema-per-tenant isolation enforced via `AfterConnect` callback setting `search_path` per pool
+- Per-tenant connection pool registry with idle eviction and health probing
+- `SiteManager`: create, drop, list, and context-switch sites
+- `moca site create/drop/list/use/info` commands with full 9-step site creation lifecycle
+
+#### App Scaffolding & User Management (MS-13)
+- `moca app new` scaffolding: generates `AppManifest`, module skeleton, and example DocType JSON
+- `moca user create/list/set-password/add-role/remove-role` commands
+- `moca dev shell` interactive REPL with pre-loaded site context and ORM helpers
+- `moca dev routes` command listing all registered HTTP routes with method and middleware chain
+
+#### Permission Engine (MS-14)
+- Role-Based Access Control (RBAC): `DocPerm` rules evaluated per DocType per role
+- Field-Level Security (FLS): per-field read/write restrictions enforced in API transformers
+- Row-Level Security (RLS): `match_conditions` filter appended to all queries for restricted roles
+- `moca perm check/explain` CLI commands for permission debugging
+
+#### Background Jobs, Events & Search (MS-15)
+- Redis Streams job queue with XAutoClaim at-least-once delivery and DLQ after max retries
+- Cron scheduler with leader election (Redis SETNX) and missed-run catch-up
+- Kafka event backend with transactional outbox poller (`moca-outbox`)
+- Redis pub/sub fallback for low-volume deployments
+- Meilisearch sync daemon with per-tenant index (`{site}_{doctype}`) and `waitForTask` write guarantees
+
+#### CLI Queue/Events/Search/Monitor Commands (MS-16)
+- `moca queue list/purge/retry/dlq` — inspect and manage Redis Streams jobs
+- `moca events emit/listen/replay` — trigger and subscribe to platform events
+- `moca search index/query/sync/reset` — manage Meilisearch indexes per site
+- `moca monitor log/tail/status` — structured log streaming and process status
+
 ## [0.1.0-mvp] - 2026-04-02
 
 ### Added
@@ -107,4 +229,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PID file management with stale PID detection
 - Static file serving at `/desk/`
 
+[1.0.0]: https://github.com/osama1998H/moca/releases/tag/v1.0.0
+[0.4.0-rc]: https://github.com/osama1998H/moca/releases/tag/v0.4.0-rc
+[0.3.0-beta]: https://github.com/osama1998H/moca/releases/tag/v0.3.0-beta
+[0.2.0-alpha]: https://github.com/osama1998H/moca/releases/tag/v0.2.0-alpha
 [0.1.0-mvp]: https://github.com/osama1998H/moca/releases/tag/v0.1.0-mvp
