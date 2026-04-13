@@ -41,6 +41,11 @@ type AppManifest struct {
 	Migrations   []Migration   `yaml:"migrations,omitempty"`
 	StaticAssets []AssetBundle `yaml:"static_assets,omitempty"`
 	PortalPages  []PortalPage  `yaml:"portal_pages,omitempty"`
+
+	// Publishing (used by moca app publish)
+	Repository string   `yaml:"repository,omitempty"`
+	Author     string   `yaml:"author,omitempty"`
+	Keywords   []string `yaml:"keywords,omitempty"`
 }
 
 // AppDep declares a dependency on another app with a minimum version constraint.

@@ -40,7 +40,7 @@ func NewAppCommand() *cobra.Command {
 		newSubcommand("remove", "Remove an app from project"),
 		newAppUpdateCmd(),
 		newAppResolveCmd(),
-		newSubcommand("publish", "Publish app to registry"),
+		newAppPublishCmd(),
 		newSubcommand("info", "Show app manifest details"),
 		newAppDiffCmd(),
 		newSubcommand("pin", "Pin app to exact version/commit"),
