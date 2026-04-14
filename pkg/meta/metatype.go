@@ -32,32 +32,32 @@ type NamingStrategy struct {
 //
 // See MOCA_SYSTEM_DESIGN.md section 3.1.1 for the canonical definition.
 type MetaType struct {
-	Hooks         DocHookDefs    `json:"hooks"`
-	ViewConfig    ViewMeta       `json:"view_config"`
-	CreatedAt     time.Time      `json:"created_at"`
-	ModifiedAt    time.Time      `json:"modified_at"`
-	APIConfig     *APIConfig     `json:"api_config,omitempty"`
-	Workflow      *WorkflowMeta  `json:"workflow,omitempty"`
-	NamingRule    NamingStrategy `json:"naming_rule"`
-	Name          string         `json:"name"`
-	ImageField    string         `json:"image_field"`
-	SortField     string         `json:"sort_field"`
-	SortOrder     string         `json:"sort_order"`
-	TitleField    string         `json:"title_field"`
-	Description   string         `json:"description"`
-	Label         string         `json:"label"`
-	Module        string         `json:"module"`
-	SearchFields  []string       `json:"search_fields"`
-	Permissions   []PermRule     `json:"permissions"`
-	Fields        []FieldDef          `json:"fields"`
-	Layout        *LayoutTree         `json:"layout,omitempty"`
+	Hooks         DocHookDefs         `json:"hooks"`
+	CreatedAt     time.Time           `json:"created_at"`
+	ModifiedAt    time.Time           `json:"modified_at"`
+	APIConfig     *APIConfig          `json:"api_config,omitempty"`
+	Workflow      *WorkflowMeta       `json:"workflow,omitempty"`
 	FieldsMap     map[string]FieldDef `json:"-"`
+	Layout        *LayoutTree         `json:"layout,omitempty"`
+	ViewConfig    ViewMeta            `json:"view_config"`
+	NamingRule    NamingStrategy      `json:"naming_rule"`
+	Module        string              `json:"module"`
+	ImageField    string              `json:"image_field"`
+	TitleField    string              `json:"title_field"`
+	Description   string              `json:"description"`
+	Label         string              `json:"label"`
+	SortField     string              `json:"sort_field"`
+	Name          string              `json:"name"`
+	SortOrder     string              `json:"sort_order"`
+	Fields        []FieldDef          `json:"fields"`
+	Permissions   []PermRule          `json:"permissions"`
+	SearchFields  []string            `json:"search_fields"`
 	Version       int                 `json:"version"`
-	IsSubmittable bool           `json:"is_submittable"`
-	IsVirtual     bool           `json:"is_virtual"`
-	IsChildTable  bool           `json:"is_child_table"`
-	TrackChanges  bool           `json:"track_changes"`
-	IsSingle      bool           `json:"is_single"`
-	EventSourcing bool           `json:"event_sourcing"`
-	CDCEnabled    bool           `json:"cdc_enabled"`
+	IsSubmittable bool                `json:"is_submittable"`
+	IsVirtual     bool                `json:"is_virtual"`
+	IsChildTable  bool                `json:"is_child_table"`
+	TrackChanges  bool                `json:"track_changes"`
+	IsSingle      bool                `json:"is_single"`
+	EventSourcing bool                `json:"event_sourcing"`
+	CDCEnabled    bool                `json:"cdc_enabled"`
 }

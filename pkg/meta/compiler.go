@@ -85,13 +85,19 @@ func Compile(jsonBytes []byte) (*MetaType, error) {
 	// Detect format by probing the JSON structure.
 	var probe struct {
 		Layout json.RawMessage `json:"layout"`
+		Fields json.RawMessage `json:"fields"`
 	}
 	if err := json.Unmarshal(jsonBytes, &probe); err != nil {
 		return nil, fmt.Errorf("compile: invalid JSON: %w", err)
 	}
 
-	// Tree-native: "layout" key exists and starts with '{'.
-	if len(probe.Layout) > 0 && probe.Layout[0] == '{' {
+	// Tree-native: "layout" key exists as object AND "fields" is an object (map).
+	// When json.Marshal(MetaType) produces both "layout" (tree) and "fields" (array),
+	// that's a re-marshaled MetaType — use the flat path.
+	isTreeNative := len(probe.Layout) > 0 && probe.Layout[0] == '{' &&
+		len(probe.Fields) > 0 && probe.Fields[0] == '{'
+
+	if isTreeNative {
 		return compileTreeNative(jsonBytes)
 	}
 	return compileFlatLegacy(jsonBytes)

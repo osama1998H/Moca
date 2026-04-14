@@ -458,19 +458,19 @@ type apiFieldDef struct {
 
 // apiMetaResponse is the API-safe representation of a MetaType.
 type apiMetaResponse struct {
-	Name          string                 `json:"name"`
+	Layout        *meta.LayoutTree       `json:"layout,omitempty"`
+	FieldsMap     map[string]apiFieldDef `json:"fields_map,omitempty"`
+	NamingRule    meta.NamingStrategy    `json:"naming_rule"`
 	Label         string                 `json:"label,omitempty"`
 	Description   string                 `json:"description,omitempty"`
 	Module        string                 `json:"module,omitempty"`
-	NamingRule    meta.NamingStrategy    `json:"naming_rule"`
 	TitleField    string                 `json:"title_field,omitempty"`
 	ImageField    string                 `json:"image_field,omitempty"`
 	SortField     string                 `json:"sort_field,omitempty"`
 	SortOrder     string                 `json:"sort_order,omitempty"`
-	SearchFields  []string               `json:"search_fields,omitempty"`
+	Name          string                 `json:"name"`
 	Fields        []apiFieldDef          `json:"fields"`
-	Layout        *meta.LayoutTree       `json:"layout,omitempty"`
-	FieldsMap     map[string]apiFieldDef `json:"fields_map,omitempty"`
+	SearchFields  []string               `json:"search_fields,omitempty"`
 	IsSingle      bool                   `json:"is_single"`
 	IsSubmittable bool                   `json:"is_submittable"`
 	IsChildTable  bool                   `json:"is_child_table"`
