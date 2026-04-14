@@ -55,6 +55,7 @@ func run() error {
 		Logger:  logger,
 		Port:    cfg.Development.Port,
 		Version: Version,
+		AppsDir: "apps",
 	})
 	if err != nil {
 		return err
