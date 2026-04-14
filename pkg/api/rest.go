@@ -458,26 +458,61 @@ type apiFieldDef struct {
 
 // apiMetaResponse is the API-safe representation of a MetaType.
 type apiMetaResponse struct {
-	Name          string              `json:"name"`
-	Label         string              `json:"label,omitempty"`
-	Description   string              `json:"description,omitempty"`
-	Module        string              `json:"module,omitempty"`
-	NamingRule    meta.NamingStrategy  `json:"naming_rule"`
-	TitleField    string              `json:"title_field,omitempty"`
-	ImageField    string              `json:"image_field,omitempty"`
-	SortField     string              `json:"sort_field,omitempty"`
-	SortOrder     string              `json:"sort_order,omitempty"`
-	SearchFields  []string            `json:"search_fields,omitempty"`
-	Fields        []apiFieldDef       `json:"fields"`
-	IsSingle      bool                `json:"is_single"`
-	IsSubmittable bool                `json:"is_submittable"`
-	IsChildTable  bool                `json:"is_child_table"`
-	TrackChanges  bool                `json:"track_changes,omitempty"`
-	AllowGet      bool                `json:"allow_get"`
-	AllowCreate   bool                `json:"allow_create"`
-	AllowUpdate   bool                `json:"allow_update"`
-	AllowDelete   bool                `json:"allow_delete"`
-	AllowList     bool                `json:"allow_list"`
+	Layout        *meta.LayoutTree       `json:"layout,omitempty"`
+	FieldsMap     map[string]apiFieldDef `json:"fields_map,omitempty"`
+	NamingRule    meta.NamingStrategy    `json:"naming_rule"`
+	Label         string                 `json:"label,omitempty"`
+	Description   string                 `json:"description,omitempty"`
+	Module        string                 `json:"module,omitempty"`
+	TitleField    string                 `json:"title_field,omitempty"`
+	ImageField    string                 `json:"image_field,omitempty"`
+	SortField     string                 `json:"sort_field,omitempty"`
+	SortOrder     string                 `json:"sort_order,omitempty"`
+	Name          string                 `json:"name"`
+	Fields        []apiFieldDef          `json:"fields"`
+	SearchFields  []string               `json:"search_fields,omitempty"`
+	IsSingle      bool                   `json:"is_single"`
+	IsSubmittable bool                   `json:"is_submittable"`
+	IsChildTable  bool                   `json:"is_child_table"`
+	TrackChanges  bool                   `json:"track_changes,omitempty"`
+	AllowGet      bool                   `json:"allow_get"`
+	AllowCreate   bool                   `json:"allow_create"`
+	AllowUpdate   bool                   `json:"allow_update"`
+	AllowDelete   bool                   `json:"allow_delete"`
+	AllowList     bool                   `json:"allow_list"`
+}
+
+// buildApiFieldDef maps a meta.FieldDef to its API-safe representation.
+func buildApiFieldDef(f meta.FieldDef) apiFieldDef {
+	return apiFieldDef{
+		Name:               f.Name,
+		FieldType:          string(f.FieldType),
+		Label:              f.Label,
+		Required:           f.Required,
+		ReadOnly:           f.ReadOnly,
+		APIReadOnly:        f.APIReadOnly,
+		APIAlias:           f.APIAlias,
+		InAPI:              f.InAPI,
+		Options:            f.Options,
+		DependsOn:          f.DependsOn,
+		MandatoryDependsOn: f.MandatoryDependsOn,
+		Default:            f.Default,
+		MaxLength:          f.MaxLength,
+		MaxValue:           f.MaxValue,
+		MinValue:           f.MinValue,
+		Width:              f.Width,
+		InListView:         f.InListView,
+		InFilter:           f.InFilter,
+		InPreview:          f.InPreview,
+		Hidden:             f.Hidden,
+		Searchable:         f.Searchable,
+		Filterable:         f.Filterable,
+		Unique:             f.Unique,
+		ColSpan:            f.LayoutHint.ColSpan,
+		Collapsible:        f.LayoutHint.Collapsible,
+		CollapsedByDefault: f.LayoutHint.CollapsedByDefault,
+		LayoutLabel:        f.LayoutHint.Label,
+	}
 }
 
 func buildMetaResponse(mt *meta.MetaType) apiMetaResponse {
@@ -506,35 +541,16 @@ func buildMetaResponse(mt *meta.MetaType) apiMetaResponse {
 	}
 	resp.Fields = make([]apiFieldDef, 0, len(mt.Fields))
 	for _, f := range mt.Fields {
-		resp.Fields = append(resp.Fields, apiFieldDef{
-			Name:               f.Name,
-			FieldType:          string(f.FieldType),
-			Label:              f.Label,
-			Required:           f.Required,
-			ReadOnly:           f.ReadOnly,
-			APIReadOnly:        f.APIReadOnly,
-			APIAlias:           f.APIAlias,
-			InAPI:              f.InAPI,
-			Options:            f.Options,
-			DependsOn:          f.DependsOn,
-			MandatoryDependsOn: f.MandatoryDependsOn,
-			Default:            f.Default,
-			MaxLength:          f.MaxLength,
-			MaxValue:           f.MaxValue,
-			MinValue:           f.MinValue,
-			Width:              f.Width,
-			InListView:         f.InListView,
-			InFilter:           f.InFilter,
-			InPreview:          f.InPreview,
-			Hidden:             f.Hidden,
-			Searchable:         f.Searchable,
-			Filterable:         f.Filterable,
-			Unique:             f.Unique,
-			ColSpan:            f.LayoutHint.ColSpan,
-			Collapsible:        f.LayoutHint.Collapsible,
-			CollapsedByDefault: f.LayoutHint.CollapsedByDefault,
-			LayoutLabel:        f.LayoutHint.Label,
-		})
+		resp.Fields = append(resp.Fields, buildApiFieldDef(f))
+	}
+	if mt.Layout != nil {
+		resp.Layout = mt.Layout
+	}
+	if mt.FieldsMap != nil {
+		resp.FieldsMap = make(map[string]apiFieldDef, len(mt.FieldsMap))
+		for name, f := range mt.FieldsMap {
+			resp.FieldsMap[name] = buildApiFieldDef(f)
+		}
 	}
 	return resp
 }

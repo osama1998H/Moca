@@ -65,17 +65,142 @@ var standardColumns = map[string]bool{
 }
 
 // Compile parses JSON bytes into a MetaType, validates against all business
-// rules, and returns the compiled result. Validation errors are accumulated
-// (not short-circuited): all 12 rules are checked even after the first failure.
+// rules, and returns the compiled result. It auto-detects the input format:
+//
+//   - Tree-native: "layout" key present with an object value — fields are a
+//     map[string]FieldDef keyed by field name.
+//   - Legacy flat: "fields" is a JSON array of FieldDef objects.
+//
+// After compilation ALL THREE representations are always populated:
+//   - Fields []FieldDef — flat ordered list (used by DDL, validation, API, search)
+//   - Layout *LayoutTree — tree structure
+//   - FieldsMap map[string]FieldDef — fields keyed by name
+//
+// Validation errors are accumulated (not short-circuited): all rules are
+// checked even after the first failure.
 //
 // Returns *CompileErrors (retrievable via errors.As) if any validation rules
 // fail. Returns a plain wrapped error if the input is not valid JSON.
 func Compile(jsonBytes []byte) (*MetaType, error) {
+	// Detect format by probing the JSON structure.
+	var probe struct {
+		Layout json.RawMessage `json:"layout"`
+		Fields json.RawMessage `json:"fields"`
+	}
+	if err := json.Unmarshal(jsonBytes, &probe); err != nil {
+		return nil, fmt.Errorf("compile: invalid JSON: %w", err)
+	}
+
+	// Tree-native: "layout" key exists as object AND "fields" is an object (map).
+	// When json.Marshal(MetaType) produces both "layout" (tree) and "fields" (array),
+	// that's a re-marshaled MetaType — use the flat path.
+	isTreeNative := len(probe.Layout) > 0 && probe.Layout[0] == '{' &&
+		len(probe.Fields) > 0 && probe.Fields[0] == '{'
+
+	if isTreeNative {
+		return compileTreeNative(jsonBytes)
+	}
+	return compileFlatLegacy(jsonBytes)
+}
+
+// compileFlatLegacy handles the original flat format where "fields" is a
+// JSON array. After validation it derives Layout and FieldsMap from the
+// flat field list via FlatToTree.
+func compileFlatLegacy(jsonBytes []byte) (*MetaType, error) {
 	var mt MetaType
 	if err := json.Unmarshal(jsonBytes, &mt); err != nil {
 		return nil, fmt.Errorf("compile: invalid JSON: %w", err)
 	}
 
+	// Default InAPI and run 12 validation rules.
+	if errs := validateAndDefault(&mt); len(errs) > 0 {
+		return nil, &CompileErrors{Errors: errs}
+	}
+
+	// Derive tree layout and fields map from flat fields.
+	mt.Layout, mt.FieldsMap = FlatToTree(mt.Fields)
+
+	return &mt, nil
+}
+
+// compileTreeNative handles the tree-native format where "layout" is a
+// LayoutTree object and "fields" is a map[string]FieldDef (keyed by name).
+func compileTreeNative(jsonBytes []byte) (*MetaType, error) {
+	// Step 1: Parse raw JSON to separate layout, fields map, and everything else.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(jsonBytes, &raw); err != nil {
+		return nil, fmt.Errorf("compile: invalid JSON: %w", err)
+	}
+
+	rawLayout, hasLayout := raw["layout"]
+	rawFields, hasFields := raw["fields"]
+
+	// Remove layout and fields so the remainder can be unmarshalled into MetaType.
+	delete(raw, "layout")
+	delete(raw, "fields")
+
+	// Step 2: Re-marshal the remainder and unmarshal into MetaType to populate
+	// all scalar fields (Name, Module, NamingRule, etc.).
+	remainder, err := json.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("compile: marshal remainder: %w", err)
+	}
+	var mt MetaType
+	if err := json.Unmarshal(remainder, &mt); err != nil {
+		return nil, fmt.Errorf("compile: invalid JSON: %w", err)
+	}
+
+	// Step 3: Parse layout.
+	if hasLayout {
+		var layout LayoutTree
+		if err := json.Unmarshal(rawLayout, &layout); err != nil {
+			return nil, fmt.Errorf("compile: invalid layout JSON: %w", err)
+		}
+		mt.Layout = &layout
+	}
+
+	// Step 4: Parse fields map. Each field's Name is set from the map key.
+	mt.FieldsMap = make(map[string]FieldDef)
+	if hasFields {
+		var fieldsRaw map[string]json.RawMessage
+		if err := json.Unmarshal(rawFields, &fieldsRaw); err != nil {
+			return nil, fmt.Errorf("compile: invalid fields JSON (expected object): %w", err)
+		}
+		for key, fieldJSON := range fieldsRaw {
+			var fd FieldDef
+			if err := json.Unmarshal(fieldJSON, &fd); err != nil {
+				return nil, fmt.Errorf("compile: invalid field %q: %w", key, err)
+			}
+			fd.Name = key
+			mt.FieldsMap[key] = fd
+		}
+	}
+
+	// Step 5: Derive flat field list from layout tree.
+	if mt.Layout != nil {
+		mt.Fields = ExtractFieldsOrdered(mt.Layout, mt.FieldsMap)
+	}
+
+	// Step 6: Default InAPI and run 12 validation rules (shared with flat path).
+	errs := validateAndDefault(&mt)
+
+	// Sync FieldsMap with changes made by validateAndDefault (e.g., InAPI defaults).
+	for i := range mt.Fields {
+		mt.FieldsMap[mt.Fields[i].Name] = mt.Fields[i]
+	}
+
+	// Step 7: Layout-specific validation.
+	errs = append(errs, validateLayout(mt.Layout)...)
+
+	if len(errs) > 0 {
+		return nil, &CompileErrors{Errors: errs}
+	}
+	return &mt, nil
+}
+
+// validateAndDefault applies InAPI defaulting for storage fields and runs
+// the 12 standard validation rules. It returns all accumulated errors.
+func validateAndDefault(mt *MetaType) []CompileError {
 	var errs []CompileError
 	add := func(field, message string) {
 		errs = append(errs, CompileError{Field: field, Message: message})
@@ -174,10 +299,41 @@ func Compile(jsonBytes []byte) (*MetaType, error) {
 		}
 	}
 
-	if len(errs) > 0 {
-		return nil, &CompileErrors{Errors: errs}
+	return errs
+}
+
+// validateLayout checks layout-specific constraints that only apply to
+// tree-native input. Returns errors for empty tabs, missing sections,
+// and invalid column widths.
+func validateLayout(layout *LayoutTree) []CompileError {
+	if layout == nil {
+		return nil
 	}
-	return &mt, nil
+	var errs []CompileError
+	add := func(field, message string) {
+		errs = append(errs, CompileError{Field: field, Message: message})
+	}
+
+	if len(layout.Tabs) == 0 {
+		add("layout.tabs", "at least one tab is required")
+	}
+
+	for i, tab := range layout.Tabs {
+		if len(tab.Sections) == 0 {
+			add(fmt.Sprintf("layout.tabs[%d].sections", i),
+				"at least one section is required per tab")
+		}
+		for j, sec := range tab.Sections {
+			for k, col := range sec.Columns {
+				if col.Width < 0 {
+					add(fmt.Sprintf("layout.tabs[%d].sections[%d].columns[%d].width", i, j, k),
+						fmt.Sprintf("column width must not be negative: %d", col.Width))
+				}
+			}
+		}
+	}
+
+	return errs
 }
 
 // TableName returns the PostgreSQL table name for a MetaType.

@@ -1,47 +1,4 @@
 {
-  "name": "ModuleDef",
-  "module": "Core",
-  "label": "Module Def",
-  "description": "Defines a module namespace within an app.",
-  "naming_rule": {
-    "rule": "field",
-    "field_name": "module_name"
-  },
-  "sort_field": "creation",
-  "sort_order": "asc",
-  "fields": [
-    {
-      "name": "module_name",
-      "field_type": "Data",
-      "label": "Module Name",
-      "required": true,
-      "unique": true,
-      "in_list_view": true,
-      "searchable": true
-    },
-    {
-      "name": "label",
-      "field_type": "Data",
-      "label": "Label",
-      "in_list_view": true
-    },
-    {
-      "name": "app_name",
-      "field_type": "Data",
-      "label": "App Name",
-      "in_list_view": true
-    },
-    {
-      "name": "icon",
-      "field_type": "Data",
-      "label": "Icon"
-    },
-    {
-      "name": "color",
-      "field_type": "Data",
-      "label": "Color"
-    }
-  ],
   "api_config": {
     "enabled": true,
     "allow_get": true,
@@ -53,10 +10,154 @@
     "default_page_size": 20,
     "max_page_size": 100
   },
+  "description": "Defines a module namespace within an app.",
+  "fields": {
+    "app_name": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "App Name",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "color": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": false,
+      "in_preview": false,
+      "label": "Color",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "icon": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": false,
+      "in_preview": false,
+      "label": "Icon",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "label": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "Label",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false
+    },
+    "module_name": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "Module Name",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": true,
+      "searchable": true,
+      "unique": true
+    }
+  },
+  "label": "Module Def",
+  "layout": {
+    "tabs": [
+      {
+        "label": "Details",
+        "sections": [
+          {
+            "columns": [
+              {
+                "fields": [
+                  "module_name",
+                  "label",
+                  "app_name",
+                  "icon",
+                  "color"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "module": "Core",
+  "name": "ModuleDef",
+  "naming_rule": {
+    "rule": "field",
+    "field_name": "module_name"
+  },
   "permissions": [
     {
       "role": "System Manager",
       "doctype_perm": 63
     }
-  ]
+  ],
+  "sort_field": "creation",
+  "sort_order": "asc"
 }
