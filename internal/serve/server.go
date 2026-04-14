@@ -41,8 +41,8 @@ type ServerConfig struct {
 	Host      string
 	Version   string
 	StaticDir string
-	Port      int
 	AppsDir   string
+	Port      int
 }
 
 // Server owns all components of the Moca HTTP server. Its Run method matches
