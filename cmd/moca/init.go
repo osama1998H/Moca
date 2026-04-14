@@ -270,9 +270,10 @@ func buildInitConfig(cmd *cobra.Command, name string) *config.ProjectConfig {
 			},
 		},
 		Development: config.DevelopmentConfig{
-			Port:       8000,
-			Workers:    1,
-			AutoReload: true,
+			Port:          8000,
+			Workers:       1,
+			AutoReload:    true,
+			DeveloperMode: true,
 		},
 		Scheduler: config.SchedulerConfig{
 			Enabled:      true,
