@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/osama1998H/moca/pkg/meta"
+	"gopkg.in/yaml.v3"
 )
 
 // DevHandler serves dev-mode API endpoints for creating/editing DocType
@@ -38,27 +39,51 @@ func (h *DevHandler) RegisterDevRoutes(mux *http.ServeMux, version string) {
 	mux.HandleFunc("DELETE "+p+"/doctype/{name}", h.HandleDeleteDocType)
 }
 
-// HandleListApps returns the list of installed apps (subdirectories
-// containing a manifest.yaml file).
+// HandleListApps returns the list of installed apps with their modules.
+// Each app entry includes the app name and the module names from its manifest.
 func (h *DevHandler) HandleListApps(w http.ResponseWriter, r *http.Request) {
 	entries, err := os.ReadDir(h.appsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusOK, map[string]any{"data": []string{}})
+			writeJSON(w, http.StatusOK, map[string]any{"data": []any{}})
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	apps := make([]string, 0)
+	type appInfo struct {
+		Name    string   `json:"name"`
+		Modules []string `json:"modules"`
+	}
+
+	apps := make([]appInfo, 0)
 	for _, e := range entries {
-		if e.IsDir() {
-			mPath := filepath.Join(h.appsDir, e.Name(), "manifest.yaml")
-			if _, err := os.Stat(mPath); err == nil {
-				apps = append(apps, e.Name())
+		if !e.IsDir() {
+			continue
+		}
+		mPath := filepath.Join(h.appsDir, e.Name(), "manifest.yaml")
+		data, err := os.ReadFile(mPath)
+		if err != nil {
+			continue // skip dirs without manifest
+		}
+
+		// Parse module names from manifest.yaml
+		var manifest struct {
+			Modules []struct {
+				Name string `yaml:"name"`
+			} `yaml:"modules"`
+		}
+		modules := []string{}
+		if yaml.Unmarshal(data, &manifest) == nil {
+			for _, m := range manifest.Modules {
+				if m.Name != "" {
+					modules = append(modules, m.Name)
+				}
 			}
 		}
+
+		apps = append(apps, appInfo{Name: e.Name(), Modules: modules})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": apps})
 }
