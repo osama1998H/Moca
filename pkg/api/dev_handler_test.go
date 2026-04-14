@@ -24,7 +24,10 @@ func TestDevHandler_ListApps(t *testing.T) {
 	}
 
 	var resp struct {
-		Data []string `json:"data"`
+		Data []struct {
+			Name    string   `json:"name"`
+			Modules []string `json:"modules"`
+		} `json:"data"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -45,7 +48,7 @@ func TestDevHandler_ListApps_WithApps(t *testing.T) {
 	if err := os.MkdirAll(appWithManifest, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(appWithManifest, "manifest.yaml"), []byte("name: myapp\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(appWithManifest, "manifest.yaml"), []byte("name: myapp\nmodules:\n  - name: Selling\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -65,7 +68,10 @@ func TestDevHandler_ListApps_WithApps(t *testing.T) {
 	}
 
 	var resp struct {
-		Data []string `json:"data"`
+		Data []struct {
+			Name    string   `json:"name"`
+			Modules []string `json:"modules"`
+		} `json:"data"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -73,8 +79,11 @@ func TestDevHandler_ListApps_WithApps(t *testing.T) {
 	if len(resp.Data) != 1 {
 		t.Fatalf("expected 1 app, got %d: %v", len(resp.Data), resp.Data)
 	}
-	if resp.Data[0] != "myapp" {
-		t.Fatalf("expected 'myapp', got %q", resp.Data[0])
+	if resp.Data[0].Name != "myapp" {
+		t.Fatalf("expected 'myapp', got %q", resp.Data[0].Name)
+	}
+	if len(resp.Data[0].Modules) != 1 || resp.Data[0].Modules[0] != "Selling" {
+		t.Fatalf("expected modules [Selling], got %v", resp.Data[0].Modules)
 	}
 }
 
