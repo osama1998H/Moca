@@ -125,6 +125,7 @@ type DevelopmentConfig struct {
 	AutoReload    bool   `yaml:"auto_reload,omitempty"`
 	DeskDevServer bool   `yaml:"desk_dev_server,omitempty"`
 	EnablePprof   bool   `yaml:"enable_pprof,omitempty"`
+	DeveloperMode bool   `yaml:"developer_mode,omitempty"`
 }
 
 // ObservabilityConfig holds settings for metrics, tracing, and diagnostics.

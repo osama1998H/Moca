@@ -41,6 +41,7 @@ type ServerConfig struct {
 	Host      string
 	Version   string
 	StaticDir string
+	AppsDir   string
 	Port      int
 }
 
@@ -347,6 +348,13 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		gw.Mux().HandleFunc("GET /debug/pprof/symbol", pprof.Symbol)
 		gw.Mux().HandleFunc("GET /debug/pprof/trace", pprof.Trace)
 		logger.Info("pprof debug endpoints enabled at /debug/pprof/")
+	}
+
+	// ── Dev API endpoints (developer mode only) ────────────────────────
+	if cfg.Config != nil && cfg.Config.Development.DeveloperMode && cfg.AppsDir != "" {
+		devHandler := api.NewDevHandler(cfg.AppsDir, registry, logger)
+		devHandler.RegisterDevRoutes(gw.Mux(), "v1")
+		logger.Info("dev API endpoints enabled at /api/v1/dev/")
 	}
 
 	// OpenAPI spec and Swagger UI documentation handler.

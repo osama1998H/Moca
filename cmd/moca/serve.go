@@ -80,6 +80,7 @@ func runServe(cmd *cobra.Command, _ []string) error {
 		Port:      port,
 		Version:   Version,
 		StaticDir: filepath.Join(projectRoot, "desk", "dist"),
+		AppsDir:   filepath.Join(projectRoot, "apps"),
 	})
 	if err != nil {
 		return output.NewCLIError("Failed to start server").
