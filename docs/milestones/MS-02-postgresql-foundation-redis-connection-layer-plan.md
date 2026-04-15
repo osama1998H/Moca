@@ -35,7 +35,7 @@ Without MS-02, no data can be stored, no tenant can be isolated, and no downstre
 | `MOCA_SYSTEM_DESIGN.md` | ADR-001 | 2063-2067 | Schema-per-tenant decision rationale |
 | `docs/blocker-resolution-strategies.md` | Blocker 2 | 66-177 | Detailed DBManager implementation: per-site pool registry, ForSite double-checked locking, assertSchema, EvictIdlePools |
 | `docs/moca-database-decision-report.md` | PG validation | 109-151 | Confirms MS-02 design is PG-specific |
-| `docs/MS-01-project-structure-configuration-plan.md` | Context | 9-193 | Upstream: config system, explicit "no DB connections" in MS-01 scope |
+| `docs/milestones/MS-01-project-structure-configuration-plan.md` | Context | 9-193 | Upstream: config system, explicit "no DB connections" in MS-01 scope |
 
 ## Research Notes
 

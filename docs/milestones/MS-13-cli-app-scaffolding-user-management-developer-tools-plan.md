@@ -345,8 +345,8 @@ No web research was needed. All implementation patterns are well-documented in t
 - **Why this task exists:** The multi-module workspace design from MS-00 only covered local composition. The short-term submodule-tagging workaround fixed alpha releases, but it kept builtin core on the wrong architectural boundary. Folding builtin core into the root module removes the release-engineering debt before beta.
 - **Dependencies:** MS-13-T1 (completed), MS-00-T1 (completed), MS-00-T4 (completed)
 - **Inputs / References:**
-  - `docs/dx-test-session-report.md` — Issue #5 root cause and recommended fix
-  - `docs/ADR-003-go-workspace-composition.md` — local replace + go.work policy
+  - `docs/dx/dx-test-session-report.md` — Issue #5 root cause and recommended fix
+  - `docs/adr/ADR-003-go-workspace-composition.md` — local replace + go.work policy
   - `.github/workflows/release.yml` — current root-tag-only release pipeline
 - **Deliverable:**
   - Builtin core package lives under `pkg/builtin/core`

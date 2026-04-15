@@ -681,7 +681,7 @@ The vast majority of desk source files require **zero modifications**:
 | `MOCA_SYSTEM_DESIGN.md` | Section 15 (Framework Package Layout): add desk package structure; frontend architecture notes |
 | `Architecture.md` | "Frontend Architecture" section: expand three-layer composition model with concrete examples |
 | `ROADMAP.md` | Note desk distribution as part of current milestone work |
-| `docs/MS-17-react-desk-foundation-plan.md` | Add desk distribution deliverables |
+| `docs/milestones/MS-17-react-desk-foundation-plan.md` | Add desk distribution deliverables |
 | `CLAUDE.md` | Update project structure section with desk package info |
 
 ---

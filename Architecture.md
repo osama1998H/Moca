@@ -1,6 +1,6 @@
 # Architecture
 
-> A high-level guide to how Moca is structured, how the pieces fit together, and the key decisions behind the design. For the full specification see [`MOCA_SYSTEM_DESIGN.md`](./MOCA_SYSTEM_DESIGN.md) and [`MOCA_CLI_SYSTEM_DESIGN.md`](./MOCA_CLI_SYSTEM_DESIGN.md).
+> A high-level guide to how Moca is structured, how the pieces fit together, and the key decisions behind the design. For the full specification see [`MOCA_SYSTEM_DESIGN.md`](./docs/MOCA_SYSTEM_DESIGN.md) and [`MOCA_CLI_SYSTEM_DESIGN.md`](./docs/MOCA_CLI_SYSTEM_DESIGN.md).
 
 ---
 
@@ -323,8 +323,8 @@ Moca follows a 30-milestone roadmap across four workstreams (Core, CLI, Frontend
 
 | Document | Contents |
 |----------|----------|
-| [`MOCA_SYSTEM_DESIGN.md`](./MOCA_SYSTEM_DESIGN.md) | Complete framework specification — MetaType, Document Runtime, API layer, permissions, hooks, workflows, database, caching, queuing, Kafka, frontend, multitenancy, observability |
-| [`MOCA_CLI_SYSTEM_DESIGN.md`](./MOCA_CLI_SYSTEM_DESIGN.md) | CLI tool architecture — 152 commands across 23 groups, context detection, internal packages |
+| [`MOCA_SYSTEM_DESIGN.md`](./docs/MOCA_SYSTEM_DESIGN.md) | Complete framework specification — MetaType, Document Runtime, API layer, permissions, hooks, workflows, database, caching, queuing, Kafka, frontend, multitenancy, observability |
+| [`MOCA_CLI_SYSTEM_DESIGN.md`](./docs/MOCA_CLI_SYSTEM_DESIGN.md) | CLI tool architecture — 152 commands across 23 groups, context detection, internal packages |
 | [`ROADMAP.md`](./ROADMAP.md) | 30-milestone roadmap with dependency graph and critical path |
 | [`SECURITY.md`](./SECURITY.md) | Security policy, vulnerability reporting, threat model |
 | [`docs/blocker-resolution-strategies.md`](./docs/blocker-resolution-strategies.md) | Solutions for 4 critical architectural blockers |

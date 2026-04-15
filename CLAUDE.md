@@ -49,37 +49,37 @@ All services use tmpfs and health checks.
 
 | File | Purpose |
 |------|---------|
-| `MOCA_SYSTEM_DESIGN.md` | Full framework architecture — MetaType, Document Runtime, API layer, permissions, hooks, workflows, database, caching, queuing, Kafka, React frontend, multitenancy, observability |
-| `MOCA_CLI_SYSTEM_DESIGN.md` | CLI tool architecture — 152 commands across 23 command groups, context detection, internal packages |
+| `docs/MOCA_SYSTEM_DESIGN.md` | Full framework architecture — MetaType, Document Runtime, API layer, permissions, hooks, workflows, database, caching, queuing, Kafka, React frontend, multitenancy, observability |
+| `docs/MOCA_CLI_SYSTEM_DESIGN.md` | CLI tool architecture — 152 commands across 23 command groups, context detection, internal packages |
 | `ROADMAP.md` | 30-milestone roadmap (MS-00 to MS-29), dependency graph, critical path, ~72 weeks to v1.0 |
-| `docs/MS-00-architecture-validation-spikes-plan.md` | MS-00: Architecture validation spikes (complete) |
-| `docs/MS-01-project-structure-configuration-plan.md` | MS-01: Project structure & config (complete) |
-| `docs/MS-02-postgresql-foundation-redis-connection-layer-plan.md` | MS-02: PostgreSQL & Redis foundation (complete) |
-| `docs/MS-03-metadata-registry-plan.md` | MS-03: Metadata registry (complete) |
-| `docs/MS-04-document-runtime-plan.md` | MS-04: Document runtime (complete) |
-| `docs/MS-05-query-engine-and-report-foundation-plan.md` | MS-05: Query engine & reports (complete) |
-| `docs/MS-06-rest-api-layer-plan.md` | MS-06: REST API layer (complete) |
-| `docs/MS-07-cli-foundation-plan.md` | MS-07: CLI foundation (complete) |
-| `docs/MS-08-hook-registry-and-app-system-foundation-plan.md` | MS-08: Hook registry & app system (complete) |
-| `docs/MS-09-cli-project-init-site-and-app-commands-plan.md` | MS-09: CLI init, site, app commands (complete) |
-| `docs/MS-10-dev-server-process-management-hot-reload-plan.md` | MS-10: Dev server & hot reload (complete) |
-| `docs/MS-11-cli-operational-commands-plan.md` | MS-11: CLI operational commands — DB, backup, config (complete) |
-| `docs/MS-12-multitenancy-plan.md` | MS-12: Multitenancy — tenant isolation, schema management (complete) |
-| `docs/MS-13-cli-app-scaffolding-user-management-developer-tools-plan.md` | MS-13: App scaffolding, user management, dev tools (complete) |
-| `docs/MS-14-permission-engine-role-based-field-level-row-level-plan.md` | MS-14: Permission engine — RBAC, FLS, RLS (complete) |
-| `docs/MS-15-background-jobs-scheduler-kafka-redis-events-search-sync-plan.md` | MS-15: Background jobs, scheduler, Kafka/Redis events, search sync (complete) |
-| `docs/MS-16-cli-queue-events-search-monitor-log-commands-plan.md` | MS-16: CLI queue/events/search/monitor commands (complete) |
-| `docs/MS-17-react-desk-foundation-plan.md` | MS-17: React Desk foundation (in progress) |
+| `docs/milestones/MS-00-architecture-validation-spikes-plan.md` | MS-00: Architecture validation spikes (complete) |
+| `docs/milestones/MS-01-project-structure-configuration-plan.md` | MS-01: Project structure & config (complete) |
+| `docs/milestones/MS-02-postgresql-foundation-redis-connection-layer-plan.md` | MS-02: PostgreSQL & Redis foundation (complete) |
+| `docs/milestones/MS-03-metadata-registry-plan.md` | MS-03: Metadata registry (complete) |
+| `docs/milestones/MS-04-document-runtime-plan.md` | MS-04: Document runtime (complete) |
+| `docs/milestones/MS-05-query-engine-and-report-foundation-plan.md` | MS-05: Query engine & reports (complete) |
+| `docs/milestones/MS-06-rest-api-layer-plan.md` | MS-06: REST API layer (complete) |
+| `docs/milestones/MS-07-cli-foundation-plan.md` | MS-07: CLI foundation (complete) |
+| `docs/milestones/MS-08-hook-registry-and-app-system-foundation-plan.md` | MS-08: Hook registry & app system (complete) |
+| `docs/milestones/MS-09-cli-project-init-site-and-app-commands-plan.md` | MS-09: CLI init, site, app commands (complete) |
+| `docs/milestones/MS-10-dev-server-process-management-hot-reload-plan.md` | MS-10: Dev server & hot reload (complete) |
+| `docs/milestones/MS-11-cli-operational-commands-plan.md` | MS-11: CLI operational commands — DB, backup, config (complete) |
+| `docs/milestones/MS-12-multitenancy-plan.md` | MS-12: Multitenancy — tenant isolation, schema management (complete) |
+| `docs/milestones/MS-13-cli-app-scaffolding-user-management-developer-tools-plan.md` | MS-13: App scaffolding, user management, dev tools (complete) |
+| `docs/milestones/MS-14-permission-engine-role-based-field-level-row-level-plan.md` | MS-14: Permission engine — RBAC, FLS, RLS (complete) |
+| `docs/milestones/MS-15-background-jobs-scheduler-kafka-redis-events-search-sync-plan.md` | MS-15: Background jobs, scheduler, Kafka/Redis events, search sync (complete) |
+| `docs/milestones/MS-16-cli-queue-events-search-monitor-log-commands-plan.md` | MS-16: CLI queue/events/search/monitor commands (complete) |
+| `docs/milestones/MS-17-react-desk-foundation-plan.md` | MS-17: React Desk foundation (in progress) |
 | `docs/MVP-VALIDATION-REPORT.md` | MVP release validation audit (MS-00 through MS-10) |
 | `docs/moca-database-decision-report.md` | ADR: PostgreSQL 16+ with schema-per-tenant over CockroachDB |
 | `docs/blocker-resolution-strategies.md` | Solutions for 4 critical architectural blockers |
 | `docs/moca-cross-doc-mismatch-report.md` | Cross-document inconsistency resolution report |
 | `docs/roadmap-gap-fix-summary.md` | Roadmap validation and gap fixes |
-| `docs/ADR-001-pg-tenant-isolation.md` | ADR: PostgreSQL schema-per-tenant via per-pool registry |
-| `docs/ADR-002-redis-streams-queue.md` | ADR: Redis Streams as job queue over dedicated broker |
-| `docs/ADR-003-go-workspace-composition.md` | ADR: Go workspace multi-module composition |
-| `docs/ADR-005-cobra-cli-extension.md` | ADR: Cobra CLI extension pattern (init + blank imports) |
-| `docs/ADR-006-meilisearch-tenant-isolation.md` | ADR: Meilisearch index-per-tenant isolation |
+| `docs/adr/ADR-001-pg-tenant-isolation.md` | ADR: PostgreSQL schema-per-tenant via per-pool registry |
+| `docs/adr/ADR-002-redis-streams-queue.md` | ADR: Redis Streams as job queue over dedicated broker |
+| `docs/adr/ADR-003-go-workspace-composition.md` | ADR: Go workspace multi-module composition |
+| `docs/adr/ADR-005-cobra-cli-extension.md` | ADR: Cobra CLI extension pattern (init + blank imports) |
+| `docs/adr/ADR-006-meilisearch-tenant-isolation.md` | ADR: Meilisearch index-per-tenant isolation |
 
 ## Technology Stack
 

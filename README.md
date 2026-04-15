@@ -155,8 +155,8 @@ docs/                 # Design documents, milestone plans & ADRs
 | Document | Description |
 |----------|-------------|
 | [Roadmap](ROADMAP.md) | 30-milestone roadmap to v1.0 (~72 weeks), dependency graph, critical path |
-| [System Design](MOCA_SYSTEM_DESIGN.md) | Full framework architecture — MetaType, Document Runtime, API, permissions, hooks, workflows, database, frontend, multitenancy, observability |
-| [CLI Design](MOCA_CLI_SYSTEM_DESIGN.md) | CLI tool architecture — 152 commands across 23 command groups |
+| [System Design](docs/MOCA_SYSTEM_DESIGN.md) | Full framework architecture — MetaType, Document Runtime, API, permissions, hooks, workflows, database, frontend, multitenancy, observability |
+| [CLI Design](docs/MOCA_CLI_SYSTEM_DESIGN.md) | CLI tool architecture — 152 commands across 23 command groups |
 | [Database Decision](docs/moca-database-decision-report.md) | ADR: PostgreSQL 16+ with schema-per-tenant over CockroachDB |
 | [Blocker Resolutions](docs/blocker-resolution-strategies.md) | Solutions for 4 critical architectural blockers |
 | [Cross-Doc Review](docs/moca-cross-doc-mismatch-report.md) | Cross-document consistency review (30 resolved mismatches) |

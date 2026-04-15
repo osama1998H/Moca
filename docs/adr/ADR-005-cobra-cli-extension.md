@@ -199,7 +199,7 @@ The `moca build server` command will generate a `main.go` with blank imports for
 
 - `MOCA_CLI_SYSTEM_DESIGN.md` §8, lines 3363–3406 — Extension System
 - `MOCA_CLI_SYSTEM_DESIGN.md` lines 2281–2296 — `moca build server`
-- `docs/MS-00-architecture-validation-spikes-plan.md` Task MS-00-T4
+- `docs/milestones/MS-00-architecture-validation-spikes-plan.md` Task MS-00-T4
 - `ROADMAP.md` line 123 — Spike 5 acceptance criterion
 - `ADR-003-go-workspace-composition.md` — Go workspace validation (dependency)
 - Cobra v1.8.1 API: `cobra.Command`, `AddCommand`, `Execute`

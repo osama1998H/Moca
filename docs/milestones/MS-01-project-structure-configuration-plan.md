@@ -27,7 +27,7 @@ MOCA is a metadata-driven, multitenant framework where a single `MetaType` defin
 | `MOCA_SYSTEM_DESIGN.md` | §15 Framework Package Layout | 1924-2057 | 15 pkg/ packages, 5 cmd/ binaries, desk/, apps/ |
 | `ROADMAP.md` | MS-01 | 220-254 | Milestone scope, deliverables, acceptance criteria |
 | `ROADMAP.md` | MS-02 | 257-295 | Downstream dependency — needs config system |
-| `docs/MS-00-architecture-validation-spikes-plan.md` | Full | — | Context on completed MS-00 scaffolding |
+| `docs/milestones/MS-00-architecture-validation-spikes-plan.md` | Full | — | Context on completed MS-00 scaffolding |
 
 ## Research Notes
 

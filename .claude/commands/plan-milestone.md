@@ -75,7 +75,7 @@ For each task include:
 
 Create exactly one Markdown file for the selected milestone.
 
-**File path:** `docs/<milestone-id>-<milestone-name>-plan.md`
+**File path:** `docs/milestones/<milestone-id>-<milestone-name>-plan.md`
 
 **Naming rules:**
 - Convert title to lowercase
@@ -83,8 +83,8 @@ Create exactly one Markdown file for the selected milestone.
 - Remove special characters
 
 **Examples:**
-- `docs/MS-01-project-structure-configuration-plan.md`
-- `docs/MS-09-cli-project-init-site-and-app-commands-plan.md`
+- `docs/milestones/MS-01-project-structure-configuration-plan.md`
+- `docs/milestones/MS-09-cli-project-init-site-and-app-commands-plan.md`
 
 ---
 
@@ -114,8 +114,8 @@ Create exactly one Markdown file for the selected milestone.
 
 | File | Section | Lines | Relevance |
 |------|---------|-------|-----------|
-| MOCA_SYSTEM_DESIGN.md | §X.Y Title | L-L | ... |
-| MOCA_CLI_SYSTEM_DESIGN.md | §X.Y Title | L-L | ... |
+| docs/MOCA_SYSTEM_DESIGN.md | §X.Y Title | L-L | ... |
+| docs/MOCA_CLI_SYSTEM_DESIGN.md | §X.Y Title | L-L | ... |
 | ROADMAP.md | $ARGUMENTS | L-L | Milestone definition |
 
 ## Research Notes
@@ -180,4 +180,4 @@ After writing the plan file, print a short summary:
 - **Milestone analyzed:** $ARGUMENTS — [title]
 - **Total tasks created:** X
 - **Biggest risk:** [one sentence]
-- **Output file:** docs/[filename].md
+- **Output file:** docs/milestones/[filename].md

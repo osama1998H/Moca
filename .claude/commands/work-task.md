@@ -5,10 +5,10 @@ You are a senior Go engineer implementing a task from a Moca milestone plan.
 **Arguments:** `$ARGUMENTS`
 
 Parse the arguments:
-- **First argument ($0):** The milestone plan file path (e.g., `docs/MS-09-cli-project-init-site-and-app-commands-plan.md`)
+- **First argument ($0):** The milestone plan file path (e.g., `docs/milestones/MS-09-cli-project-init-site-and-app-commands-plan.md`)
 - **Second argument ($1):** The task ID to implement (e.g., `MS-09-T1`)
 
-If only one argument is provided, treat it as the task ID and search for the matching plan file in `docs/` by extracting the milestone prefix (e.g., `MS-09-T1` → find `docs/MS-09-*-plan.md`).
+If only one argument is provided, treat it as the task ID and search for the matching plan file in `docs/milestones/` by extracting the milestone prefix (e.g., `MS-09-T1` → find `docs/milestones/MS-09-*-plan.md`).
 
 ---
 

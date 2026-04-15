@@ -25,7 +25,7 @@ The primary finding of this audit is a set of **documentation hygiene issues** i
 ### MS-00: Architecture Validation Spikes and Project Scaffold
 **Status:** Complete
 **Completeness:** 5/5 deliverables fulfilled, 5/5 acceptance criteria met
-**Plan tasks:** 5/5 tasks marked completed in `docs/MS-00-architecture-validation-spikes-plan.md`
+**Plan tasks:** 5/5 tasks marked completed in `docs/milestones/MS-00-architecture-validation-spikes-plan.md`
 
 #### Fulfilled
 - Root `go.mod` for `github.com/osama1998H/moca` -- `go.mod`
@@ -49,7 +49,7 @@ The primary finding of this audit is a set of **documentation hygiene issues** i
 ### MS-01: Project Structure, Configuration, and Go Module Layout
 **Status:** Complete
 **Completeness:** 5/5 deliverables fulfilled, 6/6 acceptance criteria met
-**Plan tasks:** 4/4 tasks marked completed in `docs/MS-01-project-structure-configuration-plan.md`
+**Plan tasks:** 4/4 tasks marked completed in `docs/milestones/MS-01-project-structure-configuration-plan.md`
 
 #### Fulfilled
 - Complete `pkg/` directory tree with 15 packages (meta, document, api, orm, auth, hooks, workflow, tenancy, queue, events, search, storage, ui, notify, observe) -- each with `doc.go`
@@ -70,7 +70,7 @@ None identified.
 ### MS-02: PostgreSQL Foundation and Redis Connection Layer
 **Status:** Complete
 **Completeness:** 7/7 deliverables fulfilled, 6/6 acceptance criteria met
-**Plan tasks:** 4/4 tasks marked completed in `docs/MS-02-postgresql-foundation-redis-connection-layer-plan.md`
+**Plan tasks:** 4/4 tasks marked completed in `docs/milestones/MS-02-postgresql-foundation-redis-connection-layer-plan.md`
 
 #### Fulfilled
 - `pkg/orm/postgres.go`: `DBManager` with per-site connection pools, `AfterConnect` for schema isolation
@@ -92,7 +92,7 @@ None identified.
 ### MS-03: Metadata Registry -- MetaType, FieldDef, Compiler, Redis Cache
 **Status:** Complete
 **Completeness:** 7/7 deliverables fulfilled, 6/6 acceptance criteria met
-**Plan tasks:** 4/4 tasks marked completed in `docs/MS-03-metadata-registry-plan.md`
+**Plan tasks:** 4/4 tasks marked completed in `docs/milestones/MS-03-metadata-registry-plan.md`
 
 #### Fulfilled
 - `MetaType` struct with Identity, Schema, Variants, Behavior, API/UI, Versioning fields -- `pkg/meta/metatype.go`
@@ -114,7 +114,7 @@ None identified.
 ### MS-04: Document Runtime -- DynamicDoc, Lifecycle Engine, Naming, Validation
 **Status:** Complete
 **Completeness:** 7/7 deliverables fulfilled, 6/6 acceptance criteria met
-**Plan tasks:** 5/5 tasks marked completed in `docs/MS-04-document-runtime-plan.md`
+**Plan tasks:** 5/5 tasks marked completed in `docs/milestones/MS-04-document-runtime-plan.md`
 
 #### Fulfilled
 - `Document` interface with Get/Set/AsMap/ToJSON/GetChild/AddChild/IsNew/IsModified/ModifiedFields -- `pkg/document/document.go`
@@ -137,7 +137,7 @@ None identified.
 ### MS-05: Query Engine and Report Foundation
 **Status:** Complete
 **Completeness:** 7/7 deliverables fulfilled, 6/6 acceptance criteria met
-**Plan tasks:** 4/4 tasks marked completed in `docs/MS-05-query-engine-and-report-foundation-plan.md`
+**Plan tasks:** 4/4 tasks marked completed in `docs/milestones/MS-05-query-engine-and-report-foundation-plan.md`
 
 #### Fulfilled
 - `QueryBuilder` with fluent API (For, Fields, Where, OrderBy, GroupBy, Limit, Offset, Build) -- `pkg/orm/query.go`
@@ -156,7 +156,7 @@ None identified.
 ### MS-06: REST API Layer -- Auto-Generated CRUD, Middleware, Rate Limiting
 **Status:** Complete
 **Completeness:** 8/8 deliverables fulfilled, 6/6 acceptance criteria met
-**Plan tasks:** 4/4 tasks marked completed in `docs/MS-06-rest-api-layer-plan.md`
+**Plan tasks:** 4/4 tasks marked completed in `docs/milestones/MS-06-rest-api-layer-plan.md`
 
 #### Fulfilled
 - HTTP router with middleware chain (RequestID -> CORS -> Tenant -> Auth -> RateLimit -> Version -> ServeMux) -- `pkg/api/gateway.go`
@@ -179,7 +179,7 @@ None identified.
 ### MS-07: CLI Foundation -- Context Resolver, Output Layer, Cobra Scaffold
 **Status:** Complete
 **Completeness:** 9/9 deliverables fulfilled, 6/6 acceptance criteria met
-**Plan tasks:** 4/4 tasks marked completed in `docs/MS-07-cli-foundation-plan.md`
+**Plan tasks:** 4/4 tasks marked completed in `docs/milestones/MS-07-cli-foundation-plan.md`
 
 #### Fulfilled
 - `internal/context/resolver.go`: `Resolve() -> *CLIContext` with 6-level priority pipeline (flags > env > state files > config > auto-detect > defaults) -- `internal/context/`
@@ -202,7 +202,7 @@ None identified.
 ### MS-08: Hook Registry and App System Foundation
 **Status:** Complete
 **Completeness:** 7/7 deliverables fulfilled, 6/6 acceptance criteria met
-**Plan tasks:** 5/5 tasks marked completed in `docs/MS-08-hook-registry-and-app-system-foundation-plan.md`
+**Plan tasks:** 5/5 tasks marked completed in `docs/milestones/MS-08-hook-registry-and-app-system-foundation-plan.md`
 
 #### Fulfilled
 - `HookRegistry` with `Register(doctype, event, handler)`, `RegisterGlobal`, `Resolve` sorted by priority -- `pkg/hooks/registry.go`
@@ -227,7 +227,7 @@ None identified.
 ### MS-09: CLI Project Init, Site, and App Commands
 **Status:** Complete
 **Completeness:** 7/7 deliverables fulfilled, 8/8 acceptance criteria met
-**Plan tasks:** 4/4 tasks marked completed in `docs/MS-09-cli-project-init-site-and-app-commands-plan.md`
+**Plan tasks:** 4/4 tasks marked completed in `docs/milestones/MS-09-cli-project-init-site-and-app-commands-plan.md`
 
 #### Fulfilled
 - `MigrationRunner` with `Pending()`, `Apply()` (topological sort by DependsOn), `Rollback()`, `DryRun()` -- `pkg/orm/migrate.go`
@@ -249,7 +249,7 @@ None identified.
 ### MS-10: Dev Server, Process Management, and Hot Reload
 **Status:** Complete
 **Completeness:** 7/7 deliverables fulfilled, 6/6 acceptance criteria met
-**Plan tasks:** 4/4 tasks marked completed in `docs/MS-10-dev-server-process-management-hot-reload-plan.md`
+**Plan tasks:** 4/4 tasks marked completed in `docs/milestones/MS-10-dev-server-process-management-hot-reload-plan.md`
 
 #### Fulfilled
 - `Supervisor` goroutine manager with `Subsystem` (Name, Run, Critical), graceful shutdown, critical failure cascade -- `internal/process/supervisor.go`

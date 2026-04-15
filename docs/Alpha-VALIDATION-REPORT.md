@@ -29,7 +29,7 @@ The primary findings are: (1) **ROADMAP.md status fields are stale** -- MS-11 th
 ### MS-11: CLI Operational Commands -- Site Ops, Database, Backup, Config, Cache
 **Status:** Complete
 **Completeness:** 6/6 acceptance criteria met
-**Plan tasks:** 4/4 tasks marked completed in `docs/MS-11-cli-operational-commands-plan.md`
+**Plan tasks:** 4/4 tasks marked completed in `docs/milestones/MS-11-cli-operational-commands-plan.md`
 
 #### Fulfilled
 - **Backup package** (`pkg/backup/`) -- 7 files (538 lines): `Create()` wraps `pg_dump --schema=` with gzip compression and SHA-256 checksums; `Restore()` drops/recreates schema and pipes through `psql`; `List()` scans backup directory with regex parsing; `Verify()` performs basic + deep integrity checks; `CheckDependencies()` validates `pg_dump`/`psql` on PATH
@@ -50,7 +50,7 @@ The primary findings are: (1) **ROADMAP.md status fields are stale** -- MS-11 th
 ### MS-12: Multitenancy -- Site Resolver Middleware, Per-Site Isolation
 **Status:** Complete
 **Completeness:** 8/8 acceptance criteria met
-**Plan tasks:** 4/4 tasks marked completed in `docs/MS-12-multitenancy-plan.md`
+**Plan tasks:** 4/4 tasks marked completed in `docs/milestones/MS-12-multitenancy-plan.md`
 
 #### Fulfilled
 - **SiteContext** (`pkg/tenancy/site.go`, 40 lines) -- 8 fields (Pool, Config, Name, DBSchema, Status, RedisPrefix, StorageBucket, InstalledApps), `IsActive()`, `PrefixRedisKey()`, `PrefixSearchIndex()`, `ErrSiteDisabled` sentinel
@@ -68,7 +68,7 @@ The primary findings are: (1) **ROADMAP.md status fields are stale** -- MS-11 th
 ### MS-13: CLI App Scaffolding, User Management, and Developer Tools
 **Status:** Complete
 **Completeness:** 6/6 acceptance criteria met
-**Plan tasks:** 5/5 tasks marked completed in `docs/MS-13-cli-app-scaffolding-user-management-developer-tools-plan.md`
+**Plan tasks:** 5/5 tasks marked completed in `docs/milestones/MS-13-cli-app-scaffolding-user-management-developer-tools-plan.md`
 
 #### Fulfilled
 - **Scaffold engine** (`internal/scaffold/scaffold.go`, 371 lines) -- 3 templates (standard/minimal/api-only), creates full directory structure, renders Go templates, updates `go.work`, runs `go mod tidy`; validated by `TestScaffoldApp_Standard` (scaffold_test.go:40)
@@ -88,7 +88,7 @@ The primary findings are: (1) **ROADMAP.md status fields are stale** -- MS-11 th
 ### MS-14: Permission Engine -- Role-Based, Field-Level, Row-Level
 **Status:** Complete
 **Completeness:** 10/10 acceptance criteria met
-**Plan tasks:** 5/5 tasks marked completed in `docs/MS-14-permission-engine-role-based-field-level-row-level-plan.md`
+**Plan tasks:** 5/5 tasks marked completed in `docs/milestones/MS-14-permission-engine-role-based-field-level-row-level-plan.md`
 
 #### Fulfilled
 - **Permission resolution** (`pkg/auth/permission.go`, 156 lines) -- `Perm` bitmask type with 7 constants (Read=1, Write=2, Create=4, Delete=8, Submit=16, Cancel=32, Amend=64), `EffectivePerms`, `ResolvePermissions()` with OR-merge across roles, `MatchCondition` for row-level
@@ -116,7 +116,7 @@ The primary findings are: (1) **ROADMAP.md status fields are stale** -- MS-11 th
 ### MS-15: Background Jobs, Scheduler, Kafka/Redis Events, Search Sync
 **Status:** Complete
 **Completeness:** 6/6 acceptance criteria met
-**Plan tasks:** 5/5 tasks marked completed in `docs/MS-15-background-jobs-scheduler-kafka-redis-events-search-sync-plan.md`
+**Plan tasks:** 5/5 tasks marked completed in `docs/milestones/MS-15-background-jobs-scheduler-kafka-redis-events-search-sync-plan.md`
 
 #### Fulfilled
 - **Job queue** (`pkg/queue/`) -- 19 files (2,935 lines):
@@ -153,7 +153,7 @@ The primary findings are: (1) **ROADMAP.md status fields are stale** -- MS-11 th
 ### MS-16: CLI Queue, Events, Search, Monitor, and Log Commands
 **Status:** Complete
 **Completeness:** 6/8 acceptance criteria fully met, 2/8 met with minor flag name deviations
-**Plan tasks:** 5/5 tasks marked completed in `docs/MS-16-cli-queue-events-search-monitor-log-commands-plan.md`
+**Plan tasks:** 5/5 tasks marked completed in `docs/milestones/MS-16-cli-queue-events-search-monitor-log-commands-plan.md`
 
 #### Fulfilled
 - **Queue commands** (`cmd/moca/queue.go`, ~660 lines) -- `status` (XLEN/XInfoGroups per queue type, `--watch` continuous refresh), `list`, `inspect`, `retry`, `purge`, nested `dead-letter {list, retry, purge}`
@@ -178,7 +178,7 @@ The primary findings are: (1) **ROADMAP.md status fields are stale** -- MS-11 th
 ### MS-17: React Desk Foundation -- App Shell, MetaProvider, FormView, ListView
 **Status:** Complete
 **Completeness:** 6/6 acceptance criteria met
-**Plan tasks:** 4/4 tasks marked completed in `docs/MS-17-react-desk-foundation-plan.md`
+**Plan tasks:** 4/4 tasks marked completed in `docs/milestones/MS-17-react-desk-foundation-plan.md`
 
 #### Fulfilled
 - **Vite project** (`desk/`) -- React 19, TypeScript 6, Vite 8, TailwindCSS 4.2, shadcn, TanStack React Query 5.96, react-router 7, lucide-react, jwt-decode, date-fns, codemirror, react-markdown

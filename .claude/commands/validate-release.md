@@ -19,13 +19,13 @@ Your goal is to produce a single deliverable: `docs/$ARGUMENTS-VALIDATION-REPORT
 
 Read these documents **in full**, line by line. Do not rely on memory — actually read them using the Read tool:
 
-1. **`MOCA_SYSTEM_DESIGN.md`** — the full framework architecture. Pay special attention to every section referenced by the milestones in scope.
+1. **`docs/MOCA_SYSTEM_DESIGN.md`** — the full framework architecture. Pay special attention to every section referenced by the milestones in scope.
 
-2. **`MOCA_CLI_SYSTEM_DESIGN.md`** — the CLI architecture. Pay special attention to every section referenced by the milestones in scope.
+2. **`docs/MOCA_CLI_SYSTEM_DESIGN.md`** — the CLI architecture. Pay special attention to every section referenced by the milestones in scope.
 
 3. **`ROADMAP.md`** — the full roadmap. Read every milestone in scope in detail, including all Scope, Deliverables, Acceptance Criteria, and Design References.
 
-4. **All milestone plan documents** in `docs/` for every milestone in scope (e.g., `docs/MS-XX-*-plan.md`).
+4. **All milestone plan documents** in `docs/milestones/` for every milestone in scope (e.g., `docs/milestones/MS-XX-*-plan.md`).
 
 5. **Supporting documents**:
    - `docs/blocker-resolution-strategies.md`

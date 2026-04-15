@@ -2837,11 +2837,11 @@ git commit -m "docs: update wiki submodule with guide improvements"
 ### Task 20: Final MS-26 Plan Doc Update
 
 **Files:**
-- Modify: `docs/MS-26-documentation-packaging-v1-polish-plan.md` (create if not exists)
+- Modify: `docs/milestones/MS-26-documentation-packaging-v1-polish-plan.md` (create if not exists)
 
 - [ ] **Step 1: Create the milestone plan document**
 
-Create `docs/MS-26-documentation-packaging-v1-polish-plan.md` following the pattern of existing milestone plans (e.g., `docs/MS-16-cli-queue-events-search-monitor-log-commands-plan.md`):
+Create `docs/milestones/MS-26-documentation-packaging-v1-polish-plan.md` following the pattern of existing milestone plans (e.g., `docs/milestones/MS-16-cli-queue-events-search-monitor-log-commands-plan.md`):
 
 ```markdown
 # MS-26: Documentation, Packaging, and v1.0 Polish — Plan
@@ -2892,7 +2892,7 @@ Developer docs, API reference, deployment guides, release packaging (GoReleaser,
 - [ ] **Step 2: Commit**
 
 ```bash
-git add docs/MS-26-documentation-packaging-v1-polish-plan.md
+git add docs/milestones/MS-26-documentation-packaging-v1-polish-plan.md
 git commit -m "docs: add MS-26 milestone plan document"
 ```
 

@@ -2136,7 +2136,7 @@ To avoid ambiguity, the following terms have precise meanings throughout Moca do
 
 The Desk UI is composed from three layers:
 
-1. **Framework Desk** (`moca/desk/`): The base React application — core providers, components, and views. Published as the `@osama1998h/desk` npm package to GitHub Packages (`npm.pkg.github.com`). Projects consume it via `package.json`. See [ADR-007](docs/ADR-007-desk-distribution-and-extensibility.md) for the full distribution model.
+1. **Framework Desk** (`moca/desk/`): The base React application — core providers, components, and views. Published as the `@osama1998h/desk` npm package to GitHub Packages (`npm.pkg.github.com`). Projects consume it via `package.json`. See [ADR-007](docs/adr/ADR-007-desk-distribution-and-extensibility.md) for the full distribution model.
 2. **App Desk Extensions** (declared in `apps/*/desk/desk-manifest.json`): Apps declare desk extensions — field types, pages, sidebar items, and dashboard widgets. Registration uses `registerFieldType()`, `registerPage()`, `registerSidebarItem()`, and `registerDashboardWidget()` APIs.
 3. **Project Desk** (`my-project/desk/`): Project-level overrides for theming, custom routes, or site-specific components in `desk/src/overrides/`.
 
