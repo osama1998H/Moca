@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Moca** is a metadata-driven, multitenant, full-stack business application framework built in Go. It is a spiritual successor to the [Frappe](https://frappeframework.com/) framework (behind ERPNext), redesigned from scratch. A single `MetaType` definition drives database schema, validation, document lifecycle, permissions, API generation, search indexing, and React UI rendering.
 
-**Current state:** v1.0 feature-complete. MS-00 through MS-26 (27 of 30 milestones) are fully implemented and tested. Only post-v1.0 milestones remain: MS-27 (Portal SSR), MS-28 (VirtualDoc/CDC/Advanced), MS-29 (WASM Plugin Marketplace). The codebase includes 264 Go production files, 234 test files, 273 React component files, and a full React SPA with FormView, ListView, DocType Builder, DashboardView, ReportView, and real-time WebSocket support.
+**Current state:** v1.0 feature-complete. 28 of 30 milestones are fully implemented and tested (MS-00 through MS-26 plus MS-28). Only 2 post-v1.0 milestones remain: MS-27 (Portal SSR) and MS-29 (WASM Plugin Marketplace). The codebase includes 264 Go production files, 234 test files, 273 React component files, and a full React SPA with FormView, ListView, DocType Builder, DashboardView, ReportView, and real-time WebSocket support.
 
 ## Build & Development Commands
 

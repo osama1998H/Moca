@@ -165,7 +165,7 @@ docs/                 # Design documents, milestone plans & ADRs
 
 ## Current Status
 
-**v1.0 feature-complete** — 27 of 30 milestones implemented and tested. Only 3 post-v1.0 milestones remain (MS-27, MS-28, MS-29).
+**v1.0 feature-complete** — 28 of 30 milestones implemented and tested. Only 2 post-v1.0 milestones remain: MS-27 (Portal SSR) and MS-29 (WASM Plugin Marketplace).
 
 | Phase | Milestones | What they deliver |
 |-------|-----------|-------------------|
