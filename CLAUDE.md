@@ -36,12 +36,6 @@ make bench-profile      # Capture CPU/memory profiles for a specific benchmark
 make lint               # Run golangci-lint (v2, 5m timeout)
 make clean              # Remove build artifacts and Go caches
 
-# Spike tests (validation prototypes from MS-00)
-make spike-pg           # PostgreSQL tenant isolation spike
-make spike-redis        # Redis Streams spike (uses GOWORK=off)
-make spike-meili        # Meilisearch spike (uses GOWORK=off)
-make spike-gowork       # Go workspace composition spike
-make spike-cobra        # Cobra CLI extension spike
 ```
 
 Integration tests use the `integration` build tag and require Docker. `docker-compose.yml` provides:
@@ -81,6 +75,11 @@ All services use tmpfs and health checks.
 | `docs/blocker-resolution-strategies.md` | Solutions for 4 critical architectural blockers |
 | `docs/moca-cross-doc-mismatch-report.md` | Cross-document inconsistency resolution report |
 | `docs/roadmap-gap-fix-summary.md` | Roadmap validation and gap fixes |
+| `docs/ADR-001-pg-tenant-isolation.md` | ADR: PostgreSQL schema-per-tenant via per-pool registry |
+| `docs/ADR-002-redis-streams-queue.md` | ADR: Redis Streams as job queue over dedicated broker |
+| `docs/ADR-003-go-workspace-composition.md` | ADR: Go workspace multi-module composition |
+| `docs/ADR-005-cobra-cli-extension.md` | ADR: Cobra CLI extension pattern (init + blank imports) |
+| `docs/ADR-006-meilisearch-tenant-isolation.md` | ADR: Meilisearch index-per-tenant isolation |
 
 ## Technology Stack
 
@@ -94,7 +93,7 @@ All services use tmpfs and health checks.
 | Search | Meilisearch v1.12 |
 | Object storage | S3-compatible (MinIO) |
 | CLI framework | Cobra |
-| Linting | golangci-lint v2 (govet, errcheck, staticcheck, unused) — `spikes/` excluded |
+| Linting | golangci-lint v2 (govet, errcheck, staticcheck, unused) |
 | CI | GitHub Actions (build, test, integration test, lint, benchmark, release) |
 
 ## Project Structure
@@ -147,7 +146,6 @@ pkg/builtin/core/    # Builtin framework core doctypes (User, Role, DocType, Mod
       has_role/      # Has-Role join table
       system_settings/ # System settings
 desk/                # React frontend (MS-17, in progress)
-spikes/              # MS-00 validation prototypes (5 spikes, all passing)
 ```
 
 Go multi-module workspace (`go.work`) composes the root module with installable app modules under `apps/`; builtin core lives in the root module at `pkg/builtin/core`.
@@ -182,9 +180,9 @@ CI uses Go 1.26.1 with golangci-lint v2.11.4.
 - **Benchmarks**: Tier 1 packages: `pkg/meta`, `pkg/document`, `pkg/orm`, `pkg/api`, `pkg/hooks`. Results tracked in `bench-latest.txt` / `bench-baseline.txt`.
 - **142+ test files** across the codebase with comprehensive coverage.
 
-## Validated Spike Findings (MS-00)
+## Architecture Decision Records (MS-00)
 
-These ADRs in `spikes/*/` document proven patterns — reference them when implementing production code:
+These ADRs in `docs/` document proven patterns validated during the MS-00 spike phase:
 - **ADR-001** (pg-tenant): `AfterConnect` for search_path, per-site pool registry, app-level idle eviction
 - **ADR-002** (redis-streams): go-redis v9, XAutoClaim for at-least-once delivery, ZADD for scheduled jobs
 - **ADR-003** (go-workspace): MVS resolves correctly, `replace` directives as escape hatch

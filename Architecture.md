@@ -101,7 +101,6 @@ internal/                # Private implementation details
   lockfile/              # App version lockfile management
 
 pkg/builtin/core/        # Builtin framework core doctypes (User, Role, DocType, Module, etc.)
-spikes/                  # MS-00 architecture validation prototypes (5 spikes)
 docs/                    # Milestone plans, ADRs, validation reports
 ```
 

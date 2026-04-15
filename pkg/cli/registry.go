@@ -3,7 +3,7 @@
 // framework-internal commands use explicit constructors called from a wiring file.
 //
 // Design ref: MOCA_CLI_SYSTEM_DESIGN.md §8 (lines 3363–3406)
-// Validated by: spikes/cobra-ext/ADR-005-cobra-cli-extension.md
+// Validated by: docs/ADR-005-cobra-cli-extension.md
 package cli
 
 import (

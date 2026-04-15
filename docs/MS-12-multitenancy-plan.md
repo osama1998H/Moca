@@ -258,7 +258,7 @@ No web research needed. Key findings from codebase exploration:
   - `pkg/orm/postgres.go:155-180` — `EvictIdlePools()` implementation
   - `pkg/orm/postgres_test.go:312-350` — existing eviction tests
   - `internal/serve/server.go:142-171` — `Run()` method where goroutine should be added
-  - `spikes/pg-tenant/ADR-001-pg-tenant-isolation.md:189` — ADR recommending periodic eviction every 5 min
+  - `docs/ADR-001-pg-tenant-isolation.md:189` — ADR recommending periodic eviction every 5 min
 - **Deliverable:**
   - Modified: `internal/serve/server.go`
 - **Acceptance Criteria:**

@@ -139,8 +139,7 @@ pkg/                  # Core framework packages
   observe/            #   Prometheus, OpenTelemetry, logging
 pkg/builtin/core/     # Builtin framework core doctypes (User, Role, DocType, etc.)
 desk/                 # React 19 + TypeScript frontend SPA
-spikes/               # Architecture validation prototypes (MS-00)
-docs/                 # Design documents & milestone plans
+docs/                 # Design documents, milestone plans & ADRs
 ```
 
 ## Key Architectural Decisions

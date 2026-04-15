@@ -25,7 +25,7 @@ Moca is a metadata-driven, multitenant framework. The CLI (`moca` binary) is the
 | `MOCA_CLI_SYSTEM_DESIGN.md` | §7 Error Handling | 3297–3359 | Rich error format (Error/Context/Cause/Fix/Reference) with examples |
 | `MOCA_CLI_SYSTEM_DESIGN.md` | §8 Extension System | 3363–3406 | App command registration via `init()` + `cli.RegisterCommand()` |
 | `MOCA_CLI_SYSTEM_DESIGN.md` | §9 CLI Internal Package Layout | 3410–3516 | Directory structure for `cmd/moca/`, `internal/context/`, `internal/output/` |
-| `spikes/cobra-ext/ADR-005-cobra-cli-extension.md` | Full ADR | — | Validated Cobra registration pattern |
+| `docs/ADR-005-cobra-cli-extension.md` | Full ADR | — | Validated Cobra registration pattern |
 | `spikes/cobra-ext/framework/cmd/root.go` | Registry implementation | 1–108 | Production-ready pattern to promote to `pkg/cli/` |
 | `internal/config/load.go` | `LoadAndResolve()` | — | Config loading function the context resolver will call |
 | `internal/config/types.go` | `ProjectConfig` struct | — | Type that `CLIContext` will carry |

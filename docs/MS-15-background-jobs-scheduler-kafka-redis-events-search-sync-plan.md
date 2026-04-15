@@ -30,8 +30,8 @@ The three standalone binaries (`moca-worker`, `moca-scheduler`, `moca-outbox`) m
 | `MOCA_SYSTEM_DESIGN.md` | §6.4 Transactional Outbox | 1205-1233 | Outbox table DDL, poller pattern |
 | `MOCA_SYSTEM_DESIGN.md` | §6.5 Kafka-Optional Architecture | 1235-1260 | Feature matrix with/without Kafka |
 | `ROADMAP.md` | MS-15 | 845-891 | Milestone definition, acceptance criteria |
-| `spikes/redis-streams/ADR-002-redis-streams-queue.md` | Full | — | Validated: consumer groups, DLQ, delayed jobs |
-| `spikes/meilisearch/ADR-006-meilisearch-tenant-isolation.md` | Full | — | Validated: index-per-tenant, bulk indexing |
+| `docs/ADR-002-redis-streams-queue.md` | Full | — | Validated: consumer groups, DLQ, delayed jobs |
+| `docs/ADR-006-meilisearch-tenant-isolation.md` | Full | — | Validated: index-per-tenant, bulk indexing |
 | `docs/blocker-resolution-strategies.md` | Blocker 4 | 271-387 | Kafka-optional detection layers |
 | `docs/moca-cross-doc-mismatch-report.md` | MISMATCH-004, -006, -019 | — | Kafka fallback, search process, Redis key collision |
 
@@ -90,7 +90,7 @@ No external web research was needed. All implementation patterns are fully valid
 - **Inputs / References:**
   - `MOCA_SYSTEM_DESIGN.md` §5.2 (lines 1073-1115) — stream naming, Job struct, WorkerPool
   - `spikes/redis-streams/main.go` — validated producer/consumer/DLQ patterns
-  - `spikes/redis-streams/ADR-002-redis-streams-queue.md` — architectural decisions
+  - `docs/ADR-002-redis-streams-queue.md` — architectural decisions
   - `internal/drivers/redis.go` — Queue client (db1) ready to use
   - `pkg/queue/doc.go` — existing stub to build upon
   - `internal/serve/stubs.go:10` — `WorkerStub` to replace
@@ -281,7 +281,7 @@ No external web research was needed. All implementation patterns are fully valid
   - `MOCA_SYSTEM_DESIGN.md` §6.4 (lines 1205-1233) — outbox table DDL, poller pattern
   - `MOCA_SYSTEM_DESIGN.md` §6.5 (lines 1235-1260) — search sync behavior with/without Kafka
   - `spikes/meilisearch/main.go` — validated indexer, bulk indexing, search patterns
-  - `spikes/meilisearch/ADR-006-meilisearch-tenant-isolation.md` — index-per-tenant decisions
+  - `docs/ADR-006-meilisearch-tenant-isolation.md` — index-per-tenant decisions
   - `pkg/document/crud.go:520-531` — `insertOutbox()` already writes to `tab_outbox`
   - `pkg/tenancy/site.go:37-38` — `PrefixSearchIndex()` for index naming
   - `internal/config/types.go:94-99` — `SearchConfig`

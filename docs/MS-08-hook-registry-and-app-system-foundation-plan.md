@@ -39,7 +39,7 @@ The explicit priority + dependency ordering in HookRegistry is a deliberate impr
 | `internal/config/parse.go` | YAML parsing | 1-107 | Pattern for AppManifest parser |
 | `pkg/cli/registry.go` | Command registration | full file | init() + blank import pattern (validated in ADR-005) |
 | `pkg/builtin/core/core.go` | Package doc | 1-8 | Empty package to be populated |
-| `spikes/cobra-ext/ADR-005-cobra-cli-extension.md` | Full ADR | all | Validated init() registration pattern |
+| `docs/ADR-005-cobra-cli-extension.md` | Full ADR | all | Validated init() registration pattern |
 
 ## Research Notes
 

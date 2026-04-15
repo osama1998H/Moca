@@ -14,7 +14,6 @@ BENCH_PKGS := ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks
 .PHONY: build build-server build-worker build-scheduler build-moca build-outbox \
         test test-integration test-api-integration lint clean release-local \
         bench bench-integration bench-compare bench-save-baseline bench-profile \
-        spike-pg spike-redis spike-gowork spike-meili spike-cobra \
         docs-generate docs-generate-cli docs-generate-api \
         help
 
@@ -39,12 +38,6 @@ help:
 	@echo "  lint             Run golangci-lint"
 	@echo "  clean            Remove build artifacts"
 	@echo "  release-local    Build release archives locally (GoReleaser snapshot)"
-	@echo ""
-	@echo "  spike-pg         Run PostgreSQL tenant isolation spike (MS-00-T2)"
-	@echo "  spike-redis      Run Redis Streams consumer group spike (MS-00-T3)"
-	@echo "  spike-gowork     Run Go workspace composition spike (MS-00-T4)"
-	@echo "  spike-meili      Run Meilisearch tenant isolation spike (MS-00-T5)"
-	@echo "  spike-cobra      Run Cobra CLI extension spike (MS-00-T4)"
 	@echo ""
 	@echo "  docs-generate    Generate CLI + API reference into wiki/"
 	@echo "  docs-generate-cli Generate CLI reference only"
@@ -149,22 +142,3 @@ docs-generate-cli:
 docs-generate-api:
 	$(GO) run ./cmd/moca docgen api --wiki-dir wiki/
 
-## spike-pg: Run the PostgreSQL schema-per-tenant spike
-spike-pg:
-	cd spikes/pg-tenant && $(GO) test -v -count=1 ./...
-
-## spike-redis: Run the Redis Streams consumer group spike
-spike-redis:
-	cd spikes/redis-streams && GOWORK=off $(GO) test -v -count=1 ./...
-
-## spike-gowork: Run the Go workspace composition spike
-spike-gowork:
-	cd spikes/go-workspace && $(GO) test -v -count=1 ./...
-
-## spike-meili: Run the Meilisearch tenant isolation spike
-spike-meili:
-	cd spikes/meilisearch && GOWORK=off $(GO) test -v -count=1 ./...
-
-## spike-cobra: Run the Cobra CLI extension spike
-spike-cobra:
-	cd spikes/cobra-ext && $(GO) test -v -count=1 ./...

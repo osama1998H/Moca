@@ -145,7 +145,7 @@ Web research was conducted for four library decisions. Key findings:
   - `spikes/pg-tenant/main.go` -- spike implementation
   - `spikes/pg-tenant/main_test.go` -- concurrent access test (100 goroutines x 10 schemas)
   - `spikes/pg-tenant/docker-compose.yml` -- PostgreSQL 16 container
-  - `spikes/pg-tenant/ADR-001-pg-tenant-isolation.md` -- architecture decision record
+  - `docs/ADR-001-pg-tenant-isolation.md` -- architecture decision record
   - All acceptance criteria from ROADMAP lines 119 pass: zero cross-contamination, no statement cache leaks, correct search_path after connection reuse, idle eviction works
 - **Risks / Unknowns:**
   - **pgxpool `PrepareConn` vs `AfterConnect`**: The blocker doc references `BeforeAcquire` which is deprecated. Spike must validate `AfterConnect` (for pool-wide schema setting) and optionally `PrepareConn` (for per-acquire assertion). Both should be tested.
@@ -187,7 +187,7 @@ Web research was conducted for four library decisions. Key findings:
   - `spikes/redis-streams/main.go` -- producer/consumer implementation
   - `spikes/redis-streams/main_test.go` -- test suite covering all 7 scenarios
   - `spikes/redis-streams/docker-compose.yml` -- Redis 7 container
-  - `spikes/redis-streams/ADR-002-redis-streams-queue.md` -- architecture decision record
+  - `docs/ADR-002-redis-streams-queue.md` -- architecture decision record
   - All acceptance criteria from ROADMAP line 121 pass: 100 jobs enqueued, consumed with consumer group, all acknowledged, DLQ receives failed jobs after 3 retries
 - **Risks / Unknowns:**
   - **ROADMAP mentions franz-go**: The ROADMAP line 112 says "verify franz-go or go-redis supports needed semantics." Franz-go is a **Kafka** client, not Redis. The spike should use **go-redis v9** exclusively. This should be noted as a documentation correction.
@@ -241,8 +241,8 @@ Web research was conducted for four library decisions. Key findings:
 - **Deliverable:**
   - `spikes/go-workspace/` -- multi-module workspace with intentional dependency conflicts
   - `spikes/cobra-ext/` -- Cobra command registration from multiple app modules
-  - `spikes/go-workspace/ADR-003-go-workspace-composition.md` -- documents MVS behavior, conflict policy, replace strategy
-  - `spikes/cobra-ext/ADR-005-cobra-cli-extension.md` -- documents init() vs constructor pattern, recommendation
+  - `docs/ADR-003-go-workspace-composition.md` -- documents MVS behavior, conflict policy, replace strategy
+  - `docs/ADR-005-cobra-cli-extension.md` -- documents init() vs constructor pattern, recommendation
   - All acceptance criteria pass: compatible deps compile into one binary, intentional conflict documented, Cobra commands from both apps appear in help
 - **Risks / Unknowns:**
   - **Major version conflicts**: Go treats `pkg` and `pkg/v2` as distinct module paths, which is handled correctly by Go modules. The spike should clarify that "major version conflict" in the traditional sense doesn't exist in Go -- it's a separate import path. The ADR should document this clearly for the team.
@@ -283,7 +283,7 @@ Web research was conducted for four library decisions. Key findings:
   - `spikes/meilisearch/main.go` -- spike implementation
   - `spikes/meilisearch/main_test.go` -- test suite for all 7 scenarios
   - `spikes/meilisearch/docker-compose.yml` -- Meilisearch container
-  - `spikes/meilisearch/ADR-006-meilisearch-tenant-isolation.md` -- architecture decision record with recommended isolation pattern
+  - `docs/ADR-006-meilisearch-tenant-isolation.md` -- architecture decision record with recommended isolation pattern
   - All acceptance criteria from ROADMAP line 122 pass: index created with tenant prefix, 1000 docs indexed, typo-tolerant search works, tenant isolation verified
 - **Risks / Unknowns:**
   - **Meilisearch SDK is pre-1.0** (v0.36.1): API may change between minor versions. Pin the SDK version in `go.mod` and document the version dependency.

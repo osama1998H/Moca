@@ -30,7 +30,7 @@ type GoModConflict struct {
 // highest required version. Major conflicts are returned as GoModConflict values
 // and must be reviewed by the operator before adding the app to the workspace.
 //
-// Promoted from spikes/go-workspace/main.go (MS-00 Spike 3, ADR-003).
+// Promoted from MS-00 Spike 3 (see docs/ADR-003-go-workspace-composition.md).
 func ValidateAppDependencies(appMod *modfile.File, workspaceMods []*modfile.File) []GoModConflict {
 	var conflicts []GoModConflict
 
