@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Moca** is a metadata-driven, multitenant, full-stack business application framework built in Go. It is a spiritual successor to the [Frappe](https://frappeframework.com/) framework (behind ERPNext), redesigned from scratch. A single `MetaType` definition drives database schema, validation, document lifecycle, permissions, API generation, search indexing, and React UI rendering.
 
-**Current state:** MS-00 through MS-16 are fully implemented and tested. MS-17 (React Desk Foundation) is in progress. Completed milestones: Architecture Validation, Project Structure, PostgreSQL/Redis, Metadata Registry, Document Runtime, Query Engine, REST API, CLI Foundation, Hook Registry & App System, CLI Site/App Commands, Dev Server & Hot Reload, CLI Operational Commands, Multitenancy, CLI App Scaffolding & User Management, Permission Engine (RBAC/FLS/RLS), Background Jobs/Scheduler/Kafka/Redis Events/Search Sync, CLI Queue/Events/Search/Monitor Commands.
+**Current state:** v1.0 feature-complete. MS-00 through MS-26 (27 of 30 milestones) are fully implemented and tested. Only post-v1.0 milestones remain: MS-27 (Portal SSR), MS-28 (VirtualDoc/CDC/Advanced), MS-29 (WASM Plugin Marketplace). The codebase includes 264 Go production files, 234 test files, 273 React component files, and a full React SPA with FormView, ListView, DocType Builder, DashboardView, ReportView, and real-time WebSocket support.
 
 ## Build & Development Commands
 
@@ -109,9 +109,9 @@ pkg/
   meta/              # MetaType registry, schema compiler, DDL generator, migrator
   document/          # Document interface, lifecycle, naming, validation, CRUD
   orm/               # PostgreSQL adapter, dynamic query builder, transactions, schema DDL
-  observe/           # Structured logging (slog), health checks
+  observe/           # Structured logging (slog), Prometheus metrics, tracing, health checks
   api/               # REST API gateway, middleware, rate limiting, transformers
-  auth/              # Auth stubs (NoopAuthenticator placeholder — full auth in MS-14)
+  auth/              # OAuth2, SAML/OIDC SSO, JWT sessions, RBAC, field-level & row-level security
   hooks/             # HookRegistry, priority sorting, dependency resolution, DocEventDispatcher
   apps/              # AppManifest parser, app loader, installer
   tenancy/           # SiteManager (create/drop/list sites), SiteContext
@@ -120,10 +120,12 @@ pkg/
   events/            # Event emitter with Kafka + Redis backends, transactional outbox
   search/            # Meilisearch indexer, query execution, sync daemon, multi-tenant indexing
   backup/            # Backup utilities
-  notify/            # Notification stubs
-  ui/                # UI rendering stubs
-  workflow/          # State machine, SLA timers, approval chains (planned — MS-23)
-  storage/           # S3/MinIO adapter (planned — MS-21)
+  notify/            # Email (SMTP/SES), in-app notifications, dispatcher
+  i18n/              # Translation loading, extraction, .mo compilation, middleware
+  encryption/        # Field-level AES-256-GCM encryption hook
+  console/           # Developer console
+  workflow/          # State machine, SLA timers, approval chains, evaluator
+  storage/           # S3/MinIO adapter, local storage, thumbnails
 internal/
   config/            # YAML config parser, validation, merge, env expansion
   drivers/           # Redis driver wrappers (4-DB client factory)
@@ -133,6 +135,9 @@ internal/
   serve/             # HTTP server extraction (composes DB, Redis, Registry, Gateway)
   lockfile/          # Distributed lock support (Redis-backed), PID file management
   scaffold/          # Project scaffolding templates
+  deploy/            # Deploy setup/update/rollback, promotion
+  generate/          # Infrastructure generation (Caddy, NGINX, systemd, Docker, K8s)
+  docgen/            # CLI and API documentation generation
   testutil/          # Test utilities, benchmarking helpers (internal/testutil/bench/)
 pkg/builtin/core/    # Builtin framework core doctypes (User, Role, DocType, Module, SystemSettings)
   modules/core/      # Modular doctype definitions (JSON schemas + controllers)
@@ -145,7 +150,7 @@ pkg/builtin/core/    # Builtin framework core doctypes (User, Role, DocType, Mod
       doc_perm/      # Document permissions
       has_role/      # Has-Role join table
       system_settings/ # System settings
-desk/                # React frontend (MS-17, in progress)
+desk/                # React 19 + TypeScript frontend SPA (FormView, ListView, DocType Builder, Dashboard, Reports)
 ```
 
 Go multi-module workspace (`go.work`) composes the root module with installable app modules under `apps/`; builtin core lives in the root module at `pkg/builtin/core`.
@@ -178,7 +183,7 @@ CI uses Go 1.26.1 with golangci-lint v2.11.4.
 - **Unit tests**: Co-located with source files, run via `make test` (includes race detector).
 - **Integration tests**: Use `//go:build integration` build tag. Require Docker services (PG, Redis, Meilisearch).
 - **Benchmarks**: Tier 1 packages: `pkg/meta`, `pkg/document`, `pkg/orm`, `pkg/api`, `pkg/hooks`. Results tracked in `bench-latest.txt` / `bench-baseline.txt`.
-- **142+ test files** across the codebase with comprehensive coverage.
+- **234 test files** across the codebase with comprehensive coverage.
 
 ## Architecture Decision Records (MS-00)
 

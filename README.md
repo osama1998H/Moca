@@ -21,7 +21,9 @@
   <img src="https://img.shields.io/badge/PostgreSQL-16+-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 16+">
     <img src="https://img.shields.io/badge/Redis-7+-4169E1?logo=redis&logoColor=Red" alt="Redis 7+">
   <img src="https://img.shields.io/badge/React-19+-61DAFB?logo=react&logoColor=black" alt="React 19+">
-  <img src="https://img.shields.io/badge/Release-v0.1.0--mvp-green" alt="Release: v0.1.0-mvp">
+  <a href="https://github.com/osama1998H/Moca/releases/latest">
+    <img src="https://img.shields.io/github/v/release/osama1998H/Moca?color=green&logo=github" alt="Latest Release">
+  </a>
 </p>
 
 ---
@@ -41,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | s
 Or install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | MOCA_VERSION=0.1.0-mvp sh
+curl -fsSL https://raw.githubusercontent.com/osama1998H/moca/main/install.sh | MOCA_VERSION=1.0.3 sh
 ```
 
 Or download directly from [GitHub Releases](https://github.com/osama1998H/moca/releases).
@@ -163,24 +165,22 @@ docs/                 # Design documents, milestone plans & ADRs
 
 ## Current Status
 
-**MVP complete (v0.1.0-mvp)** — MS-00 through MS-10 are fully implemented and tested:
+**v1.0 feature-complete** — 27 of 30 milestones implemented and tested. Only 3 post-v1.0 milestones remain (MS-27, MS-28, MS-29).
 
-| Milestone | What it delivers |
-|-----------|-----------------|
-| MS-00 | Architecture validation spikes (5 ADRs) |
-| MS-01 | Project structure, `moca.yaml` config system |
-| MS-02 | PostgreSQL per-tenant pools, Redis client factory, health checks |
-| MS-03 | MetaType registry, schema compiler, DDL migrator, 3-tier cache |
-| MS-04 | Document lifecycle (16 events), naming, validation, CRUD |
-| MS-05 | Query builder (15 operators), JSONB transparency, auto-joins |
-| MS-06 | REST API layer, rate limiting, transformers, versioning |
-| MS-07 | CLI foundation (24+ commands), context resolver, output formatters |
-| MS-08 | Hook registry, app manifest system, core doctypes |
-| MS-09 | `moca init`, site/app/db CLI commands, migration runner |
-| MS-10 | Dev server, hot reload, process supervisor |
+| Phase | Milestones | What they deliver |
+|-------|-----------|-------------------|
+| **Foundation** | MS-00 -- MS-01 | Architecture validation (6 ADRs), project structure, `moca.yaml` config |
+| **Core Engine** | MS-02 -- MS-06 | PostgreSQL per-tenant pools, metadata registry, document lifecycle, query builder, REST API layer |
+| **CLI & Apps** | MS-07 -- MS-11 | CLI foundation (152 commands), hook registry, site/app management, dev server, hot reload, DB/backup/config ops |
+| **Multitenancy & Security** | MS-12 -- MS-14 | Schema-per-tenant isolation, app scaffolding, user management, RBAC/FLS/RLS permission engine |
+| **Infrastructure** | MS-15 -- MS-16 | Background jobs, scheduler, Kafka/Redis events, search sync, CLI queue/events/search/monitor commands |
+| **React Desk** | MS-17, MS-19 -- MS-20 | React app shell, FormView, ListView, DocType Builder, real-time WebSocket, dashboard, reports, i18n |
+| **API & Webhooks** | MS-18 | API keys, webhooks, custom endpoints, per-DocType API config |
+| **Deployment & Ops** | MS-21, MS-24 | Deploy setup/update/rollback, infrastructure generation (Caddy/NGINX/systemd/Docker/K8s), Prometheus metrics, tracing |
+| **Security Hardening** | MS-22 | OAuth2, SAML/OIDC SSO, field-level encryption, email/in-app notifications |
+| **Advanced** | MS-23, MS-25 | Workflow engine (state machine, SLA timers, approval chains), testing framework |
+| **Release** | MS-26 | Documentation, packaging, v1.0 polish |
 
-See the [Roadmap](ROADMAP.md) for the full 30-milestone plan to v1.0 and the [Changelog](CHANGELOG.md) for detailed release notes.
+**Codebase:** 264 Go production files, 234 test files, 273 React component files, 5 binaries, full React SPA with 7 major views.
 
-## License
-
-TBD
+See the [Roadmap](ROADMAP.md) for the full milestone plan and the [Changelog](CHANGELOG.md) for detailed release notes.
