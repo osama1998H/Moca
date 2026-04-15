@@ -144,6 +144,12 @@ func (h *DevHandler) HandleCreateDocType(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	// Validate field types
+	if err := ValidateFieldDefs(req.Fields); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
 	// Build the tree-native JSON document for disk
 	docDef := buildDocTypeJSON(req)
 
@@ -203,6 +209,12 @@ func (h *DevHandler) HandleUpdateDocType(w http.ResponseWriter, r *http.Request)
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
+	}
+
+	// Validate field types
+	if err := ValidateFieldDefs(req.Fields); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
 	}
 
 	docDef := buildDocTypeJSON(req)

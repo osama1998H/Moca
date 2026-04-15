@@ -4,6 +4,8 @@ import (
 	"errors"
 	"regexp"
 	"unicode"
+
+	"github.com/osama1998H/moca/pkg/meta"
 )
 
 // reFieldName matches valid snake_case field names: starts with a lowercase letter,
@@ -74,5 +76,15 @@ func ValidateFieldName(name string) error {
 		return errors.New("field name " + name + " is reserved by the framework")
 	}
 
+	return nil
+}
+
+// ValidateFieldDefs checks that every field in the map has a non-empty field_type.
+func ValidateFieldDefs(fields map[string]meta.FieldDef) error {
+	for name, fd := range fields {
+		if fd.FieldType == "" {
+			return errors.New("field '" + name + "' has no field_type")
+		}
+	}
 	return nil
 }
