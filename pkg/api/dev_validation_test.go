@@ -1,6 +1,10 @@
 package api
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/osama1998H/moca/pkg/meta"
+)
 
 // ── ValidateDocTypeName ──────────────────────────────────────────────────────
 
@@ -88,5 +92,34 @@ func TestValidateFieldName_Invalid(t *testing.T) {
 		if err := ValidateFieldName(tc.name); err == nil {
 			t.Errorf("ValidateFieldName(%q) expected error for %s, got nil", tc.name, tc.desc)
 		}
+	}
+}
+
+// ── ValidateFieldDefs ──────────────────────────────────────────────────────
+
+func TestValidateFieldDefs_Valid(t *testing.T) {
+	fields := map[string]meta.FieldDef{
+		"title":     {FieldType: "Data", Name: "title"},
+		"full_name": {FieldType: "Text", Name: "full_name"},
+	}
+	if err := ValidateFieldDefs(fields); err != nil {
+		t.Errorf("ValidateFieldDefs returned unexpected error: %v", err)
+	}
+}
+
+func TestValidateFieldDefs_EmptyFieldType(t *testing.T) {
+	fields := map[string]meta.FieldDef{
+		"title":     {FieldType: "Data", Name: "title"},
+		"full_name": {FieldType: "", Name: "full_name"},
+	}
+	err := ValidateFieldDefs(fields)
+	if err == nil {
+		t.Error("ValidateFieldDefs expected error for empty field_type, got nil")
+	}
+}
+
+func TestValidateFieldDefs_EmptyMap(t *testing.T) {
+	if err := ValidateFieldDefs(map[string]meta.FieldDef{}); err != nil {
+		t.Errorf("ValidateFieldDefs returned unexpected error for empty map: %v", err)
 	}
 }
