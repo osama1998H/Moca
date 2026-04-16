@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,10 +16,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// docTypeRegisterer is the minimal registry surface needed by DevHandler.
+// *meta.Registry satisfies it; tests can substitute a fake.
+type docTypeRegisterer interface {
+	Register(ctx context.Context, site string, jsonBytes []byte) (*meta.MetaType, error)
+}
+
 // DevHandler serves dev-mode API endpoints for creating/editing DocType
 // definition files on disk. Only available when developer mode is enabled.
 type DevHandler struct {
-	registry *meta.Registry
+	registry docTypeRegisterer
 	logger   *slog.Logger
 	appsDir  string
 }
@@ -26,6 +33,18 @@ type DevHandler struct {
 // NewDevHandler creates a DevHandler that reads/writes DocType files
 // under the given apps directory.
 func NewDevHandler(appsDir string, registry *meta.Registry, logger *slog.Logger) *DevHandler {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	h := &DevHandler{appsDir: appsDir, logger: logger}
+	if registry != nil {
+		h.registry = registry
+	}
+	return h
+}
+
+// NewDevHandlerWithRegisterer is used by tests to inject a fake registry.
+func NewDevHandlerWithRegisterer(appsDir string, registry docTypeRegisterer, logger *slog.Logger) *DevHandler {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -236,9 +255,18 @@ func (h *DevHandler) HandleCreateDocType(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	// Register in registry if available
+	// Register in registry if available. The nil-guard on h.registry is
+	// defensive against test harnesses; the nil-guard on site is
+	// defensive against request paths that bypass tenantMiddleware.
 	if h.registry != nil {
-		if _, err := h.registry.Register(r.Context(), siteFromContext(r), data); err != nil {
+		site := SiteFromContext(r.Context())
+		if site == nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "site context required",
+			})
+			return
+		}
+		if _, err := h.registry.Register(r.Context(), site.Name, data); err != nil {
 			h.logger.Warn("registry registration failed (non-fatal)", "error", err)
 		}
 	}
@@ -311,7 +339,14 @@ func (h *DevHandler) HandleUpdateDocType(w http.ResponseWriter, r *http.Request)
 	}
 
 	if h.registry != nil {
-		if _, err := h.registry.Register(r.Context(), siteFromContext(r), data); err != nil {
+		site := SiteFromContext(r.Context())
+		if site == nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "site context required",
+			})
+			return
+		}
+		if _, err := h.registry.Register(r.Context(), site.Name, data); err != nil {
 			h.logger.Warn("registry re-registration failed", "error", err)
 		}
 	}
@@ -434,6 +469,17 @@ func buildDocTypeJSON(req DevDocTypeRequest) map[string]any {
 		"is_virtual":     req.Settings.IsVirtual,
 		"track_changes":  req.Settings.TrackChanges,
 		"permissions":    req.Permissions,
+		"api_config": map[string]any{
+			"enabled":           true,
+			"allow_list":        true,
+			"allow_get":         true,
+			"allow_create":      true,
+			"allow_update":      true,
+			"allow_delete":      true,
+			"allow_count":       true,
+			"default_page_size": 20,
+			"max_page_size":     100,
+		},
 	}
 }
 
@@ -442,15 +488,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v) //nolint:errcheck
-}
-
-// siteFromContext extracts the site identifier from the request context,
-// falling back to "default" if not set by tenant middleware.
-func siteFromContext(r *http.Request) string {
-	if site, ok := r.Context().Value("site").(string); ok {
-		return site
-	}
-	return "default"
 }
 
 // toSnakeCaseDev converts a PascalCase name to snake_case by reusing
@@ -462,3 +499,7 @@ func toSnakeCaseDev(s string) string {
 	tn := meta.TableName(s) // "tab_sales_order"
 	return tn[4:]           // "sales_order"
 }
+
+// ToSnakeCaseForTest is exported only for test harnesses to mirror the
+// internal directory-naming convention without duplicating it.
+func ToSnakeCaseForTest(s string) string { return toSnakeCaseDev(s) }

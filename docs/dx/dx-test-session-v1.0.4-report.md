@@ -68,6 +68,13 @@ The first `moca init` run failed with "Failed to scaffold desk frontend" with no
 **Impact:** New developers hitting this on first run get a broken project with no actionable error message.
 **Fix:** Add detailed error output to the desk scaffolding step. Investigate the transient failure cause (possibly a race condition in directory creation or template extraction).
 
+**Resolution (2026-04-16):** Fixed in three commits on branch `fix/dx-v1.0.4-issues`:
+- `8f6e256` `fix(output): surface wrapped err in CLIError.Format` — users now see the underlying scaffold error instead of a bare headline.
+- `7cd4635` `fix(init): clean up half-written desk/ on scaffold failure` — retry on the same path now succeeds.
+- `9680cae` `fix(init): guard against wiping pre-existing desk/ on init` — safety guard added after a code review caught that the cleanup helper could wipe a user's hand-authored desk/.
+
+Unblocks verification row 6 (opaque error → detailed error with cause; retry in place succeeds).
+
 ---
 
 ### Issue #34: `VITE_MOCA_SITE` empty in scaffolded `desk/.env`
@@ -83,6 +90,11 @@ The first `moca init` run failed with "Failed to scaffold desk frontend" with no
 1. Populate `VITE_MOCA_SITE` during `moca site create` (update the .env as a post-creation step)
 2. Add a `moca desk env` command that writes the active site to `desk/.env`
 3. Have the Vite plugin auto-detect the site from `moca.yaml` if `VITE_MOCA_SITE` is empty
+
+**Resolution (2026-04-16):** Fixed in one commit on branch `fix/dx-v1.0.4-issues`:
+- `07581be` `fix(site): populate VITE_MOCA_SITE in desk/.env on site create/use` — `moca site use` and `moca site create` (first site only) now call `scaffold.UpdateDeskEnvSite(...)` to populate the value. Non-empty existing values are preserved unless `force=true`.
+
+Unblocks verification row 10 (VITE_MOCA_SITE now populated automatically after site create/use).
 
 ---
 
@@ -109,6 +121,12 @@ When a stale/expired JWT exists in browser localStorage (from a previous DX sess
 
 **Workaround:** Clear localStorage at `http://localhost:3000` (DevTools > Application > Local Storage > Clear) or use incognito window.
 
+**Resolution (2026-04-16):** Fixed in two commits on branch `fix/dx-v1.0.4-issues`:
+- `af38122` `fix(api): skip auth middleware for public auth endpoints` — `authMiddleware` now skips auth for `login`, `refresh`, `sso/*`, and `saml/*` paths; logout remains authenticated.
+- `f9ea0c6` `fix(desk): bump desk submodule pointer` — carries desk-repo commit `343fc08` which makes `AuthProvider.restore()` call `setAccessToken(null)` when no refresh token is present, clearing the orphan on first mount.
+
+Unblocks verification rows 23 and 24 (browser login succeeds; curl POST with stale Bearer no longer returns 401).
+
 ---
 
 ### Issue #36: Dev API creates DocType under wrong site ("default" instead of actual tenant)
@@ -130,6 +148,11 @@ registry register default/BookReader: query current: ERROR: relation "tab_doctyp
 
 **Fix:** Replace `siteFromContext(r)` in dev_handler.go with `SiteFromContext(r.Context()).Name`, or remove the private function entirely and use the exported one.
 
+**Resolution (2026-04-16):** Fixed in one commit on branch `fix/dx-v1.0.4-issues`:
+- `463d5af` `fix(api): use canonical SiteFromContext in dev handler` — dev handler now reads from `SiteFromContext` (the canonical typed key) and returns 400 if the site is missing, instead of silently falling back to `"default"`.
+
+Unblocks verification rows 25, 26, and 27 (BookReader DocType registered to the active site schema; backend log no longer shows `relation "tab_doctype" does not exist`).
+
 ---
 
 ### Issue #37: DocType Builder omits `api_config` from saved JSON
@@ -145,6 +168,11 @@ Without `api_config`, the REST API will not auto-generate CRUD routes for the Do
 **Impact:** DocTypes created via the builder have no API endpoints.
 **Fix:** Either the frontend should include a default `api_config` in the payload, or the backend should inject a default `api_config` when not present.
 
+**Resolution (2026-04-16):** Fixed in one commit on branch `fix/dx-v1.0.4-issues`:
+- `7170518` `fix(api): inject default api_config in DocType builder handler` — the builder now injects a default `api_config` with all allow-* flags enabled and page sizes 20/100 when the block is absent, matching the CLI scaffold template exactly.
+
+Unblocks verification row 29 (api_config present in BookReader JSON; REST routes auto-generated).
+
 ---
 
 ### Issue #38: "leader election: lock lost" log spam in single-instance mode
@@ -157,6 +185,11 @@ When running `moca serve` in single-instance mode (one process handles HTTP + wo
 
 **Impact:** Log noise; may confuse developers into thinking something is wrong.
 **Fix:** Either suppress this warning in single-instance mode, or downgrade to DEBUG level.
+
+**Resolution (2026-04-16):** Fixed in one commit on branch `fix/dx-v1.0.4-issues`:
+- `183df75` `fix(queue): downgrade leader election log noise to DEBUG` — log level downgraded from WARN to DEBUG with `key` and `instance` attrs. In multi-instance production, alerting should key off "no leader for N minutes" rather than this line.
+
+Unblocks verification row 30 (leader election log silent at default log level in single-instance dev).
 
 ## Regression Check (v1.0.2 Open Issues)
 

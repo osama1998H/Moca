@@ -172,3 +172,44 @@ func TestCLIError_FormatIndentsMultilineContent(t *testing.T) {
 		t.Error("multiline context should indent each line")
 	}
 }
+
+func TestCLIError_FormatWrappedErrAsCause(t *testing.T) {
+	e := NewCLIError("operation failed").WithErr(errors.New("boom"))
+
+	var buf bytes.Buffer
+	e.FormatPlain(&buf)
+	out := buf.String()
+
+	if !strings.Contains(out, "Cause:\n  boom") {
+		t.Errorf("expected wrapped err to appear as Cause, got:\n%s", out)
+	}
+}
+
+func TestCLIError_FormatExplicitCauseWinsOverErr(t *testing.T) {
+	e := NewCLIError("operation failed").
+		WithErr(errors.New("wrapped")).
+		WithCause("explicit cause text")
+
+	var buf bytes.Buffer
+	e.FormatPlain(&buf)
+	out := buf.String()
+
+	if !strings.Contains(out, "Cause:\n  explicit cause text") {
+		t.Errorf("expected explicit Cause to win, got:\n%s", out)
+	}
+	if strings.Contains(out, "wrapped") {
+		t.Errorf("wrapped err should not appear when Cause is explicit, got:\n%s", out)
+	}
+}
+
+func TestCLIError_FormatNoErrNoCauseOmitsBlock(t *testing.T) {
+	e := NewCLIError("only a message")
+
+	var buf bytes.Buffer
+	e.FormatPlain(&buf)
+	out := buf.String()
+
+	if strings.Contains(out, "Cause:") {
+		t.Errorf("no Cause block expected when Err and Cause are both empty, got:\n%s", out)
+	}
+}

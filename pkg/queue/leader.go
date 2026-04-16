@@ -229,7 +229,10 @@ func (le *LeaderElection) heartbeat(ctx context.Context, cancelLeader context.Ca
 			}
 			// luaRenew returns "OK" on success, 0 if not owner.
 			if result != "OK" {
-				le.logger.Warn("leader election: lock lost (not owner)")
+				le.logger.Debug("leader election: lock lost, will re-acquire",
+					slog.String("key", le.config.Key),
+					slog.String("instance", le.config.InstanceID),
+				)
 				cancelLeader()
 				return
 			}

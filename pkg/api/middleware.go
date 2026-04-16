@@ -209,6 +209,48 @@ func siteFromPath(path string) (siteID, strippedPath string) {
 	return rest[:idx], rest[idx:]
 }
 
+// publicAuthTails enumerates the suffixes under /api/{v}/auth/ that must
+// bypass authMiddleware because they are either the entry point for
+// obtaining a session (login/refresh) or IdP-driven flows (SSO/SAML).
+//
+// Keep in sync with AuthHandler.RegisterRoutes (pkg/api/auth_handler.go)
+// and SSOHandler.RegisterRoutes (pkg/api/sso_handler.go).
+// Intentionally NOT included: "logout" — needs current bearer to revoke
+// the session; the desk frontend swallows its 401.
+var publicAuthTails = map[string]bool{
+	"login":         true,
+	"refresh":       true,
+	"sso/authorize": true,
+	"sso/callback":  true,
+	"saml/metadata": true,
+	"saml/acs":      true,
+}
+
+// isPublicAuthPath reports whether path matches /api/{version}/auth/{tail}
+// with tail in publicAuthTails. Version is treated opaquely (any non-empty
+// segment without a slash), so adding v2 routes auto-inherits the policy.
+func isPublicAuthPath(path string) bool {
+	const prefix = "/api/"
+	if !strings.HasPrefix(path, prefix) {
+		return false
+	}
+	rest := path[len(prefix):]
+	slash := strings.IndexByte(rest, '/')
+	if slash <= 0 {
+		return false
+	}
+	rest = rest[slash+1:]
+	const authPrefix = "auth/"
+	if !strings.HasPrefix(rest, authPrefix) {
+		return false
+	}
+	tail := rest[len(authPrefix):]
+	if tail == "" {
+		return false
+	}
+	return publicAuthTails[tail]
+}
+
 // authMiddleware authenticates the request and stores the user in context.
 // It also re-enriches the logger with the resolved user identity.
 //
@@ -219,8 +261,9 @@ func siteFromPath(path string) (siteID, strippedPath string) {
 func authMiddleware(authn Authenticator, apiKeys APIKeyValidator) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Skip auth for non-API paths (static assets, health).
-			if strings.HasPrefix(r.URL.Path, "/desk/") || r.URL.Path == "/health" || r.URL.Path == "/ws" {
+			// Skip auth for non-API paths (static assets, health) and for
+			// public auth endpoints that mint/exchange credentials.
+			if strings.HasPrefix(r.URL.Path, "/desk/") || r.URL.Path == "/health" || r.URL.Path == "/ws" || isPublicAuthPath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
