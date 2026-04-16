@@ -984,17 +984,13 @@ func (m *SiteManager) seedLanguages(ctx context.Context, pool *pgxpool.Pool) err
 
 	return orm.WithTransaction(ctx, pool, func(ctx context.Context, tx pgx.Tx) error {
 		for i, lang := range languages {
-			enabledInt := 0
-			if lang.enabled {
-				enabledInt = 1
-			}
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO tab_language (
 					name, language_code, language_name, direction, enabled,
-					owner, creation, modified, modified_by, docstatus, idx, _extra
-				) VALUES ($1, $2, $3, $4, $5, 'System', NOW(), NOW(), 'System', 0, $6, NULL)
+					owner, creation, modified, modified_by, docstatus, idx
+				) VALUES ($1, $2, $3, $4, $5, 'System', NOW(), NOW(), 'System', 0, $6)
 				ON CONFLICT (name) DO NOTHING`,
-				lang.code, lang.code, lang.name, lang.direction, enabledInt, i,
+				lang.code, lang.code, lang.name, lang.direction, lang.enabled, i,
 			); err != nil {
 				return fmt.Errorf("seed language %q: %w", lang.code, err)
 			}

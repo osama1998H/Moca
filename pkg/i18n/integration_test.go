@@ -97,10 +97,10 @@ func TestIntegration_TranslateLifecycle(t *testing.T) {
 
 	// Insert test translations.
 	_, err := integPool.Exec(ctx,
-		`INSERT INTO tab_translation (source_text, language, translated_text, context, app) VALUES
-		('Hello', 'ar', 'مرحبا', '', 'core'),
-		('Save', 'ar', 'حفظ', 'DocType:User', 'core'),
-		('Delete', 'ar', 'حذف', '', 'core')`,
+		`INSERT INTO tab_translation (name, source_text, language, translated_text, context, app) VALUES
+		('t-hello-ar', 'Hello', 'ar', 'مرحبا', '', 'core'),
+		('t-save-ar', 'Save', 'ar', 'حفظ', 'DocType:User', 'core'),
+		('t-delete-ar', 'Delete', 'ar', 'حذف', '', 'core')`,
 	)
 	if err != nil {
 		t.Fatalf("insert translations: %v", err)
@@ -181,10 +181,10 @@ func TestIntegration_GetAllForLanguage(t *testing.T) {
 
 	// Insert data.
 	_, err := integPool.Exec(ctx,
-		`INSERT INTO tab_translation (source_text, language, translated_text, context, app) VALUES
-		('Yes', 'ar', 'نعم', '', 'core'),
-		('No', 'ar', 'لا', '', 'core'),
-		('Yes', 'fr', 'Oui', '', 'core')`,
+		`INSERT INTO tab_translation (name, source_text, language, translated_text, context, app) VALUES
+		('t-yes-ar', 'Yes', 'ar', 'نعم', '', 'core'),
+		('t-no-ar', 'No', 'ar', 'لا', '', 'core'),
+		('t-yes-fr', 'Yes', 'fr', 'Oui', '', 'core')`,
 	)
 	if err != nil {
 		t.Fatalf("insert: %v", err)
