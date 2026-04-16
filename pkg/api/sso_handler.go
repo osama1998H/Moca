@@ -112,12 +112,12 @@ func (h *SSOHandler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	cfg, err := h.loadAndDecryptConfig(r.Context(), site, providerName)
 	if err != nil {
-		h.logger.Warn("SSO authorize: provider not found",
+		h.logger.Warn("SSO authorize: provider config error",
 			slog.String("provider", providerName),
 			slog.String("site", site.Name),
 			slog.String("error", err.Error()),
 		)
-		writeError(w, http.StatusNotFound, "SSO_PROVIDER_NOT_FOUND", "SSO provider not found or disabled")
+		h.ssoErrorRedirect(w, r, "SSO provider not found or disabled")
 		return
 	}
 
@@ -432,21 +432,36 @@ func (h *SSOHandler) loadAndDecryptConfig(
 		return nil, err
 	}
 
-	// Decrypt Password-type fields if encryption is enabled.
-	// These fields are stored encrypted via FieldEncryptionHook but loaded
-	// via direct SQL (bypassing PostLoadTransformer), so we decrypt explicitly.
-	if h.encryptor != nil {
-		if cfg.ClientSecret != "" {
-			cfg.ClientSecret, err = h.encryptor.Decrypt(cfg.ClientSecret)
-			if err != nil {
-				return nil, fmt.Errorf("decrypt client_secret: %w", err)
-			}
+	// Reject plaintext secrets when no encryption key is configured.
+	if h.encryptor == nil {
+		if cfg.ClientSecret != "" || cfg.SPPrivateKey != "" {
+			return nil, fmt.Errorf("SSO provider %q has secrets but MOCA_ENCRYPTION_KEY is not configured; "+
+				"set the encryption key and re-save the provider", cfg.ProviderName)
 		}
-		if cfg.SPPrivateKey != "" {
-			cfg.SPPrivateKey, err = h.encryptor.Decrypt(cfg.SPPrivateKey)
-			if err != nil {
-				return nil, fmt.Errorf("decrypt sp_private_key: %w", err)
-			}
+		return cfg, nil
+	}
+
+	// Reject secrets that are not encrypted (plaintext migration gap).
+	if cfg.ClientSecret != "" && !auth.IsEncrypted(cfg.ClientSecret) {
+		return nil, fmt.Errorf("SSO provider %q: client_secret is not encrypted; "+
+			"re-save the provider to encrypt it", cfg.ProviderName)
+	}
+	if cfg.SPPrivateKey != "" && !auth.IsEncrypted(cfg.SPPrivateKey) {
+		return nil, fmt.Errorf("SSO provider %q: sp_private_key is not encrypted; "+
+			"re-save the provider to encrypt it", cfg.ProviderName)
+	}
+
+	// Decrypt Password-type fields.
+	if cfg.ClientSecret != "" {
+		cfg.ClientSecret, err = h.encryptor.Decrypt(cfg.ClientSecret)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt client_secret: %w", err)
+		}
+	}
+	if cfg.SPPrivateKey != "" {
+		cfg.SPPrivateKey, err = h.encryptor.Decrypt(cfg.SPPrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt sp_private_key: %w", err)
 		}
 	}
 

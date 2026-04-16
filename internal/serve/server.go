@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/osama1998H/moca/internal/config"
@@ -207,6 +208,29 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		logger.Info("field encryption enabled")
 	} else {
 		logger.Info("field encryption disabled (MOCA_ENCRYPTION_KEY not set)")
+	}
+
+	// ── Startup check: detect unencrypted SSO secrets ───────────────────
+	if fieldEncryptor != nil && dbManager.SystemPool() != nil {
+		var unencProviders []string
+		rows, qErr := dbManager.SystemPool().Query(ctx,
+			`SELECT "name" FROM "tab_sso_provider"
+			 WHERE ("client_secret" != '' AND "client_secret" NOT LIKE 'enc:v1:%')
+			    OR ("sp_private_key" != '' AND "sp_private_key" NOT LIKE 'enc:v1:%')`)
+		if qErr == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var name string
+				if rows.Scan(&name) == nil {
+					unencProviders = append(unencProviders, name)
+				}
+			}
+		}
+		// Ignore query errors (table may not exist yet).
+		if len(unencProviders) > 0 {
+			logger.Warn("unencrypted SSO secrets detected — re-save these providers to encrypt them",
+				slog.String("providers", strings.Join(unencProviders, ", ")))
+		}
 	}
 
 	// ── Search ──────────────────────────────────────────────────────────

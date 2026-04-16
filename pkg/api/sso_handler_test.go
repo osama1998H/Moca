@@ -159,8 +159,12 @@ func TestSSOHandler_Authorize_ProviderNotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	env.mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
+	if w.Code != http.StatusFound {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusFound)
+	}
+	loc := w.Header().Get("Location")
+	if !strings.Contains(loc, "sso_failed") {
+		t.Errorf("expected error redirect, got Location: %s", loc)
 	}
 }
 
@@ -170,7 +174,6 @@ func TestSSOHandler_Authorize_OAuth2_Redirect(t *testing.T) {
 			ProviderName: "google",
 			ProviderType: "OAuth2",
 			ClientID:     "google-client-id",
-			ClientSecret: "google-secret",
 			AuthorizeURL: "https://accounts.google.com/o/oauth2/auth",
 			TokenURL:     "https://oauth2.googleapis.com/token",
 			UserInfoURL:  "https://www.googleapis.com/oauth2/v3/userinfo",
@@ -319,7 +322,6 @@ func TestSSOHandler_Callback_OAuth2_FullFlow(t *testing.T) {
 			ProviderName:   "mock-oauth2",
 			ProviderType:   "OAuth2",
 			ClientID:       "cid",
-			ClientSecret:   "csecret",
 			AuthorizeURL:   idpSrv.URL + "/authorize",
 			TokenURL:       idpSrv.URL + "/token",
 			UserInfoURL:    idpSrv.URL + "/userinfo",
@@ -508,5 +510,81 @@ func TestSSOHandler_StateStore_SingleUse(t *testing.T) {
 	_, err = env.handler.validateState(context.Background(), env.site, token)
 	if err != auth.ErrSSOStateInvalid {
 		t.Errorf("expected ErrSSOStateInvalid for consumed state, got %v", err)
+	}
+}
+
+func TestSSOHandler_LoadAndDecryptConfig_RejectsPlaintextWithoutEncryptor(t *testing.T) {
+	configs := map[string]*auth.SSOProviderConfig{
+		"google": {
+			ProviderName: "google",
+			ProviderType: "OAuth2",
+			ClientID:     "id",
+			ClientSecret: "plaintext-secret",
+			AuthorizeURL: "https://accounts.google.com/o/oauth2/auth",
+			TokenURL:     "https://oauth2.googleapis.com/token",
+		},
+	}
+	env := newSSOTestEnv(t, mockConfigLoader(configs))
+
+	req := env.makeRequest("GET", "/api/v1/auth/sso/authorize?provider=google")
+	w := httptest.NewRecorder()
+	env.mux.ServeHTTP(w, req)
+
+	// Should fail — encryptor is nil but secrets exist. Handler redirects to login with error.
+	if w.Code != http.StatusFound {
+		t.Fatalf("expected 302 redirect, got %d", w.Code)
+	}
+	loc := w.Header().Get("Location")
+	if !strings.Contains(loc, "sso_failed") {
+		t.Fatalf("expected error redirect, got Location: %s", loc)
+	}
+}
+
+func TestSSOHandler_LoadAndDecryptConfig_RejectsUnencryptedWithEncryptor(t *testing.T) {
+	configs := map[string]*auth.SSOProviderConfig{
+		"google": {
+			ProviderName: "google",
+			ProviderType: "OAuth2",
+			ClientID:     "id",
+			ClientSecret: "plaintext-not-encrypted",
+			AuthorizeURL: "https://accounts.google.com/o/oauth2/auth",
+			TokenURL:     "https://oauth2.googleapis.com/token",
+		},
+	}
+
+	mini, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("start miniredis: %v", err)
+	}
+	t.Cleanup(mini.Close)
+
+	redisClient := redis.NewClient(&redis.Options{Addr: mini.Addr()})
+	sessionMgr := auth.NewSessionManager(redisClient, 24*time.Hour)
+	provisioner := auth.NewUserProvisioner(slog.Default())
+
+	encryptor, err := auth.NewFieldEncryptor(strings.Repeat("ab", 32))
+	if err != nil {
+		t.Fatalf("NewFieldEncryptor: %v", err)
+	}
+
+	handler := NewSSOHandler(sessionMgr, provisioner,
+		mockConfigLoader(configs), encryptor, redisClient, slog.Default())
+
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux, "v1")
+
+	site := &tenancy.SiteContext{Name: "test-site"}
+	req := httptest.NewRequest("GET", "/api/v1/auth/sso/authorize?provider=google", nil)
+	ctx := WithSite(req.Context(), site)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusFound {
+		t.Fatalf("expected 302 redirect, got %d", w.Code)
+	}
+	loc := w.Header().Get("Location")
+	if !strings.Contains(loc, "sso_failed") {
+		t.Fatalf("expected error redirect, got Location: %s", loc)
 	}
 }
