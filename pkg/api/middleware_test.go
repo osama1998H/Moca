@@ -446,3 +446,83 @@ func TestStatusRecorder_HijackFailsGracefully(t *testing.T) {
 		t.Fatal("expected error from Hijack() on non-hijackable writer")
 	}
 }
+
+// --- isPublicAuthPath ---
+
+func TestIsPublicAuthPath(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"/api/v1/auth/login", true},
+		{"/api/v2/auth/login", true},
+		{"/api/v1/auth/refresh", true},
+		{"/api/v1/auth/logout", false},
+		{"/api/v1/auth/sso/authorize", true},
+		{"/api/v1/auth/sso/callback", true},
+		{"/api/v1/auth/saml/metadata", true},
+		{"/api/v1/auth/saml/acs", true},
+		{"/api/v1/auth/unknown", false},
+		{"/api/v1/auth", false},
+		{"/api/v1/resource/Customer", false},
+		{"/desk/", false},
+		{"/health", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := isPublicAuthPath(c.path); got != c.want {
+			t.Errorf("isPublicAuthPath(%q) = %v, want %v", c.path, got, c.want)
+		}
+	}
+}
+
+// --- authMiddleware: public auth paths bypass ---
+
+func TestAuthMiddleware_BypassesPublicAuthPaths(t *testing.T) {
+	publicPaths := []string{
+		"/api/v1/auth/login",
+		"/api/v2/auth/login",
+		"/api/v1/auth/refresh",
+		"/api/v1/auth/sso/authorize",
+		"/api/v1/auth/sso/callback",
+		"/api/v1/auth/saml/metadata",
+		"/api/v1/auth/saml/acs",
+	}
+	for _, path := range publicPaths {
+		t.Run(path, func(t *testing.T) {
+			handlerCalled := false
+			handler := authMiddleware(failingAuth{}, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				handlerCalled = true
+				// Sending a garbage Bearer must not affect the bypass.
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			rr := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, path, nil)
+			req.Header.Set("Authorization", "Bearer garbage-token")
+			handler.ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusOK {
+				t.Errorf("status = %d, want 200 (bypass expected)", rr.Code)
+			}
+			if !handlerCalled {
+				t.Error("expected downstream handler to be called despite failing authn")
+			}
+		})
+	}
+}
+
+func TestAuthMiddleware_LogoutStillRequiresAuth(t *testing.T) {
+	handler := authMiddleware(failingAuth{}, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called for logout when authn fails")
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	req.Header.Set("Authorization", "Bearer x")
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rr.Code)
+	}
+}
