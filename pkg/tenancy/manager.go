@@ -71,7 +71,7 @@ type CloneOptions struct {
 
 // SiteManager orchestrates site lifecycle operations: creation, deletion,
 // listing, and active-site selection. It composes lower-level primitives
-// (DBManager, Migrator, Registry) into the 9-step creation workflow.
+// (DBManager, Migrator, Registry) into the 11-step creation workflow.
 type SiteManager struct {
 	db          *orm.DBManager
 	migrator    *meta.Migrator
@@ -105,7 +105,7 @@ func NewSiteManager(
 	}
 }
 
-// CreateSite executes the 10-step site creation lifecycle:
+// CreateSite executes the 11-step site creation lifecycle:
 //  1. Create PostgreSQL schema
 //  2. Create per-tenant system tables
 //  3. Bootstrap core MetaType tables
@@ -116,6 +116,7 @@ func NewSiteManager(
 //  8. Register site in moca_system
 //  9. Warm metadata cache
 //  10. Seed DocType document records for core doctypes
+//  11. Seed default languages for the desk language selector
 func (m *SiteManager) CreateSite(ctx context.Context, cfg SiteCreateConfig) (retErr error) {
 	if err := validateSiteConfig(cfg); err != nil {
 		return err
@@ -141,19 +142,19 @@ func (m *SiteManager) CreateSite(ctx context.Context, cfg SiteCreateConfig) (ret
 	}()
 
 	// Step 1: Create PostgreSQL schema.
-	m.logger.InfoContext(ctx, "step 1/10: creating schema", slog.String("schema", schemaName))
+	m.logger.InfoContext(ctx, "step 1/11: creating schema", slog.String("schema", schemaName))
 	if schemaErr := m.createSchema(ctx, schemaName); schemaErr != nil {
 		return fmt.Errorf("create site step 1 (schema): %w", schemaErr)
 	}
 
 	// Step 2: Create per-tenant system tables.
-	m.logger.InfoContext(ctx, "step 2/10: creating system tables", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 2/11: creating system tables", slog.String("site", siteName))
 	if metaErr := m.migrator.EnsureMetaTables(ctx, siteName); metaErr != nil {
 		return fmt.Errorf("create site step 2 (meta tables): %w", metaErr)
 	}
 
 	// Step 3: Bootstrap core MetaType document tables.
-	m.logger.InfoContext(ctx, "step 3/10: bootstrapping core tables", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 3/11: bootstrapping core tables", slog.String("site", siteName))
 	coreMetaTypes, err := m.bootstrapFn()
 	if err != nil {
 		return fmt.Errorf("create site step 3 (bootstrap): %w", err)
@@ -167,32 +168,32 @@ func (m *SiteManager) CreateSite(ctx context.Context, cfg SiteCreateConfig) (ret
 	}
 
 	// Step 4: Create Administrator user.
-	m.logger.InfoContext(ctx, "step 4/10: creating admin user", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 4/11: creating admin user", slog.String("site", siteName))
 	if adminErr := m.createAdminUser(ctx, siteName, cfg.AdminEmail, cfg.AdminPassword); adminErr != nil {
 		return fmt.Errorf("create site step 4 (admin user): %w", adminErr)
 	}
 
 	// Step 5: Create Redis config namespace.
-	m.logger.InfoContext(ctx, "step 5/10: setting up Redis config", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 5/11: setting up Redis config", slog.String("site", siteName))
 	if redisErr := m.setupRedisConfig(ctx, siteName, cfg.Config); redisErr != nil {
 		return fmt.Errorf("create site step 5 (redis config): %w", redisErr)
 	}
 
 	// Step 6: Stub — Meilisearch index.
-	m.logger.WarnContext(ctx, "step 6/10: meilisearch index creation not yet implemented", slog.String("site", siteName))
+	m.logger.WarnContext(ctx, "step 6/11: meilisearch index creation not yet implemented", slog.String("site", siteName))
 
 	// Step 7: Storage uses shared bucket with site-scoped key prefix ({site}/private/..., {site}/public/...).
 	// No per-site bucket creation needed — prefix is created implicitly on first upload.
-	m.logger.InfoContext(ctx, "step 7/10: storage uses shared bucket with site-scoped key prefix", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 7/11: storage uses shared bucket with site-scoped key prefix", slog.String("site", siteName))
 
 	// Step 8: Register site in moca_system.
-	m.logger.InfoContext(ctx, "step 8/10: registering site", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 8/11: registering site", slog.String("site", siteName))
 	if regErr := m.registerSiteInSystem(ctx, cfg, schemaName); regErr != nil {
 		return fmt.Errorf("create site step 8 (register): %w", regErr)
 	}
 
 	// Step 9: Warm metadata cache via Registry.Register.
-	m.logger.InfoContext(ctx, "step 9/10: warming metadata cache", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 9/11: warming metadata cache", slog.String("site", siteName))
 	for _, mt := range ordered {
 		jsonBytes, merr := json.Marshal(mt)
 		if merr != nil {
@@ -206,13 +207,19 @@ func (m *SiteManager) CreateSite(ctx context.Context, cfg SiteCreateConfig) (ret
 	// Step 10: Seed DocType document records into tab_doc_type so the resource
 	// API can list them (sidebar, list views, etc.). Also seed DocPerm child
 	// records for each MetaType's permission rules.
-	m.logger.InfoContext(ctx, "step 10/10: seeding DocType document records", slog.String("site", siteName))
+	m.logger.InfoContext(ctx, "step 10/11: seeding DocType document records", slog.String("site", siteName))
 	tenantPool, poolErr := m.db.ForSite(ctx, siteName)
 	if poolErr != nil {
 		return fmt.Errorf("create site step 10 (tenant pool): %w", poolErr)
 	}
 	if seedErr := m.seedDocTypeRecords(ctx, tenantPool, ordered); seedErr != nil {
 		return fmt.Errorf("create site step 10 (seed): %w", seedErr)
+	}
+
+	// Step 11: Seed default languages for the desk language selector.
+	m.logger.InfoContext(ctx, "step 11/11: seeding default languages", slog.String("site", siteName))
+	if langErr := m.seedLanguages(ctx, tenantPool); langErr != nil {
+		return fmt.Errorf("create site step 11 (seed languages): %w", langErr)
 	}
 
 	m.logger.InfoContext(ctx, "site created successfully", slog.String("site", siteName))
@@ -952,6 +959,44 @@ func (m *SiteManager) seedDocTypeRecords(ctx context.Context, pool *pgxpool.Pool
 					return fmt.Errorf("seed DocPerm for %q role %q: %w", mt.Name, perm.Role, err)
 				}
 				permIdx++
+			}
+		}
+		return nil
+	})
+}
+
+// seedLanguages inserts the default Language records for the desk language selector.
+func (m *SiteManager) seedLanguages(ctx context.Context, pool *pgxpool.Pool) error {
+	type langSeed struct {
+		code      string
+		name      string
+		direction string
+		enabled   bool
+	}
+
+	languages := []langSeed{
+		{"en", "English", "ltr", true},
+		{"ar", "العربية", "rtl", true},
+		{"fr", "Français", "ltr", false},
+		{"es", "Español", "ltr", false},
+		{"de", "Deutsch", "ltr", false},
+	}
+
+	return orm.WithTransaction(ctx, pool, func(ctx context.Context, tx pgx.Tx) error {
+		for i, lang := range languages {
+			enabledInt := 0
+			if lang.enabled {
+				enabledInt = 1
+			}
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO tab_language (
+					name, language_code, language_name, direction, enabled,
+					owner, creation, modified, modified_by, docstatus, idx, _extra
+				) VALUES ($1, $2, $3, $4, $5, 'System', NOW(), NOW(), 'System', 0, $6, NULL)
+				ON CONFLICT (name) DO NOTHING`,
+				lang.code, lang.code, lang.name, lang.direction, enabledInt, i,
+			); err != nil {
+				return fmt.Errorf("seed language %q: %w", lang.code, err)
 			}
 		}
 		return nil
