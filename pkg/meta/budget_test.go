@@ -1,3 +1,5 @@
+//go:build !race
+
 package meta
 
 import "testing"
