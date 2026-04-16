@@ -176,7 +176,86 @@ env:
   BENCH_PKGS: ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks ./internal/drivers
 ```
 
-No other workflow changes needed. The `paths` trigger already includes `internal/**`. benchstat handles new benchmarks automatically.
+### Enhanced PR Comment
+
+The current PR comment dumps raw benchstat output behind a collapsed `<details>` tag with a one-line pass/fail verdict. This requires reviewers to manually expand and parse dense terminal output. The workflow will be updated with a post-processing script that parses benchstat output into a structured, actionable comment.
+
+**New comment structure:**
+
+#### 1. Top-level summary table (always visible)
+
+Only benchmarks with statistically significant changes appear here. Each row shows: status icon, benchmark name, old value, new value, delta. Icons: a red circle for regression >= 10%, a yellow circle for regression 5-10%, a green circle for improvement, a dash for no significant change.
+
+Example:
+
+```
+| Status | Benchmark | Base | PR | Delta |
+|--------|-----------|------|----|-------|
+| :red_circle: | DocManagerInsert_SimpleDoc | 1.23 ms/op | 1.58 ms/op | +28.5% |
+| :yellow_circle: | QueryBuilderBuild_ComplexJoins | 8.1 µs/op | 8.9 µs/op | +9.8% |
+| :green_circle: | RegistryGet_L1Hit | 48 ns/op | 41 ns/op | -14.6% |
+```
+
+Benchmarks with no significant change (`~` in benchstat) are omitted from this table. If all benchmarks are unchanged, the table is replaced with: "All benchmarks within noise margin."
+
+#### 2. Tier grouping
+
+The summary table is grouped by tier with headers:
+
+```
+### Tier 1 — Critical Hot Path
+| ... |
+
+### Tier 2 — Per-Request Components
+| ... |
+
+### Tier 3 — Infrastructure
+| ... |
+```
+
+Empty tiers are omitted.
+
+#### 3. Allocation changes
+
+A second table shows allocation deltas for benchmarks where `B/op` or `allocs/op` changed significantly:
+
+```
+| Benchmark | Base B/op | PR B/op | Base allocs | PR allocs |
+|-----------|-----------|---------|-------------|-----------|
+| DocManagerInsert_SimpleDoc | 4096 | 8192 | 24 | 48 |
+```
+
+#### 4. Performance budget proximity
+
+For the 4 budgeted benchmarks, show current value vs budget:
+
+```
+### Performance Budgets
+| Benchmark | Current | Budget | Used |
+|-----------|---------|--------|------|
+| RegistryGet_L1Hit | 41 ns/op | 200 ns/op | 20% |
+| GenerateTableDDL_10Fields | 12 µs/op | 50 µs/op | 24% |
+| TransformerChain_Response | 8 µs/op | 20 µs/op | 40% |
+| HookRegistryResolve_10Hooks | 1.8 µs/op | 5 µs/op | 36% |
+```
+
+#### 5. Raw output preserved
+
+Full benchstat output stays in a collapsed `<details>` block at the bottom for anyone who needs the raw data.
+
+**Implementation:** A shell script (`.github/scripts/format-bench-comment.sh`) that:
+1. Receives benchstat output and PR benchmark raw output as inputs
+2. Parses benchmark names into tiers using a name-to-tier mapping
+3. Extracts ns/op, B/op, allocs/op values and delta percentages
+4. Formats the structured markdown comment
+5. Outputs the formatted comment for the workflow step
+
+The tier mapping is a simple associative array in the script:
+- Names starting with `RegistryGet`, `DocManager{Get,GetList,Insert}`, `QueryBuilderBuild`, `GatewayHandler` -> Tier 1
+- Names starting with `ValidateDoc`, `NamingEngine`, `DispatchEvent`, `HookRegistry`, `RateLimiter`, `TransformerChain`, `WithTransaction` -> Tier 2
+- Names starting with `PGRoundTrip`, `RedisGetSet`, `PoolSaturation`, `GenerateTableDDL`, `Compile` -> Tier 3
+
+Budget values are hardcoded in the script (same source of truth as the `Test*_Budget` functions).
 
 ### Delete `docs/BENCHMARKING.md`
 
@@ -214,7 +293,7 @@ Table with the 5 make targets, what each does, and whether Docker is required.
 Explain `ns/op`, `B/op`, `allocs/op`. Show a sample output and annotate what "good" vs "bad" looks like. Explain benchstat output format.
 
 ### 5. CI Regression Detection
-How the PR workflow works: runs benchmarks on base and PR branch, compares with benchstat, posts results as a PR comment, fails the check if any benchmark regresses >= 10%.
+How the PR workflow works: runs benchmarks on base and PR branch, compares with benchstat, posts a structured PR comment (summary table grouped by tier, allocation changes, budget proximity), fails the check if any benchmark regresses >= 10%. Include an annotated screenshot or example of what the PR comment looks like.
 
 ### 6. Performance Budgets
 Table of the 4 budgeted benchmarks with their hard limits. Explain that these run as normal tests and fail `make test` if exceeded.
@@ -240,5 +319,6 @@ Quick guide: `make bench-profile`, then `go tool pprof -http=:8080 cpu.prof`. Wh
 | 10 | `wiki/Performance-Benchmarking-Guide.md` | Wiki doc | n/a |
 | 11 | `wiki/_Sidebar.md` | Wiki sidebar edit | n/a |
 | 12 | `Makefile` | Edit BENCH_PKGS | n/a |
-| 13 | `.github/workflows/benchmark.yml` | Edit BENCH_PKGS | n/a |
-| 14 | `docs/BENCHMARKING.md` | Delete | n/a |
+| 13 | `.github/workflows/benchmark.yml` | Edit BENCH_PKGS + comment format | n/a |
+| 14 | `.github/scripts/format-bench-comment.sh` | New script | n/a |
+| 15 | `docs/BENCHMARKING.md` | Delete | n/a |
