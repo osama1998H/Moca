@@ -55,7 +55,7 @@ jobs:
           --health-retries 10
 
     env:
-      BENCH_PKGS: ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks
+      BENCH_PKGS: ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks ./internal/drivers
       PG_HOST: localhost
       REDIS_ADDR: localhost:6380
 
@@ -96,19 +96,39 @@ jobs:
         id: compare
         run: |
           if ! grep -q '^Benchmark' /tmp/bench-pr.txt; then
-            RESULT="No benchmark output was produced on the PR branch."
-            REGRESSION=false
-            STATUS="missing-pr-data"
-            SUMMARY="> No benchmark output was produced on the PR branch."
+            echo "status=missing-pr-data" >> "$GITHUB_OUTPUT"
+            echo "regression=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "comment<<EOF"
+              echo "## Benchmark Results"
+              echo ""
+              echo "> No benchmark output was produced on the PR branch."
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           elif ! grep -q '^Benchmark' /tmp/bench-base.txt; then
-            RESULT="Base branch does not yet contain benchmark baselines for these packages; regression check skipped."
-            REGRESSION=false
-            STATUS="missing-base-data"
-            SUMMARY="> Baseline unavailable on the base branch, so regression gating was skipped for this PR."
+            echo "status=missing-base-data" >> "$GITHUB_OUTPUT"
+            echo "regression=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "comment<<EOF"
+              echo "## Benchmark Results"
+              echo ""
+              echo "> Baseline unavailable on the base branch, so regression gating was skipped for this PR."
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           else
-            RESULT="$(benchstat /tmp/bench-base.txt /tmp/bench-pr.txt)"
-            STATUS="compared"
-            if printf '%s\n' "$RESULT" | awk '
+            benchstat /tmp/bench-base.txt /tmp/bench-pr.txt > /tmp/benchstat-output.txt
+            cat /tmp/benchstat-output.txt
+
+            FORMATTED=$(bash .github/scripts/format-bench-comment.sh /tmp/benchstat-output.txt /tmp/bench-pr.txt)
+            {
+              echo "comment<<EOF"
+              echo "$FORMATTED"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+
+            echo "status=compared" >> "$GITHUB_OUTPUT"
+
+            if printf '%s\n' "$(cat /tmp/benchstat-output.txt)" | awk '
               /^name[[:space:]]/ { next }
               /^[[:space:]]*$/ { next }
               /p=/ {
@@ -124,26 +144,11 @@ jobs:
               }
               END { exit(found ? 0 : 1) }
             '; then
-              REGRESSION=true
-              SUMMARY="> Benchmark regression detected: one or more statistically significant deltas were at or above 10%."
+              echo "regression=true" >> "$GITHUB_OUTPUT"
             else
-              REGRESSION=false
-              SUMMARY="> Benchmarks are within the current regression threshold."
+              echo "regression=false" >> "$GITHUB_OUTPUT"
             fi
           fi
-
-          {
-            echo "result<<EOF"
-            echo "$RESULT"
-            echo "EOF"
-            echo "regression=$REGRESSION"
-            echo "status=$STATUS"
-            echo "summary<<EOF"
-            echo "$SUMMARY"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-          printf '%s\n' "$RESULT"
 
       - name: Comment on PR
         if: github.event.pull_request.head.repo.full_name == github.repository
@@ -151,18 +156,7 @@ jobs:
         with:
           header: benchmark
           message: |
-            ## Benchmark Results
-
-            <details>
-            <summary>Click to expand</summary>
-
-            ```
-            ${{ steps.compare.outputs.result }}
-            ```
-
-            </details>
-
-            ${{ steps.compare.outputs.summary }}
+            ${{ steps.compare.outputs.comment }}
 
       - name: Fail on regression
         if: steps.compare.outputs.regression == 'true'

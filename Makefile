@@ -9,7 +9,7 @@ LDFLAGS    := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildD
 
 GO := go
 COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
-BENCH_PKGS := ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks
+BENCH_PKGS := ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks ./internal/drivers
 
 .PHONY: build build-server build-worker build-scheduler build-moca build-outbox \
         test test-integration test-api-integration lint clean release-local \
