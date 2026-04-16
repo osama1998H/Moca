@@ -402,6 +402,27 @@ func TestCLI_SiteWorkflow(t *testing.T) {
 		t.Errorf("current_site: got %q, want %q", strings.TrimSpace(string(data)), name)
 	}
 
+	// 3.1 Verify desk/.env VITE_MOCA_SITE was synced (Issue #34).
+	// Set up a minimal desk/ skeleton so UpdateDeskEnvSite has a target.
+	deskDir := filepath.Join(tmpDir, "desk")
+	_ = os.MkdirAll(deskDir, 0o755)
+	_ = os.WriteFile(filepath.Join(deskDir, ".env"), []byte("VITE_MOCA_SITE=\n"), 0o644)
+
+	_, _, err = executeWithContext(t, tmpDir, "",
+		"site", "use", name,
+	)
+	if err != nil {
+		t.Fatalf("site use (post-desk): %v", err)
+	}
+
+	envBytes, readErr := os.ReadFile(filepath.Join(deskDir, ".env"))
+	if readErr != nil {
+		t.Fatalf("read desk/.env: %v", readErr)
+	}
+	if !strings.Contains(string(envBytes), "VITE_MOCA_SITE="+name) {
+		t.Errorf("desk/.env not synced, got:\n%s", string(envBytes))
+	}
+
 	// 4. Site Info.
 	stdout, _, err = executeWithContext(t, tmpDir, name,
 		"site", "info", name, "--json",

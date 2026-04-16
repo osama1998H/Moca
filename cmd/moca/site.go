@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/osama1998H/moca/internal/output"
+	"github.com/osama1998H/moca/internal/scaffold"
 	"github.com/osama1998H/moca/pkg/backup"
 	"github.com/osama1998H/moca/pkg/sitepath"
 	"github.com/osama1998H/moca/pkg/tenancy"
@@ -143,6 +144,15 @@ func runSiteCreate(cmd *cobra.Command, args []string) error {
 	// Create site filesystem directory.
 	if mkErr := os.MkdirAll(siteDir, 0o755); mkErr != nil {
 		w.PrintWarning(fmt.Sprintf("Could not create site directory: %v", mkErr))
+	}
+
+	// First-site bootstrap: prime desk/.env so developers don't have
+	// to hand-edit VITE_MOCA_SITE (Issue #34).
+	currentSitePath := filepath.Join(ctx.ProjectRoot, ".moca", "current_site")
+	if _, err := os.Stat(currentSitePath); os.IsNotExist(err) {
+		if err := scaffold.UpdateDeskEnvSite(ctx.ProjectRoot, siteName, false); err != nil {
+			w.PrintWarning(fmt.Sprintf("desk/.env update skipped: %v", err))
+		}
 	}
 
 	// Optionally install additional apps.
@@ -378,6 +388,10 @@ func runSiteUse(cmd *cobra.Command, args []string) error {
 	}
 	if err := os.WriteFile(filepath.Join(dotMoca, "current_site"), []byte(siteName), 0o644); err != nil {
 		return output.NewCLIError("Failed to write current_site file").WithErr(err)
+	}
+
+	if err := scaffold.UpdateDeskEnvSite(ctx.ProjectRoot, siteName, false); err != nil {
+		w.PrintWarning(fmt.Sprintf("desk/.env update skipped: %v", err))
 	}
 
 	if w.Mode() == output.ModeJSON {
