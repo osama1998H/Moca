@@ -62,7 +62,10 @@ declare -A BUDGETS=(
 )
 
 # ── Parse benchstat for time/op changes ───────────────────────────────────────
-declare -A TIER1_ROWS TIER2_ROWS TIER3_ROWS OTHER_ROWS
+declare -A TIER1_ROWS=()
+declare -A TIER2_ROWS=()
+declare -A TIER3_ROWS=()
+declare -A OTHER_ROWS=()
 has_changes=false
 
 while IFS= read -r line; do
@@ -132,9 +135,7 @@ else
   print_tier_table TIER1_ROWS 1
   print_tier_table TIER2_ROWS 2
   print_tier_table TIER3_ROWS 3
-  if [ ${#OTHER_ROWS[@]} -gt 0 ]; then
-    print_tier_table OTHER_ROWS 0
-  fi
+  print_tier_table OTHER_ROWS 0
 fi
 
 # Budget proximity
