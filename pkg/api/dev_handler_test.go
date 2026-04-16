@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/osama1998H/moca/pkg/api"
+	"github.com/osama1998H/moca/pkg/auth"
 )
 
 func TestDevHandler_ListApps(t *testing.T) {
@@ -242,5 +243,72 @@ func TestDevHandler_GetDocType_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDevAuthMiddleware_RejectsNilUser(t *testing.T) {
+	mw := api.DevAuthMiddleware()
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be called")
+	})
+	handler := mw(inner)
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestDevAuthMiddleware_RejectsGuestUser(t *testing.T) {
+	mw := api.DevAuthMiddleware()
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be called")
+	})
+	handler := mw(inner)
+	req := httptest.NewRequest("GET", "/", nil)
+	ctx := api.WithUser(req.Context(), &auth.User{Email: "Guest", Roles: []string{"Guest"}})
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestDevAuthMiddleware_RejectsNonAdmin(t *testing.T) {
+	mw := api.DevAuthMiddleware()
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be called")
+	})
+	handler := mw(inner)
+	req := httptest.NewRequest("GET", "/", nil)
+	ctx := api.WithUser(req.Context(), &auth.User{Email: "user@test.com", Roles: []string{"Editor"}})
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestDevAuthMiddleware_AllowsAdmin(t *testing.T) {
+	mw := api.DevAuthMiddleware()
+	called := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := mw(inner)
+	req := httptest.NewRequest("GET", "/", nil)
+	ctx := api.WithUser(req.Context(), &auth.User{Email: "admin@test.com", Roles: []string{"Administrator"}})
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !called {
+		t.Fatal("expected inner handler to be called")
 	}
 }

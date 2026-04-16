@@ -353,7 +353,7 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 	// ── Dev API endpoints (developer mode only) ────────────────────────
 	if cfg.Config != nil && cfg.Config.Development.DeveloperMode && cfg.AppsDir != "" {
 		devHandler := api.NewDevHandler(cfg.AppsDir, registry, logger)
-		devHandler.RegisterDevRoutes(gw.Mux(), "v1")
+		devHandler.RegisterDevRoutes(gw.Mux(), "v1", api.DevAuthMiddleware())
 		logger.Info("dev API endpoints enabled at /api/v1/dev/")
 	}
 

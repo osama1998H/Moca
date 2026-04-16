@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/osama1998H/moca/pkg/meta"
 	"gopkg.in/yaml.v3"
@@ -29,14 +30,39 @@ func NewDevHandler(appsDir string, registry *meta.Registry, logger *slog.Logger)
 	return &DevHandler{appsDir: appsDir, registry: registry, logger: logger}
 }
 
+// DevAuthMiddleware returns middleware that requires the Administrator role
+// for all dev API endpoints.
+func DevAuthMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			user := UserFromContext(r.Context())
+			if user == nil || !slices.Contains(user.Roles, "Administrator") {
+				writeJSON(w, http.StatusForbidden, map[string]string{
+					"error": "developer API requires Administrator role",
+				})
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // RegisterDevRoutes registers dev-mode routes on the given mux.
-func (h *DevHandler) RegisterDevRoutes(mux *http.ServeMux, version string) {
+// Optional middleware is applied to each handler (outermost first).
+func (h *DevHandler) RegisterDevRoutes(mux *http.ServeMux, version string, mw ...func(http.Handler) http.Handler) {
+	wrap := func(hf http.HandlerFunc) http.Handler {
+		var handler http.Handler = hf
+		for i := len(mw) - 1; i >= 0; i-- {
+			handler = mw[i](handler)
+		}
+		return handler
+	}
 	p := "/api/" + version + "/dev"
-	mux.HandleFunc("GET "+p+"/apps", h.HandleListApps)
-	mux.HandleFunc("POST "+p+"/doctype", h.HandleCreateDocType)
-	mux.HandleFunc("PUT "+p+"/doctype/{name}", h.HandleUpdateDocType)
-	mux.HandleFunc("GET "+p+"/doctype/{name}", h.HandleGetDocType)
-	mux.HandleFunc("DELETE "+p+"/doctype/{name}", h.HandleDeleteDocType)
+	mux.Handle("GET "+p+"/apps", wrap(h.HandleListApps))
+	mux.Handle("POST "+p+"/doctype", wrap(h.HandleCreateDocType))
+	mux.Handle("PUT "+p+"/doctype/{name}", wrap(h.HandleUpdateDocType))
+	mux.Handle("GET "+p+"/doctype/{name}", wrap(h.HandleGetDocType))
+	mux.Handle("DELETE "+p+"/doctype/{name}", wrap(h.HandleDeleteDocType))
 }
 
 // HandleListApps returns the list of installed apps with their modules.
