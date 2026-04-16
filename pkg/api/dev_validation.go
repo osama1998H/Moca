@@ -12,6 +12,10 @@ import (
 // followed by lowercase letters, digits, or underscores.
 var reFieldName = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
+// reAppModuleName matches valid app and module names: lowercase letter start,
+// followed by lowercase letters, digits, underscores, or hyphens.
+var reAppModuleName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+
 // reservedFieldNames contains field names that are managed internally by the
 // framework and must not be used as user-defined field names.
 var reservedFieldNames = map[string]bool{
@@ -76,6 +80,22 @@ func ValidateFieldName(name string) error {
 		return errors.New("field name " + name + " is reserved by the framework")
 	}
 
+	return nil
+}
+
+// ValidateAppName checks that name is a valid app directory name.
+func ValidateAppName(name string) error {
+	if !reAppModuleName.MatchString(name) {
+		return errors.New("app name must match ^[a-z][a-z0-9_-]*$ (lowercase, digits, hyphens, underscores)")
+	}
+	return nil
+}
+
+// ValidateModuleName checks that name is a valid module directory name.
+func ValidateModuleName(name string) error {
+	if !reAppModuleName.MatchString(name) {
+		return errors.New("module name must match ^[a-z][a-z0-9_-]*$ (lowercase, digits, hyphens, underscores)")
+	}
 	return nil
 }
 
