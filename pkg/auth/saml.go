@@ -149,7 +149,7 @@ func (p *SAMLProvider) ParseResponse(r *http.Request) (*SSOResult, error) {
 		return nil, fmt.Errorf("saml: parse form: %w", err)
 	}
 
-	assertion, err := p.sp.ParseResponse(r, []string{""})
+	assertion, err := p.sp.ParseResponse(r, []string{p.sp.EntityID})
 	if err != nil {
 		return nil, fmt.Errorf("saml: parse response: %w", err)
 	}

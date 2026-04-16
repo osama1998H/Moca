@@ -240,6 +240,26 @@ func TestParsePEMCertificate_Invalid(t *testing.T) {
 	}
 }
 
+func TestSAMLProvider_ParseResponse_UsesEntityIDAudience(t *testing.T) {
+	certPEM, keyPEM := generateTestCertAndKey(t)
+	cfg := &SSOProviderConfig{
+		IdPEntityID:    "https://idp.example.com",
+		IdPSSOURL:      "https://idp.example.com/sso",
+		IdPCertificate: certPEM,
+		SPCertificate:  certPEM,
+		SPPrivateKey:   keyPEM,
+	}
+	metadataURL := "https://app.example.com/api/v1/auth/saml/metadata?provider=test"
+	sp, err := NewSAMLProvider(cfg, metadataURL,
+		"https://app.example.com/api/v1/auth/saml/acs?provider=test")
+	if err != nil {
+		t.Fatalf("NewSAMLProvider: %v", err)
+	}
+	if sp.sp.EntityID != metadataURL {
+		t.Errorf("EntityID = %q, want %q", sp.sp.EntityID, metadataURL)
+	}
+}
+
 // containsStr is a simple string contains helper for tests.
 func containsStr(s, substr string) bool {
 	return len(s) >= len(substr) && searchStr(s, substr)
