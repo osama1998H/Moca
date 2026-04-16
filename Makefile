@@ -30,8 +30,8 @@ help:
 	@echo "  test             Run all tests with race detector"
 	@echo "  test-integration Run integration tests (requires Docker)"
 	@echo "  test-api-integration Run API integration tests (requires Docker)"
-	@echo "  bench            Run Tier 1 benchmarks"
-	@echo "  bench-integration Run Docker-backed Tier 1 integration benchmarks"
+	@echo "  bench            Run benchmarks (no Docker)"
+	@echo "  bench-integration Run all benchmarks including integration (Docker required)"
 	@echo "  bench-compare    Compare current benchmark run against bench-baseline.txt"
 	@echo "  bench-save-baseline Save the latest benchmark run as bench-baseline.txt"
 	@echo "  bench-profile    Capture CPU and memory profiles for a benchmark"
@@ -84,11 +84,11 @@ test-api-integration:
 	$(GO) test -race -count=1 -tags=integration ./pkg/api/... ; \
 	$(COMPOSE) down
 
-## bench: Run Tier 1 benchmarks without Docker
+## bench: Run benchmarks (no Docker)
 bench:
 	bash -o pipefail -ec '$(GO) test -run=^$$ -bench=. -benchmem -count=5 -timeout=10m $(BENCH_PKGS) | tee bench-latest.txt'
 
-## bench-integration: Run Docker-backed Tier 1 integration benchmarks
+## bench-integration: Run all benchmarks including integration (Docker required)
 bench-integration:
 	bash -o pipefail -ec 'trap "$(COMPOSE) down" EXIT; \
 		$(COMPOSE) up -d --wait; \
