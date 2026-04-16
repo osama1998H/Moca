@@ -49,6 +49,7 @@ func NewInitCommand() *cobra.Command {
 	f.Bool("skip-assets", false, "Skip building frontend assets")
 	f.Bool("skip-desk", false, "Skip scaffolding desk/ frontend (headless API-only project)")
 	f.StringSlice("apps", nil, "Apps to pre-install")
+	f.Bool("dev", false, "Enable developer mode in generated config")
 
 	return cmd
 }
@@ -78,6 +79,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// 3. Build config from flags.
 	cfg := buildInitConfig(cmd, projectName)
+	if devMode, _ := cmd.Flags().GetBool("dev"); devMode {
+		cfg.Development.DeveloperMode = true
+	}
 
 	// 4. Create directory structure.
 	s := w.NewSpinner("Creating project structure...")
@@ -273,7 +277,7 @@ func buildInitConfig(cmd *cobra.Command, name string) *config.ProjectConfig {
 			Port:          8000,
 			Workers:       1,
 			AutoReload:    true,
-			DeveloperMode: true,
+			DeveloperMode: false,
 		},
 		Scheduler: config.SchedulerConfig{
 			Enabled:      true,

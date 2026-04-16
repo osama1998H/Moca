@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"unicode"
 
@@ -11,6 +12,10 @@ import (
 // reFieldName matches valid snake_case field names: starts with a lowercase letter,
 // followed by lowercase letters, digits, or underscores.
 var reFieldName = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+// reAppModuleName matches valid app and module names: lowercase letter start,
+// followed by lowercase letters, digits, underscores, or hyphens.
+var reAppModuleName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 
 // reservedFieldNames contains field names that are managed internally by the
 // framework and must not be used as user-defined field names.
@@ -79,11 +84,30 @@ func ValidateFieldName(name string) error {
 	return nil
 }
 
-// ValidateFieldDefs checks that every field in the map has a non-empty field_type.
+// ValidateAppName checks that name is a valid app directory name.
+func ValidateAppName(name string) error {
+	if !reAppModuleName.MatchString(name) {
+		return errors.New("app name must match ^[a-z][a-z0-9_-]*$ (lowercase, digits, hyphens, underscores)")
+	}
+	return nil
+}
+
+// ValidateModuleName checks that name is a valid module directory name.
+func ValidateModuleName(name string) error {
+	if !reAppModuleName.MatchString(name) {
+		return errors.New("module name must match ^[a-z][a-z0-9_-]*$ (lowercase, digits, hyphens, underscores)")
+	}
+	return nil
+}
+
+// ValidateFieldDefs checks that every field has a non-empty, recognized field_type.
 func ValidateFieldDefs(fields map[string]meta.FieldDef) error {
 	for name, fd := range fields {
 		if fd.FieldType == "" {
 			return errors.New("field '" + name + "' has no field_type")
+		}
+		if !meta.FieldType(fd.FieldType).IsValid() {
+			return fmt.Errorf("field '%s' has unrecognized field_type %q", name, fd.FieldType)
 		}
 	}
 	return nil

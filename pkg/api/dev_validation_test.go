@@ -123,3 +123,87 @@ func TestValidateFieldDefs_EmptyMap(t *testing.T) {
 		t.Errorf("ValidateFieldDefs returned unexpected error for empty map: %v", err)
 	}
 }
+
+func TestValidateFieldDefs_UnrecognizedFieldType(t *testing.T) {
+	fields := map[string]meta.FieldDef{
+		"title": {FieldType: "Data", Name: "title"},
+		"bad":   {FieldType: "NotAType", Name: "bad"},
+	}
+	err := ValidateFieldDefs(fields)
+	if err == nil {
+		t.Error("ValidateFieldDefs expected error for unrecognized field_type, got nil")
+	}
+}
+
+func TestValidateFieldDefs_AllValidTypes(t *testing.T) {
+	fields := map[string]meta.FieldDef{
+		"f1": {FieldType: "Data", Name: "f1"},
+		"f2": {FieldType: "Int", Name: "f2"},
+		"f3": {FieldType: "Currency", Name: "f3"},
+		"f4": {FieldType: "Date", Name: "f4"},
+		"f5": {FieldType: "Link", Name: "f5"},
+	}
+	if err := ValidateFieldDefs(fields); err != nil {
+		t.Errorf("ValidateFieldDefs returned unexpected error: %v", err)
+	}
+}
+
+// ── ValidateAppName ─────────────────────────────────────────────────────────
+
+func TestValidateAppName_Valid(t *testing.T) {
+	cases := []string{"core", "my-app", "app_v2", "a", "test123"}
+	for _, name := range cases {
+		if err := ValidateAppName(name); err != nil {
+			t.Errorf("ValidateAppName(%q) returned unexpected error: %v", name, err)
+		}
+	}
+}
+
+func TestValidateAppName_Invalid(t *testing.T) {
+	cases := []struct {
+		name string
+		desc string
+	}{
+		{"", "empty"},
+		{"../../etc", "path traversal"},
+		{"foo/bar", "contains slash"},
+		{".hidden", "starts with dot"},
+		{"MyApp", "contains uppercase"},
+		{"123app", "starts with digit"},
+		{"app name", "contains space"},
+	}
+	for _, tc := range cases {
+		if err := ValidateAppName(tc.name); err == nil {
+			t.Errorf("ValidateAppName(%q) expected error for %s, got nil", tc.name, tc.desc)
+		}
+	}
+}
+
+// ── ValidateModuleName ──────────────────────────────────────────────────────
+
+func TestValidateModuleName_Valid(t *testing.T) {
+	cases := []string{"core", "selling", "hr_module", "mod-1"}
+	for _, name := range cases {
+		if err := ValidateModuleName(name); err != nil {
+			t.Errorf("ValidateModuleName(%q) returned unexpected error: %v", name, err)
+		}
+	}
+}
+
+func TestValidateModuleName_Invalid(t *testing.T) {
+	cases := []struct {
+		name string
+		desc string
+	}{
+		{"", "empty"},
+		{"../etc", "path traversal"},
+		{"foo/bar", "contains slash"},
+		{".hidden", "starts with dot"},
+		{"Selling", "contains uppercase"},
+	}
+	for _, tc := range cases {
+		if err := ValidateModuleName(tc.name); err == nil {
+			t.Errorf("ValidateModuleName(%q) expected error for %s, got nil", tc.name, tc.desc)
+		}
+	}
+}

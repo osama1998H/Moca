@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,7 +57,14 @@ func mockOAuth2IdP(t *testing.T) *httptest.Server {
 
 // mockSSOConfigLoaderForIdP returns a SSOConfigLoadFunc that resolves a test
 // OAuth2 provider pointing at the given httptest IdP server.
-func mockSSOConfigLoaderForIdP(idpURL string) auth.SSOConfigLoadFunc {
+// The ClientSecret is encrypted using the provided encryptor to satisfy the
+// encryption enforcement in loadAndDecryptConfig.
+func mockSSOConfigLoaderForIdP(idpURL string, encryptor *auth.FieldEncryptor) auth.SSOConfigLoadFunc {
+	// Pre-encrypt the test secret so loadAndDecryptConfig can decrypt it.
+	encSecret, err := encryptor.Encrypt("test-client-secret")
+	if err != nil {
+		panic("encrypt test secret: " + err.Error())
+	}
 	return func(_ context.Context, _ *tenancy.SiteContext, name string) (*auth.SSOProviderConfig, error) {
 		if name != "test-oauth2" {
 			return nil, fmt.Errorf("unknown SSO provider %q", name)
@@ -65,7 +73,7 @@ func mockSSOConfigLoaderForIdP(idpURL string) auth.SSOConfigLoadFunc {
 			ProviderName:   "test-oauth2",
 			ProviderType:   "OAuth2",
 			ClientID:       "test-client-id",
-			ClientSecret:   "test-client-secret",
+			ClientSecret:   encSecret,
 			AuthorizeURL:   idpURL + "/authorize",
 			TokenURL:       idpURL + "/token",
 			UserInfoURL:    idpURL + "/userinfo",
@@ -123,6 +131,12 @@ func buildSSOTestServer(t *testing.T, idpURL string) *httptest.Server {
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
+	// Create a field encryptor — required by encryption enforcement (F4).
+	encryptor, encErr := auth.NewFieldEncryptor(strings.Repeat("ab", 32))
+	if encErr != nil {
+		t.Fatalf("create test encryptor: %v", encErr)
+	}
+
 	sessions := auth.NewSessionManager(
 		redis.NewClient(&redis.Options{Addr: "localhost:6380", DB: 2}),
 		24*time.Hour,
@@ -136,8 +150,8 @@ func buildSSOTestServer(t *testing.T, idpURL string) *httptest.Server {
 
 	ssoHandler := api.NewSSOHandler(
 		sessions, provisioner,
-		mockSSOConfigLoaderForIdP(idpURL),
-		nil, // no field encryption in test
+		mockSSOConfigLoaderForIdP(idpURL, encryptor),
+		encryptor,
 		redis.NewClient(&redis.Options{Addr: "localhost:6380", DB: 2}),
 		logger,
 	)
@@ -311,7 +325,7 @@ func TestSSOInteg_OAuth2InvalidState(t *testing.T) {
 }
 
 // TestSSOInteg_UnknownProvider verifies that requesting an unknown provider
-// returns a 404 error.
+// redirects to the login page with an error (SSO endpoints are browser flows).
 func TestSSOInteg_UnknownProvider(t *testing.T) {
 	idp := mockOAuth2IdP(t)
 	ssoServer := buildSSOTestServer(t, idp.URL)
@@ -331,8 +345,13 @@ func TestSSOInteg_UnknownProvider(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("unknown provider: expected 404, got %d", resp.StatusCode)
+	// SSO authorize errors redirect to login with error message.
+	if resp.StatusCode != http.StatusFound {
+		t.Errorf("unknown provider: expected 302 redirect, got %d", resp.StatusCode)
+	}
+	loc := resp.Header.Get("Location")
+	if !strings.Contains(loc, "sso_failed") {
+		t.Errorf("expected error redirect containing 'sso_failed', got Location: %s", loc)
 	}
 }
 

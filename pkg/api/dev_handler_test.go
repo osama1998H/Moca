@@ -7,9 +7,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/osama1998H/moca/pkg/api"
+	"github.com/osama1998H/moca/pkg/auth"
 )
 
 func TestDevHandler_ListApps(t *testing.T) {
@@ -94,7 +96,7 @@ func TestDevHandler_CreateDocType(t *testing.T) {
 	body := map[string]any{
 		"name":   "SalesOrder",
 		"app":    "testapp",
-		"module": "Selling",
+		"module": "selling",
 		"layout": map[string]any{
 			"tabs": []any{
 				map[string]any{
@@ -200,7 +202,7 @@ func TestDevHandler_UpdateDocType_NotFound(t *testing.T) {
 
 	body := map[string]any{
 		"app":         "testapp",
-		"module":      "Selling",
+		"module":      "selling",
 		"layout":      map[string]any{"tabs": []any{}},
 		"fields":      map[string]any{},
 		"settings":    map[string]any{},
@@ -242,5 +244,182 @@ func TestDevHandler_GetDocType_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDevAuthMiddleware_RejectsNilUser(t *testing.T) {
+	mw := api.DevAuthMiddleware()
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be called")
+	})
+	handler := mw(inner)
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestDevAuthMiddleware_RejectsGuestUser(t *testing.T) {
+	mw := api.DevAuthMiddleware()
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be called")
+	})
+	handler := mw(inner)
+	req := httptest.NewRequest("GET", "/", nil)
+	ctx := api.WithUser(req.Context(), &auth.User{Email: "Guest", Roles: []string{"Guest"}})
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestDevAuthMiddleware_RejectsNonAdmin(t *testing.T) {
+	mw := api.DevAuthMiddleware()
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be called")
+	})
+	handler := mw(inner)
+	req := httptest.NewRequest("GET", "/", nil)
+	ctx := api.WithUser(req.Context(), &auth.User{Email: "user@test.com", Roles: []string{"Editor"}})
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestDevAuthMiddleware_AllowsAdmin(t *testing.T) {
+	mw := api.DevAuthMiddleware()
+	called := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := mw(inner)
+	req := httptest.NewRequest("GET", "/", nil)
+	ctx := api.WithUser(req.Context(), &auth.User{Email: "admin@test.com", Roles: []string{"Administrator"}})
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !called {
+		t.Fatal("expected inner handler to be called")
+	}
+}
+
+func TestDevHandler_CreateDocType_PathTraversal_App(t *testing.T) {
+	dir := t.TempDir()
+	h := api.NewDevHandler(dir, nil, nil)
+	body := map[string]any{
+		"name": "Exploit", "app": "../../etc", "module": "core",
+		"layout": map[string]any{"tabs": []any{}},
+		"fields": map[string]any{"title": map[string]any{"field_type": "Data", "name": "title"}},
+		"settings": map[string]any{}, "permissions": []any{},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	req := httptest.NewRequest("POST", "/api/v1/dev/doctype", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleCreateDocType(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for path traversal in app, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDevHandler_CreateDocType_PathTraversal_Module(t *testing.T) {
+	dir := t.TempDir()
+	h := api.NewDevHandler(dir, nil, nil)
+	body := map[string]any{
+		"name": "Exploit", "app": "testapp", "module": "../../../etc",
+		"layout": map[string]any{"tabs": []any{}},
+		"fields": map[string]any{"title": map[string]any{"field_type": "Data", "name": "title"}},
+		"settings": map[string]any{}, "permissions": []any{},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	req := httptest.NewRequest("POST", "/api/v1/dev/doctype", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleCreateDocType(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for path traversal in module, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDevHandler_UpdateDocType_ValidatesNameFromURL(t *testing.T) {
+	dir := t.TempDir()
+	h := api.NewDevHandler(dir, nil, nil)
+	body := map[string]any{
+		"app": "testapp", "module": "core",
+		"layout": map[string]any{"tabs": []any{}},
+		"fields": map[string]any{}, "settings": map[string]any{}, "permissions": []any{},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	mux := http.NewServeMux()
+	h.RegisterDevRoutes(mux, "v1")
+	req := httptest.NewRequest("PUT", "/api/v1/dev/doctype/bad_name", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid name from URL, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDevHandler_UpdateDocType_ErrorDoesNotLeakPath(t *testing.T) {
+	dir := t.TempDir()
+	h := api.NewDevHandler(dir, nil, nil)
+
+	body := map[string]any{
+		"app":         "testapp",
+		"module":      "selling",
+		"layout":      map[string]any{"tabs": []any{}},
+		"fields":      map[string]any{},
+		"settings":    map[string]any{},
+		"permissions": []any{},
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	mux := http.NewServeMux()
+	h.RegisterDevRoutes(mux, "v1")
+
+	req := httptest.NewRequest("PUT", "/api/v1/dev/doctype/NonExistent", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+
+	body404 := w.Body.String()
+	if strings.Contains(body404, dir) {
+		t.Fatalf("error response leaks filesystem path: %s", body404)
+	}
+	if strings.Contains(body404, "modules") && strings.Contains(body404, "doctypes") {
+		t.Fatalf("error response leaks internal path structure: %s", body404)
+	}
+}
+
+func TestDevHandler_CreateDocType_BodySizeLimit(t *testing.T) {
+	dir := t.TempDir()
+	h := api.NewDevHandler(dir, nil, nil)
+
+	bigField := strings.Repeat("x", 2<<20) // 2 MiB
+	body := `{"name":"Test","app":"testapp","module":"core","fields":{"f":{"field_type":"` + bigField + `"}}}`
+
+	req := httptest.NewRequest("POST", "/api/v1/dev/doctype", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleCreateDocType(w, req)
+
+	if w.Code == http.StatusCreated {
+		t.Fatalf("expected request to be rejected for oversized body, got 201")
 	}
 }
