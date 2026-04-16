@@ -95,7 +95,7 @@ func TestDevHandler_CreateDocType(t *testing.T) {
 	body := map[string]any{
 		"name":   "SalesOrder",
 		"app":    "testapp",
-		"module": "Selling",
+		"module": "selling",
 		"layout": map[string]any{
 			"tabs": []any{
 				map[string]any{
@@ -201,7 +201,7 @@ func TestDevHandler_UpdateDocType_NotFound(t *testing.T) {
 
 	body := map[string]any{
 		"app":         "testapp",
-		"module":      "Selling",
+		"module":      "selling",
 		"layout":      map[string]any{"tabs": []any{}},
 		"fields":      map[string]any{},
 		"settings":    map[string]any{},
@@ -310,5 +310,63 @@ func TestDevAuthMiddleware_AllowsAdmin(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("expected inner handler to be called")
+	}
+}
+
+func TestDevHandler_CreateDocType_PathTraversal_App(t *testing.T) {
+	dir := t.TempDir()
+	h := api.NewDevHandler(dir, nil, nil)
+	body := map[string]any{
+		"name": "Exploit", "app": "../../etc", "module": "core",
+		"layout": map[string]any{"tabs": []any{}},
+		"fields": map[string]any{"title": map[string]any{"field_type": "Data", "name": "title"}},
+		"settings": map[string]any{}, "permissions": []any{},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	req := httptest.NewRequest("POST", "/api/v1/dev/doctype", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleCreateDocType(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for path traversal in app, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDevHandler_CreateDocType_PathTraversal_Module(t *testing.T) {
+	dir := t.TempDir()
+	h := api.NewDevHandler(dir, nil, nil)
+	body := map[string]any{
+		"name": "Exploit", "app": "testapp", "module": "../../../etc",
+		"layout": map[string]any{"tabs": []any{}},
+		"fields": map[string]any{"title": map[string]any{"field_type": "Data", "name": "title"}},
+		"settings": map[string]any{}, "permissions": []any{},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	req := httptest.NewRequest("POST", "/api/v1/dev/doctype", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleCreateDocType(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for path traversal in module, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDevHandler_UpdateDocType_ValidatesNameFromURL(t *testing.T) {
+	dir := t.TempDir()
+	h := api.NewDevHandler(dir, nil, nil)
+	body := map[string]any{
+		"app": "testapp", "module": "core",
+		"layout": map[string]any{"tabs": []any{}},
+		"fields": map[string]any{}, "settings": map[string]any{}, "permissions": []any{},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	mux := http.NewServeMux()
+	h.RegisterDevRoutes(mux, "v1")
+	req := httptest.NewRequest("PUT", "/api/v1/dev/doctype/bad_name", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid name from URL, got %d: %s", w.Code, w.Body.String())
 	}
 }

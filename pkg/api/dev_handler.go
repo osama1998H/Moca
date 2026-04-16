@@ -2,12 +2,14 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/osama1998H/moca/pkg/meta"
 	"gopkg.in/yaml.v3"
@@ -28,6 +30,23 @@ func NewDevHandler(appsDir string, registry *meta.Registry, logger *slog.Logger)
 		logger = slog.Default()
 	}
 	return &DevHandler{appsDir: appsDir, registry: registry, logger: logger}
+}
+
+// ensureInsideAppsDir verifies that target resolves to a path under h.appsDir.
+func (h *DevHandler) ensureInsideAppsDir(target string) error {
+	abs, err := filepath.Abs(target)
+	if err != nil {
+		return fmt.Errorf("resolve path: %w", err)
+	}
+	base, err := filepath.Abs(h.appsDir)
+	if err != nil {
+		return fmt.Errorf("resolve appsDir: %w", err)
+	}
+	rel, err := filepath.Rel(base, abs)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return errors.New("path escapes apps directory")
+	}
+	return nil
 }
 
 // DevAuthMiddleware returns middleware that requires the Administrator role
@@ -153,12 +172,12 @@ func (h *DevHandler) HandleCreateDocType(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if req.App == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "app is required"})
+	if err := ValidateAppName(req.App); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	if req.Module == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "module is required"})
+	if err := ValidateModuleName(req.Module); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
@@ -183,6 +202,10 @@ func (h *DevHandler) HandleCreateDocType(w http.ResponseWriter, r *http.Request)
 	moduleSnake := toSnakeCaseDev(req.Module)
 	dtSnake := toSnakeCaseDev(req.Name)
 	dtDir := filepath.Join(h.appsDir, req.App, "modules", moduleSnake, "doctypes", dtSnake)
+	if err := h.ensureInsideAppsDir(dtDir); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid path"})
+		return
+	}
 	if err := os.MkdirAll(dtDir, 0o755); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create directory: " + err.Error()})
 		return
@@ -230,6 +253,19 @@ func (h *DevHandler) HandleUpdateDocType(w http.ResponseWriter, r *http.Request)
 	}
 	req.Name = name
 
+	if err := ValidateDocTypeName(name); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if err := ValidateAppName(req.App); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if err := ValidateModuleName(req.Module); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
 	for fieldName := range req.Fields {
 		if err := ValidateFieldName(fieldName); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -247,6 +283,11 @@ func (h *DevHandler) HandleUpdateDocType(w http.ResponseWriter, r *http.Request)
 	moduleSnake := toSnakeCaseDev(req.Module)
 	dtSnake := toSnakeCaseDev(req.Name)
 	jsonPath := filepath.Join(h.appsDir, req.App, "modules", moduleSnake, "doctypes", dtSnake, dtSnake+".json")
+
+	if err := h.ensureInsideAppsDir(jsonPath); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid path"})
+		return
+	}
 
 	if _, err := os.Stat(jsonPath); os.IsNotExist(err) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "doctype not found at " + jsonPath})
