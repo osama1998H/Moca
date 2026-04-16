@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/osama1998H/moca/pkg/api"
@@ -368,5 +369,57 @@ func TestDevHandler_UpdateDocType_ValidatesNameFromURL(t *testing.T) {
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for invalid name from URL, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDevHandler_UpdateDocType_ErrorDoesNotLeakPath(t *testing.T) {
+	dir := t.TempDir()
+	h := api.NewDevHandler(dir, nil, nil)
+
+	body := map[string]any{
+		"app":         "testapp",
+		"module":      "selling",
+		"layout":      map[string]any{"tabs": []any{}},
+		"fields":      map[string]any{},
+		"settings":    map[string]any{},
+		"permissions": []any{},
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	mux := http.NewServeMux()
+	h.RegisterDevRoutes(mux, "v1")
+
+	req := httptest.NewRequest("PUT", "/api/v1/dev/doctype/NonExistent", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+
+	body404 := w.Body.String()
+	if strings.Contains(body404, dir) {
+		t.Fatalf("error response leaks filesystem path: %s", body404)
+	}
+	if strings.Contains(body404, "modules") && strings.Contains(body404, "doctypes") {
+		t.Fatalf("error response leaks internal path structure: %s", body404)
+	}
+}
+
+func TestDevHandler_CreateDocType_BodySizeLimit(t *testing.T) {
+	dir := t.TempDir()
+	h := api.NewDevHandler(dir, nil, nil)
+
+	bigField := strings.Repeat("x", 2<<20) // 2 MiB
+	body := `{"name":"Test","app":"testapp","module":"core","fields":{"f":{"field_type":"` + bigField + `"}}}`
+
+	req := httptest.NewRequest("POST", "/api/v1/dev/doctype", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleCreateDocType(w, req)
+
+	if w.Code == http.StatusCreated {
+		t.Fatalf("expected request to be rejected for oversized body, got 201")
 	}
 }

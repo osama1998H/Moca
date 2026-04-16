@@ -93,7 +93,8 @@ func (h *DevHandler) HandleListApps(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]any{"data": []any{}})
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		h.logger.Debug("read apps directory failed", slog.String("error", err.Error()))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
@@ -161,6 +162,7 @@ type DevDocTypeSettings struct {
 
 // HandleCreateDocType creates a new DocType definition on disk.
 func (h *DevHandler) HandleCreateDocType(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
 	var req DevDocTypeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
@@ -207,7 +209,8 @@ func (h *DevHandler) HandleCreateDocType(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := os.MkdirAll(dtDir, 0o755); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create directory: " + err.Error()})
+		h.logger.Debug("create doctype directory failed", slog.String("error", err.Error()))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create directory"})
 		return
 	}
 
@@ -219,7 +222,8 @@ func (h *DevHandler) HandleCreateDocType(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := os.WriteFile(jsonPath, data, 0o644); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "write: " + err.Error()})
+		h.logger.Debug("write doctype file failed", slog.String("error", err.Error()))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to write doctype"})
 		return
 	}
 
@@ -245,6 +249,7 @@ func (h *DevHandler) HandleCreateDocType(w http.ResponseWriter, r *http.Request)
 // HandleUpdateDocType updates an existing DocType JSON file on disk.
 // It does NOT overwrite the .go controller file (preserves developer code).
 func (h *DevHandler) HandleUpdateDocType(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
 	name := r.PathValue("name")
 	var req DevDocTypeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -290,7 +295,8 @@ func (h *DevHandler) HandleUpdateDocType(w http.ResponseWriter, r *http.Request)
 	}
 
 	if _, err := os.Stat(jsonPath); os.IsNotExist(err) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "doctype not found at " + jsonPath})
+		h.logger.Debug("doctype not found", slog.String("path", jsonPath))
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "doctype not found"})
 		return
 	}
 
@@ -318,13 +324,26 @@ func (h *DevHandler) HandleUpdateDocType(w http.ResponseWriter, r *http.Request)
 // _app and _module_dir metadata.
 func (h *DevHandler) HandleGetDocType(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	entries, _ := os.ReadDir(h.appsDir)
+	entries, err := os.ReadDir(h.appsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "doctype not found"})
+			return
+		}
+		h.logger.Error("read apps directory", slog.String("error", err.Error()))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
 	for _, app := range entries {
 		if !app.IsDir() {
 			continue
 		}
 		modulesDir := filepath.Join(h.appsDir, app.Name(), "modules")
-		modules, _ := os.ReadDir(modulesDir)
+		modules, err := os.ReadDir(modulesDir)
+		if err != nil {
+			h.logger.Debug("read modules directory failed", slog.String("path", modulesDir), slog.String("error", err.Error()))
+			continue
+		}
 		for _, mod := range modules {
 			if !mod.IsDir() {
 				continue
@@ -351,13 +370,26 @@ func (h *DevHandler) HandleGetDocType(w http.ResponseWriter, r *http.Request) {
 // HandleDeleteDocType removes a DocType directory from disk.
 func (h *DevHandler) HandleDeleteDocType(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	entries, _ := os.ReadDir(h.appsDir)
+	entries, err := os.ReadDir(h.appsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "doctype not found"})
+			return
+		}
+		h.logger.Error("read apps directory", slog.String("error", err.Error()))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
 	for _, app := range entries {
 		if !app.IsDir() {
 			continue
 		}
 		modulesDir := filepath.Join(h.appsDir, app.Name(), "modules")
-		modules, _ := os.ReadDir(modulesDir)
+		modules, err := os.ReadDir(modulesDir)
+		if err != nil {
+			h.logger.Debug("read modules directory failed", slog.String("path", modulesDir), slog.String("error", err.Error()))
+			continue
+		}
 		for _, mod := range modules {
 			if !mod.IsDir() {
 				continue
@@ -366,7 +398,8 @@ func (h *DevHandler) HandleDeleteDocType(w http.ResponseWriter, r *http.Request)
 			dtDir := filepath.Join(modulesDir, mod.Name(), "doctypes", dtSnake)
 			if _, err := os.Stat(dtDir); err == nil {
 				if err := os.RemoveAll(dtDir); err != nil {
-					writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+					h.logger.Debug("delete doctype failed", slog.String("error", err.Error()))
+					writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 					return
 				}
 				writeJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
