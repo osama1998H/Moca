@@ -379,6 +379,15 @@ func NewServer(ctx context.Context, cfg ServerConfig) (*Server, error) {
 		devHandler := api.NewDevHandler(cfg.AppsDir, registry, logger)
 		devHandler.RegisterDevRoutes(gw.Mux(), "v1", api.DevAuthMiddleware())
 		logger.Info("dev API endpoints enabled at /api/v1/dev/")
+		// Warn if dev mode is exposed on a non-loopback address.
+		bindAddr := cfg.Host
+		if bindAddr == "" || bindAddr == "0.0.0.0" || bindAddr == "::" {
+			logger.Warn("developer mode is enabled on a non-loopback address; "+
+				"dev API routes are exposed to the network — this is unsafe for production",
+				slog.String("bind", bindAddr),
+				slog.Int("port", cfg.Port),
+			)
+		}
 	}
 
 	// OpenAPI spec and Swagger UI documentation handler.
