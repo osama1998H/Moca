@@ -429,19 +429,18 @@ func TestDevHandler_CreateDocType_BodySizeLimit(t *testing.T) {
 
 // --- mock registerer for dev_handler tests ---
 
+type mockDevRegisterCall struct {
+	site string
+	data []byte
+}
+
 type mockDevRegisterer struct {
-	calls []struct {
-		site string
-		data []byte
-	}
-	err error
+	err   error
+	calls []mockDevRegisterCall
 }
 
 func (m *mockDevRegisterer) Register(_ context.Context, site string, data []byte) (*meta.MetaType, error) {
-	m.calls = append(m.calls, struct {
-		site string
-		data []byte
-	}{site: site, data: data})
+	m.calls = append(m.calls, mockDevRegisterCall{site: site, data: data})
 	return nil, m.err
 }
 
