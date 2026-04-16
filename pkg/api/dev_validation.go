@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"unicode"
 
@@ -99,11 +100,14 @@ func ValidateModuleName(name string) error {
 	return nil
 }
 
-// ValidateFieldDefs checks that every field in the map has a non-empty field_type.
+// ValidateFieldDefs checks that every field has a non-empty, recognized field_type.
 func ValidateFieldDefs(fields map[string]meta.FieldDef) error {
 	for name, fd := range fields {
 		if fd.FieldType == "" {
 			return errors.New("field '" + name + "' has no field_type")
+		}
+		if !meta.FieldType(fd.FieldType).IsValid() {
+			return fmt.Errorf("field '%s' has unrecognized field_type %q", name, fd.FieldType)
 		}
 	}
 	return nil

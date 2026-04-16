@@ -124,6 +124,30 @@ func TestValidateFieldDefs_EmptyMap(t *testing.T) {
 	}
 }
 
+func TestValidateFieldDefs_UnrecognizedFieldType(t *testing.T) {
+	fields := map[string]meta.FieldDef{
+		"title": {FieldType: "Data", Name: "title"},
+		"bad":   {FieldType: "NotAType", Name: "bad"},
+	}
+	err := ValidateFieldDefs(fields)
+	if err == nil {
+		t.Error("ValidateFieldDefs expected error for unrecognized field_type, got nil")
+	}
+}
+
+func TestValidateFieldDefs_AllValidTypes(t *testing.T) {
+	fields := map[string]meta.FieldDef{
+		"f1": {FieldType: "Data", Name: "f1"},
+		"f2": {FieldType: "Int", Name: "f2"},
+		"f3": {FieldType: "Currency", Name: "f3"},
+		"f4": {FieldType: "Date", Name: "f4"},
+		"f5": {FieldType: "Link", Name: "f5"},
+	}
+	if err := ValidateFieldDefs(fields); err != nil {
+		t.Errorf("ValidateFieldDefs returned unexpected error: %v", err)
+	}
+}
+
 // ── ValidateAppName ─────────────────────────────────────────────────────────
 
 func TestValidateAppName_Valid(t *testing.T) {
