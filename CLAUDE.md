@@ -185,6 +185,16 @@ CI uses Go 1.26.1 with golangci-lint v2.11.4.
 - **Benchmarks**: Tier 1 packages: `pkg/meta`, `pkg/document`, `pkg/orm`, `pkg/api`, `pkg/hooks`. Results tracked in `bench-latest.txt` / `bench-baseline.txt`.
 - **234 test files** across the codebase with comprehensive coverage.
 
+## Documentation Requirements
+
+When making code changes, **always update the related documentation**:
+
+- **Root repository docs (`docs/`)**: Update system design docs, ADRs, milestone plans, or any other documentation in `docs/` that describes the changed functionality. If a new feature is added, document it. If behavior changes, update the existing docs to match.
+- **Wiki submodule (`wiki/`)**: Update the corresponding wiki pages to reflect the changes. The wiki is a git submodule — commit changes inside `wiki/` and update the submodule pointer in the root repository.
+- **CLAUDE.md**: If the change affects the project structure, build commands, technology stack, or key architectural decisions documented here, update this file as well.
+
+This applies to all AI-assisted development tools. Documentation is not optional — code changes without corresponding documentation updates are incomplete.
+
 ## Architecture Decision Records (MS-00)
 
 These ADRs in `docs/` document proven patterns validated during the MS-00 spike phase:

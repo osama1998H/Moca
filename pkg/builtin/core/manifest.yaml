@@ -20,3 +20,5 @@ modules:
       - SSOProvider
       - Notification
       - NotificationSettings
+      - Language
+      - Translation

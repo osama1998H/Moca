@@ -192,3 +192,22 @@ func (t *Translator) Invalidate(ctx context.Context, site, lang string) error {
 	}
 	return t.redis.Del(ctx, redisKey(site, lang)).Err()
 }
+
+// LookupDirection returns the text direction ("ltr" or "rtl") for the given
+// language by querying tab_language. Falls back to "ltr" if not found.
+func (t *Translator) LookupDirection(ctx context.Context, site, lang string) string {
+	if t.poolResolver == nil {
+		return "ltr"
+	}
+	pool, err := t.poolResolver(ctx, site)
+	if err != nil || pool == nil {
+		return "ltr"
+	}
+	var dir string
+	if scanErr := pool.QueryRow(ctx,
+		`SELECT direction FROM tab_language WHERE name = $1`, lang,
+	).Scan(&dir); scanErr == nil && dir != "" {
+		return dir
+	}
+	return "ltr"
+}

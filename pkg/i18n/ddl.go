@@ -27,14 +27,22 @@ func TranslationDDL() []meta.DDLStatement {
 	return []meta.DDLStatement{
 		{
 			SQL: `CREATE TABLE IF NOT EXISTS tab_translation (
+	"name"            VARCHAR(140) NOT NULL PRIMARY KEY,
 	"source_text"     TEXT NOT NULL,
 	"language"        TEXT NOT NULL,
 	"translated_text" TEXT NOT NULL,
 	"context"         TEXT NOT NULL DEFAULT '',
 	"app"             TEXT,
-	PRIMARY KEY ("source_text", "language", "context")
+	"owner"           VARCHAR(140) NOT NULL DEFAULT '',
+	"creation"        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	"modified"        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	"modified_by"     VARCHAR(140) NOT NULL DEFAULT '',
+	"docstatus"       SMALLINT NOT NULL DEFAULT 0,
+	"idx"             INTEGER NOT NULL DEFAULT 0,
+	"_extra"          JSONB,
+	UNIQUE ("source_text", "language", "context")
 )`,
-			Comment: "create system table tab_translation",
+			Comment: "create system table tab_translation (DocType-compatible)",
 		},
 		{
 			SQL:     `CREATE INDEX IF NOT EXISTS idx_translation_app ON tab_translation ("app")`,

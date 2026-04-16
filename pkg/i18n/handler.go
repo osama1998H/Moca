@@ -52,7 +52,11 @@ func (h *TranslationHandler) handleGetTranslations(w http.ResponseWriter, r *htt
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"data": translations})
+	direction := h.translator.LookupDirection(r.Context(), site.Name, lang)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data":      translations,
+		"direction": direction,
+	})
 }
 
 // writeJSON writes a JSON response with the given status code.
