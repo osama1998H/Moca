@@ -1,11 +1,11 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"runtime"
 
 	"github.com/spf13/cobra"
+
+	"github.com/osama1998H/moca/internal/output"
 )
 
 // NewVersionCommand returns the "moca version" command.
@@ -25,20 +25,22 @@ func NewVersionCommand() *cobra.Command {
 				Arch:      runtime.GOARCH,
 			}
 
-			jsonFlag, _ := cmd.Flags().GetBool("json")
-			if jsonFlag {
-				enc := json.NewEncoder(cmd.OutOrStdout())
-				enc.SetIndent("", "  ")
-				return enc.Encode(info)
+			w := output.NewWriter(cmd)
+
+			if err := w.PrintJSON(info); err != nil {
+				return err
+			}
+			if w.Mode() == output.ModeJSON {
+				return nil
 			}
 
-			w := cmd.OutOrStdout()
-			_, _ = fmt.Fprintf(w, "MOCA CLI\n")
-			_, _ = fmt.Fprintf(w, "  Version:    %s\n", info.Version)
-			_, _ = fmt.Fprintf(w, "  Commit:     %s\n", info.Commit)
-			_, _ = fmt.Fprintf(w, "  Built:      %s\n", info.BuildDate)
-			_, _ = fmt.Fprintf(w, "  Go version: %s\n", info.GoVersion)
-			_, _ = fmt.Fprintf(w, "  OS/Arch:    %s/%s\n", info.OS, info.Arch)
+			c := w.Color()
+			w.Print("%s", c.Bold("MOCA CLI"))
+			w.Print("  %s    %s", c.Info("Version:"), info.Version)
+			w.Print("  %s     %s", c.Info("Commit:"), info.Commit)
+			w.Print("  %s      %s", c.Info("Built:"), info.BuildDate)
+			w.Print("  %s %s", c.Info("Go version:"), info.GoVersion)
+			w.Print("  %s    %s/%s", c.Info("OS/Arch:"), info.OS, info.Arch)
 			return nil
 		},
 	}

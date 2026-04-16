@@ -33,6 +33,12 @@ func NewColorConfig(noColorFlag bool, w io.Writer) *ColorConfig {
 	return &ColorConfig{enabled: false}
 }
 
+// NewColorConfigForTesting creates a ColorConfig with an explicit enabled state.
+// Use in tests where TTY detection is unreliable.
+func NewColorConfigForTesting(enabled bool) *ColorConfig {
+	return &ColorConfig{enabled: enabled}
+}
+
 // Enabled returns true when ANSI color codes should be emitted.
 func (c *ColorConfig) Enabled() bool {
 	return c.enabled

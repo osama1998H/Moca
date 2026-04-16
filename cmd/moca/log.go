@@ -157,48 +157,33 @@ func parseLogLine(line, process string) (*logEntry, error) {
 
 // formatLogEntry formats a log entry for human-readable TTY display.
 // Example: 15:04:12 WARN  [worker] acme  Slow query...
-func formatLogEntry(e *logEntry, noColor bool) string {
+func formatLogEntry(e *logEntry, cc *output.ColorConfig) string {
 	ts := e.Time.Format("15:04:05")
 	level := fmt.Sprintf("%-5s", e.Level)
 	proc := fmt.Sprintf("[%s]", e.Process)
 	site := e.Site
 
-	if noColor {
-		if site != "" {
-			return fmt.Sprintf("%s %s %s %s  %s", ts, level, proc, site, e.Msg)
-		}
-		return fmt.Sprintf("%s %s %s  %s", ts, level, proc, e.Msg)
-	}
-
-	// ANSI color codes.
-	var levelColor string
+	// Apply level-specific color.
+	var coloredLevel string
 	switch e.Level {
 	case "ERROR":
-		levelColor = "\033[31m" // red
+		coloredLevel = cc.Error(level)
 	case "WARN":
-		levelColor = "\033[33m" // yellow
+		coloredLevel = cc.Warning(level)
 	case "INFO":
-		levelColor = "\033[32m" // green
+		coloredLevel = cc.Success(level)
 	case "DEBUG":
-		levelColor = "\033[36m" // cyan
+		coloredLevel = cc.Info(level)
 	default:
-		levelColor = ""
+		coloredLevel = level
 	}
-	reset := "\033[0m"
-	muted := "\033[90m" // gray
 
 	if site != "" {
-		return fmt.Sprintf("%s%s%s %s%s%s %s%s%s %s  %s",
-			muted, ts, reset,
-			levelColor, level, reset,
-			muted, proc, reset,
-			site, e.Msg)
+		return fmt.Sprintf("%s %s %s %s  %s",
+			cc.Muted(ts), coloredLevel, cc.Muted(proc), site, e.Msg)
 	}
-	return fmt.Sprintf("%s%s%s %s%s%s %s%s%s  %s",
-		muted, ts, reset,
-		levelColor, level, reset,
-		muted, proc, reset,
-		e.Msg)
+	return fmt.Sprintf("%s %s %s  %s",
+		cc.Muted(ts), coloredLevel, cc.Muted(proc), e.Msg)
 }
 
 // resolveLogDir returns the log directory path. Uses config override if set,
@@ -331,8 +316,6 @@ func runLogTail(cmd *cobra.Command, _ []string) error {
 	levelFlag, _ := cmd.Flags().GetString("level")
 	siteFlag, _ := cmd.Flags().GetString("site")
 	requestID, _ := cmd.Flags().GetString("request-id")
-	noColor, _ := cmd.Flags().GetBool("no-color")
-
 	files, err := resolveLogFiles(logDir, processFlag)
 	if err != nil {
 		return err
@@ -381,7 +364,7 @@ func runLogTail(cmd *cobra.Command, _ []string) error {
 
 	for {
 		for _, s := range states {
-			readTailLines(s, filter, jsonMode, noColor, out)
+			readTailLines(s, filter, jsonMode, w.Color(), out)
 		}
 
 		select {
@@ -393,7 +376,7 @@ func runLogTail(cmd *cobra.Command, _ []string) error {
 }
 
 // readTailLines reads new lines from a tail state and prints matching entries.
-func readTailLines(s *tailState, filter *logFilter, jsonMode, noColor bool, out io.Writer) {
+func readTailLines(s *tailState, filter *logFilter, jsonMode bool, cc *output.ColorConfig, out io.Writer) {
 	// Check for file rotation: if file shrank, reopen from start.
 	info, statErr := s.handle.Stat()
 	if statErr != nil {
@@ -428,7 +411,7 @@ func readTailLines(s *tailState, filter *logFilter, jsonMode, noColor bool, out 
 		if jsonMode {
 			_, _ = fmt.Fprintln(out, entry.Raw)
 		} else {
-			_, _ = fmt.Fprintln(out, formatLogEntry(entry, noColor))
+			_, _ = fmt.Fprintln(out, formatLogEntry(entry, cc))
 		}
 	}
 
@@ -735,7 +718,7 @@ func exportLogFiles(files []logFileInfo, filter *logFilter, formatFlag string, d
 
 			switch strings.ToLower(formatFlag) {
 			case "text":
-				_, _ = fmt.Fprintln(dest, formatLogEntry(entry, true))
+				_, _ = fmt.Fprintln(dest, formatLogEntry(entry, output.NewColorConfig(true, dest)))
 			default: // json
 				_, _ = fmt.Fprintln(dest, entry.Raw)
 			}
