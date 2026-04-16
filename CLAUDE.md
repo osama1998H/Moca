@@ -86,7 +86,7 @@ All services use tmpfs and health checks.
 | Layer | Technology |
 |-------|-----------|
 | Backend | Go 1.26+ (module: `github.com/osama1998H/moca`) |
-| Frontend | React 19+ with TypeScript (MS-17, in progress) |
+| Frontend | React 19+ with TypeScript (shadcn ui) |
 | Database | PostgreSQL 16+ (schema-per-tenant, JSONB, RLS) — pgx v5 / pgxpool |
 | Cache / Queue | Redis 7+ (go-redis v9; cache + Redis Streams for jobs) |
 | Event streaming | Apache Kafka (optional; Redis pub/sub fallback) |
