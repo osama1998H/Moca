@@ -11,6 +11,7 @@ import (
 
 	"github.com/osama1998H/moca/pkg/api"
 	"github.com/osama1998H/moca/pkg/auth"
+	"github.com/osama1998H/moca/pkg/tenancy"
 )
 
 func setupDevMux(t *testing.T) (*http.ServeMux, string) {
@@ -166,5 +167,44 @@ func TestIntegration_DevAPI_FullRoundTrip(t *testing.T) {
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("get after delete: expected 404, got %d", w.Code)
+	}
+}
+
+func TestIntegration_DevAPI_WithoutSiteContext_Returns400(t *testing.T) {
+	dir := t.TempDir()
+	reg := &mockDevRegisterer{}
+	h := api.NewDevHandlerWithRegisterer(dir, reg, nil)
+	mux := http.NewServeMux()
+	h.RegisterDevRoutes(mux, "v1", api.DevAuthMiddleware())
+
+	req := withAdminCtx(devRequest("POST", "/api/v1/dev/doctype", validDocTypeBody()))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing site context, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(reg.calls) != 0 {
+		t.Errorf("registry should not be called without site, got %d call(s)", len(reg.calls))
+	}
+}
+
+func TestIntegration_DevAPI_WithSiteContext_PassesSiteToRegistry(t *testing.T) {
+	dir := t.TempDir()
+	reg := &mockDevRegisterer{}
+	h := api.NewDevHandlerWithRegisterer(dir, reg, nil)
+	mux := http.NewServeMux()
+	h.RegisterDevRoutes(mux, "v1", api.DevAuthMiddleware())
+
+	req := withAdminCtx(devRequest("POST", "/api/v1/dev/doctype", validDocTypeBody()))
+	req = req.WithContext(api.WithSite(req.Context(), &tenancy.SiteContext{Name: "acme"}))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(reg.calls) != 1 || reg.calls[0].site != "acme" {
+		t.Errorf("expected Register called with site=acme, got %+v", reg.calls)
 	}
 }
