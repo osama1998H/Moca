@@ -37,7 +37,7 @@ var (
 
 // SiteCreateConfig holds all parameters for the 9-step site creation lifecycle.
 type SiteCreateConfig struct {
-	Config        map[string]any // optional; timezone, language, currency
+	Config        map[string]any // optional; e.g. timezone, language
 	Name          string         // required; site identifier (e.g. "acme.localhost")
 	AdminEmail    string         // required; admin user email
 	AdminPassword string         // required; plaintext, bcrypt-hashed internally
@@ -831,7 +831,6 @@ func (m *SiteManager) setupRedisConfig(ctx context.Context, siteName string, use
 	cfg := map[string]any{
 		"timezone": "UTC",
 		"language": "en",
-		"currency": "USD",
 	}
 	for k, v := range userConfig {
 		cfg[k] = v
