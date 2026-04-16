@@ -45,10 +45,14 @@ func (e *CLIError) Format(w io.Writer, cc *ColorConfig) {
 		writeIndented(w, e.Context)
 	}
 
-	if e.Cause != "" {
+	cause := e.Cause
+	if cause == "" && e.Err != nil {
+		cause = e.Err.Error()
+	}
+	if cause != "" {
 		_, _ = fmt.Fprintln(w)
 		_, _ = fmt.Fprintln(w, cc.Muted("Cause:"))
-		writeIndented(w, e.Cause)
+		writeIndented(w, cause)
 	}
 
 	if e.Fix != "" {
