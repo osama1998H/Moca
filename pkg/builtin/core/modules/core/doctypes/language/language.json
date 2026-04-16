@@ -1,0 +1,144 @@
+{
+  "api_config": {
+    "enabled": true,
+    "allow_get": true,
+    "allow_list": true,
+    "allow_create": true,
+    "allow_update": true,
+    "allow_delete": true,
+    "allow_count": true,
+    "default_page_size": 20,
+    "max_page_size": 100
+  },
+  "description": "A language available for translation in the system.",
+  "fields": {
+    "language_code": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": true,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": true,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "Language Code",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": true,
+      "searchable": true,
+      "unique": true
+    },
+    "language_name": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Data",
+      "filterable": false,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": false,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "Language Name",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": true,
+      "searchable": true,
+      "unique": false
+    },
+    "direction": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Select",
+      "filterable": true,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": true,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "Direction",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "ltr\nrtl",
+      "read_only": false,
+      "required": true,
+      "searchable": false,
+      "unique": false,
+      "default": "ltr"
+    },
+    "enabled": {
+      "api_alias": "",
+      "api_read_only": false,
+      "db_index": false,
+      "depends_on": "",
+      "field_type": "Check",
+      "filterable": true,
+      "full_text_index": false,
+      "hidden": false,
+      "in_api": false,
+      "in_filter": true,
+      "in_list_view": true,
+      "in_preview": false,
+      "label": "Enabled",
+      "layout_hint": {},
+      "mandatory_depends_on": "",
+      "options": "",
+      "read_only": false,
+      "required": false,
+      "searchable": false,
+      "unique": false,
+      "default": 0
+    }
+  },
+  "label": "Language",
+  "layout": {
+    "tabs": [
+      {
+        "label": "Details",
+        "sections": [
+          {
+            "columns": [
+              {
+                "fields": [
+                  "language_code",
+                  "language_name",
+                  "direction",
+                  "enabled"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "module": "Core",
+  "name": "Language",
+  "naming_rule": {
+    "rule": "field",
+    "field_name": "language_code"
+  },
+  "permissions": [
+    {
+      "role": "System Manager",
+      "doctype_perm": 63
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "asc",
+  "title_field": "language_name",
+  "search_fields": ["language_code", "language_name"]
+}

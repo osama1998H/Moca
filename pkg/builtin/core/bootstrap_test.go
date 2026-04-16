@@ -12,8 +12,8 @@ func TestBootstrapCoreMeta(t *testing.T) {
 		t.Fatalf("BootstrapCoreMeta() error: %v", err)
 	}
 
-	if len(mts) != 11 {
-		t.Fatalf("expected 11 MetaTypes, got %d", len(mts))
+	if len(mts) != 12 {
+		t.Fatalf("expected 12 MetaTypes, got %d", len(mts))
 	}
 
 	// DocType must be first (bootstrap ordering).
@@ -44,6 +44,7 @@ func TestBootstrapCoreMeta(t *testing.T) {
 		"SSOProvider":          true,
 		"Notification":         true,
 		"NotificationSettings": true,
+		"Language":             true,
 	}
 	for _, mt := range mts {
 		delete(expected, mt.Name)
