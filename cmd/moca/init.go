@@ -110,7 +110,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		// Resolve @osama1998h/desk version from the binary version.
 		deskVersion, deskSpec := resolveDeskVersion(targetDir)
 
-		if err := scaffold.ScaffoldDesk(scaffold.DeskScaffoldOptions{
+		if err := scaffoldDeskWithCleanup(scaffold.DeskScaffoldOptions{
 			ProjectRoot:     targetDir,
 			ProjectName:     projectName,
 			MocaDeskVersion: deskVersion,
@@ -204,6 +204,21 @@ func runInit(cmd *cobra.Command, args []string) error {
 	w.Print("  moca site create <site-name> --admin-password <password>")
 	w.Print("")
 
+	return nil
+}
+
+// scaffoldDeskWithCleanup wraps scaffold.ScaffoldDesk. If scaffolding
+// returns an error, the partial desk/ directory is removed so a retry
+// on the same path can succeed. If cleanup itself fails, that failure
+// is wrapped into the returned error for visibility.
+func scaffoldDeskWithCleanup(opts scaffold.DeskScaffoldOptions) error {
+	if err := scaffold.ScaffoldDesk(opts); err != nil {
+		deskDir := filepath.Join(opts.ProjectRoot, "desk")
+		if rmErr := os.RemoveAll(deskDir); rmErr != nil {
+			return fmt.Errorf("%w (cleanup also failed: %v)", err, rmErr)
+		}
+		return err
+	}
 	return nil
 }
 
