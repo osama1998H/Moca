@@ -429,6 +429,33 @@ func TestCLI_SiteWorkflow(t *testing.T) {
 	}
 }
 
+func TestCLI_InitPreExistingDeskDirectory_Error(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Pre-seed a user-authored desk/ with a distinctive marker file.
+	deskDir := filepath.Join(tmpDir, "desk")
+	if err := os.MkdirAll(deskDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	markerPath := filepath.Join(deskDir, "user-authored.txt")
+	if err := os.WriteFile(markerPath, []byte("do not delete"), 0o644); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+
+	_, _, err := executeInit(t, "init", tmpDir)
+	if err == nil {
+		t.Fatal("expected error for pre-existing desk/, got nil")
+	}
+	if !strings.Contains(err.Error(), "desk/ directory already exists") {
+		t.Errorf("expected 'desk/ directory already exists' error, got: %v", err)
+	}
+
+	// Critical assertion: the user's desk/ must be untouched.
+	if _, statErr := os.Stat(markerPath); statErr != nil {
+		t.Errorf("user's marker file was deleted (regression!): %v", statErr)
+	}
+}
+
 func TestCLI_DuplicateSiteCreate_Error(t *testing.T) {
 	tmpDir := t.TempDir()
 	name := uniqueCLISiteName(t)

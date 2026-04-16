@@ -12,8 +12,12 @@ import (
 func TestScaffoldDeskWithCleanup_RemovesPartialStateOnFailure(t *testing.T) {
 	tmp := t.TempDir()
 
-	// Pre-seed desk/ with a partial subpath so ScaffoldDesk fails with
-	// "desk/ directory already exists" at scaffold.go:40.
+	// Seed a desk/ directory so ScaffoldDesk fails fast ("desk/ already
+	// exists"). The purpose of this helper-level test is to confirm
+	// that whenever ScaffoldDesk errors, the helper removes the desk/
+	// it finds. The full runInit flow prevents this destructive case
+	// via a guard earlier in runInit; this test exercises the helper
+	// in isolation as defense-in-depth for future call sites.
 	if err := os.MkdirAll(filepath.Join(tmp, "desk", "src"), 0o755); err != nil {
 		t.Fatalf("seed: %v", err)
 	}

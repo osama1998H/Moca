@@ -71,6 +71,21 @@ func runInit(cmd *cobra.Command, args []string) error {
 			WithFix("Use a different directory or remove the existing moca.yaml.")
 	}
 
+	// Check for existing desk/ before we do anything expensive.
+	// ScaffoldDesk fails at internal/scaffold/desk.go if desk/ pre-exists,
+	// and our cleanup helper cannot distinguish that from partial state
+	// created by this invocation. Guard here so hand-authored desk/
+	// directories are never silently removed.
+	skipDesk, _ := cmd.Flags().GetBool("skip-desk")
+	if !skipDesk {
+		deskDir := filepath.Join(targetDir, "desk")
+		if _, err := os.Stat(deskDir); err == nil {
+			return output.NewCLIError("desk/ directory already exists").
+				WithContext("Path: " + deskDir).
+				WithFix("Remove the existing desk/ directory, or rerun with --skip-desk to skip frontend scaffolding.")
+		}
+	}
+
 	// 2. Determine project name.
 	projectName, _ := cmd.Flags().GetString("name")
 	if projectName == "" {
@@ -102,7 +117,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	s.Stop("Go workspace created")
 
 	// 4.6. Scaffold desk/ frontend directory.
-	skipDesk, _ := cmd.Flags().GetBool("skip-desk")
 	if !skipDesk {
 		s = w.NewSpinner("Scaffolding desk frontend...")
 		s.Start()
