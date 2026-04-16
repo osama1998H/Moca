@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/osama1998H/moca/internal/config"
+	"github.com/osama1998H/moca/internal/output"
 )
 
 // TestLogCommandStructure verifies all 3 subcommands exist.
@@ -284,8 +285,8 @@ func TestFormatLogEntry(t *testing.T) {
 		Process: "server",
 	}
 
-	// With no-color, output should not contain ANSI escape codes.
-	plain := formatLogEntry(e, true)
+	// With color disabled, output should not contain ANSI escape codes.
+	plain := formatLogEntry(e, output.NewColorConfigForTesting(false))
 	if len(plain) == 0 {
 		t.Fatal("expected non-empty formatted output")
 	}
@@ -299,8 +300,8 @@ func TestFormatLogEntry(t *testing.T) {
 		}
 	}
 
-	// With color, output should contain ANSI escape codes.
-	colored := formatLogEntry(e, false)
+	// With color enabled, output should contain ANSI escape codes.
+	colored := formatLogEntry(e, output.NewColorConfigForTesting(true))
 	if !containsANSI(colored) {
 		t.Error("color output should contain ANSI codes")
 	}
@@ -315,7 +316,7 @@ func TestFormatLogEntryNoSite(t *testing.T) {
 		Process: "server",
 	}
 
-	plain := formatLogEntry(e, true)
+	plain := formatLogEntry(e, output.NewColorConfigForTesting(false))
 	if !containsStr(plain, "Server starting") {
 		t.Errorf("output missing message: %s", plain)
 	}

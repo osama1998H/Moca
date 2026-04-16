@@ -101,8 +101,10 @@ func runQueueStatus(cmd *cobra.Command, _ []string) error {
 		defer stop()
 
 		for {
-			// Clear screen.
-			_, _ = fmt.Fprint(cmd.OutOrStdout(), "\033[H\033[2J")
+			// Clear screen (only when TTY/color is enabled to avoid raw escape codes in pipes).
+			if w.Color().Enabled() {
+				_, _ = fmt.Fprint(cmd.OutOrStdout(), "\033[H\033[2J")
+			}
 			if err := printQueueStatus(cmd, w, svc, sites); err != nil {
 				return err
 			}
