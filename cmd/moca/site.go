@@ -61,7 +61,6 @@ func newSiteCreateCmd() *cobra.Command {
 	f.StringSlice("install-apps", nil, "Apps to install after site creation")
 	f.String("timezone", "UTC", "Site timezone")
 	f.String("language", "en", "Default language")
-	f.String("currency", "USD", "Default currency")
 	f.Bool("no-cache-warmup", false, "Skip initial cache warming")
 
 	return cmd
@@ -119,7 +118,6 @@ func runSiteCreate(cmd *cobra.Command, args []string) error {
 	// Build config.
 	timezone, _ := cmd.Flags().GetString("timezone")
 	language, _ := cmd.Flags().GetString("language")
-	currency, _ := cmd.Flags().GetString("currency")
 
 	cfg := tenancy.SiteCreateConfig{
 		Name:          siteName,
@@ -128,7 +126,6 @@ func runSiteCreate(cmd *cobra.Command, args []string) error {
 		Config: map[string]any{
 			"timezone": timezone,
 			"language": language,
-			"currency": currency,
 		},
 	}
 
