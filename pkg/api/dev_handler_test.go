@@ -550,3 +550,76 @@ func seedDocTypeFile(t *testing.T, root, app, module, name string) {
 		t.Fatalf("seed file: %v", err)
 	}
 }
+
+func TestDevHandler_CreateDocType_EmitsDefaultAPIConfig(t *testing.T) {
+	dir := t.TempDir()
+	h := api.NewDevHandler(dir, nil, nil)
+
+	body := map[string]any{
+		"name":   "Report",
+		"app":    "testapp",
+		"module": "core",
+		"layout": map[string]any{"tabs": []any{}},
+		"fields": map[string]any{
+			"title": map[string]any{"field_type": "Data", "name": "title"},
+		},
+		"settings":    map[string]any{},
+		"permissions": []any{},
+	}
+	data, _ := json.Marshal(body)
+	req := httptest.NewRequest("POST", "/api/v1/dev/doctype", bytes.NewReader(data))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleCreateDocType(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	jsonPath := filepath.Join(dir, "testapp", "modules", "core", "doctypes", "report", "report.json")
+	written, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(written, &parsed); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	cfg, ok := parsed["api_config"].(map[string]any)
+	if !ok {
+		t.Fatalf("api_config missing or not an object: %v", parsed["api_config"])
+	}
+
+	expectBool := map[string]bool{
+		"enabled":      true,
+		"allow_list":   true,
+		"allow_get":    true,
+		"allow_create": true,
+		"allow_update": true,
+		"allow_delete": true,
+		"allow_count":  true,
+	}
+	for k, want := range expectBool {
+		if got, _ := cfg[k].(bool); got != want {
+			t.Errorf("api_config.%s = %v, want %v", k, got, want)
+		}
+	}
+	if got := cfg["default_page_size"]; int(toFloat(got)) != 20 {
+		t.Errorf("default_page_size = %v, want 20", got)
+	}
+	if got := cfg["max_page_size"]; int(toFloat(got)) != 100 {
+		t.Errorf("max_page_size = %v, want 100", got)
+	}
+}
+
+func toFloat(v any) float64 {
+	switch x := v.(type) {
+	case float64:
+		return x
+	case int:
+		return float64(x)
+	default:
+		return 0
+	}
+}

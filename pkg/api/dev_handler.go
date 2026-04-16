@@ -469,6 +469,17 @@ func buildDocTypeJSON(req DevDocTypeRequest) map[string]any {
 		"is_virtual":     req.Settings.IsVirtual,
 		"track_changes":  req.Settings.TrackChanges,
 		"permissions":    req.Permissions,
+		"api_config": map[string]any{
+			"enabled":           true,
+			"allow_list":        true,
+			"allow_get":         true,
+			"allow_create":      true,
+			"allow_update":      true,
+			"allow_delete":      true,
+			"allow_count":       true,
+			"default_page_size": 20,
+			"max_page_size":     100,
+		},
 	}
 }
 
