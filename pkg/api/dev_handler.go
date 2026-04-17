@@ -97,6 +97,7 @@ func (h *DevHandler) RegisterDevRoutes(mux *http.ServeMux, version string, mw ..
 	}
 	p := "/api/" + version + "/dev"
 	mux.Handle("GET "+p+"/apps", wrap(h.HandleListApps))
+	mux.Handle("GET "+p+"/doctype", wrap(h.HandleListDocTypes))
 	mux.Handle("POST "+p+"/doctype", wrap(h.HandleCreateDocType))
 	mux.Handle("PUT "+p+"/doctype/{name}", wrap(h.HandleUpdateDocType))
 	mux.Handle("GET "+p+"/doctype/{name}", wrap(h.HandleGetDocType))
@@ -177,6 +178,92 @@ type DevDocTypeSettings struct {
 	IsChildTable  bool                `json:"is_child_table"`
 	IsVirtual     bool                `json:"is_virtual"`
 	TrackChanges  bool                `json:"track_changes"`
+}
+
+// DocTypeListItem is one entry in the dev-mode DocType list response.
+// Returned by GET /api/v1/dev/doctype for the builder entry dialog.
+type DocTypeListItem struct {
+	Name          string `json:"name"`
+	App           string `json:"app"`
+	Module        string `json:"module"`
+	IsSubmittable bool   `json:"is_submittable"`
+	IsSingle      bool   `json:"is_single"`
+	IsChildTable  bool   `json:"is_child_table"`
+	IsVirtual     bool   `json:"is_virtual"`
+}
+
+// HandleListDocTypes returns every DocType JSON file found under
+// {appsDir}/*/modules/*/doctypes/*/{slug}.json. Malformed files are skipped.
+func (h *DevHandler) HandleListDocTypes(w http.ResponseWriter, r *http.Request) {
+	items := make([]DocTypeListItem, 0)
+
+	appEntries, err := os.ReadDir(h.appsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeJSON(w, http.StatusOK, map[string]any{"data": items})
+			return
+		}
+		h.logger.Debug("read apps directory failed", slog.String("error", err.Error()))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+
+	for _, app := range appEntries {
+		if !app.IsDir() {
+			continue
+		}
+		modulesDir := filepath.Join(h.appsDir, app.Name(), "modules")
+		modEntries, err := os.ReadDir(modulesDir)
+		if err != nil {
+			continue
+		}
+		for _, mod := range modEntries {
+			if !mod.IsDir() {
+				continue
+			}
+			doctypesDir := filepath.Join(modulesDir, mod.Name(), "doctypes")
+			dtEntries, err := os.ReadDir(doctypesDir)
+			if err != nil {
+				continue
+			}
+			for _, dt := range dtEntries {
+				if !dt.IsDir() {
+					continue
+				}
+				jsonPath := filepath.Join(doctypesDir, dt.Name(), dt.Name()+".json")
+				data, err := os.ReadFile(jsonPath)
+				if err != nil {
+					continue
+				}
+				var parsed struct {
+					Name          string `json:"name"`
+					Module        string `json:"module"`
+					IsSubmittable bool   `json:"is_submittable"`
+					IsSingle      bool   `json:"is_single"`
+					IsChildTable  bool   `json:"is_child_table"`
+					IsVirtual     bool   `json:"is_virtual"`
+				}
+				if err := json.Unmarshal(data, &parsed); err != nil {
+					h.logger.Debug("skip malformed doctype json", slog.String("path", jsonPath), slog.String("error", err.Error()))
+					continue
+				}
+				if parsed.Name == "" {
+					continue
+				}
+				items = append(items, DocTypeListItem{
+					Name:          parsed.Name,
+					App:           app.Name(),
+					Module:        parsed.Module,
+					IsSubmittable: parsed.IsSubmittable,
+					IsSingle:      parsed.IsSingle,
+					IsChildTable:  parsed.IsChildTable,
+					IsVirtual:     parsed.IsVirtual,
+				})
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"data": items})
 }
 
 // HandleCreateDocType creates a new DocType definition on disk.
