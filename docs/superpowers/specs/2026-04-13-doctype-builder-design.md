@@ -15,6 +15,8 @@ The feature comprises three layers:
 2. **BuilderKit** — a reusable shell framework (panels, drawers, undo/redo, DnD primitives) consumed by this builder and future builders (workflow, report)
 3. **DocType Builder UI** — the builder page itself, the first consumer of BuilderKit
 
+> **Related:** The builder's entry flow (what happens when the user opens `/desk/app/doctype-builder`) is specified separately in [`2026-04-17-doctype-builder-entry-flow-design.md`](2026-04-17-doctype-builder-entry-flow-design.md).
+
 ### Design Decisions Summary
 
 | Decision | Choice | Rationale |
