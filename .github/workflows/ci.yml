@@ -161,3 +161,31 @@ jobs:
 
       - name: Verify build output
         run: test -f desk/dist/index.html
+
+  skylos:
+    # Phase 2 of the Skylos rollout: advisory-only while the baseline and
+    # false-positive rate stabilise. Promote to a required check (remove
+    # `continue-on-error`) after one clean CI week on main. See
+    # wiki/Contributing-Skylos-Audit.md for the gate policy.
+    name: Skylos Audit (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Skylos
+        run: pip install 'skylos==4.3.2'
+
+      - name: Audit Go backend
+        run: make audit-go
+
+      - name: Audit desk/ frontend
+        run: make audit-desk
