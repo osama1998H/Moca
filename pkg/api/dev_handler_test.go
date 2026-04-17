@@ -622,3 +622,143 @@ func toFloat(v any) float64 {
 		return 0
 	}
 }
+
+func TestDevHandler_ListDocTypes_Empty(t *testing.T) {
+	h := api.NewDevHandler(t.TempDir(), nil, nil)
+	req := httptest.NewRequest("GET", "/api/v1/dev/doctype", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleListDocTypes(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Data []api.DocTypeListItem `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Data == nil {
+		t.Fatal("expected non-nil data array")
+	}
+	if len(resp.Data) != 0 {
+		t.Fatalf("expected empty array, got %v", resp.Data)
+	}
+}
+
+func TestDevHandler_ListDocTypes_Populated(t *testing.T) {
+	dir := t.TempDir()
+
+	// apps/acme/modules/crm/doctypes/customer/customer.json — a plain Submittable doctype
+	customerDir := filepath.Join(dir, "acme", "modules", "crm", "doctypes", "customer")
+	if err := os.MkdirAll(customerDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	customerJSON := []byte(`{"name":"Customer","module":"crm","is_submittable":true,"is_single":false,"is_child_table":false,"is_virtual":false}`)
+	if err := os.WriteFile(filepath.Join(customerDir, "customer.json"), customerJSON, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// apps/acme/modules/crm/doctypes/order_line/order_line.json — a Child Table
+	orderLineDir := filepath.Join(dir, "acme", "modules", "crm", "doctypes", "order_line")
+	if err := os.MkdirAll(orderLineDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	orderLineJSON := []byte(`{"name":"Order Line","module":"crm","is_submittable":false,"is_single":false,"is_child_table":true,"is_virtual":false}`)
+	if err := os.WriteFile(filepath.Join(orderLineDir, "order_line.json"), orderLineJSON, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h := api.NewDevHandler(dir, nil, nil)
+	req := httptest.NewRequest("GET", "/api/v1/dev/doctype", nil)
+	w := httptest.NewRecorder()
+	h.HandleListDocTypes(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Data []api.DocTypeListItem `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Data) != 2 {
+		t.Fatalf("expected 2 doctypes, got %d: %+v", len(resp.Data), resp.Data)
+	}
+
+	byName := map[string]api.DocTypeListItem{}
+	for _, it := range resp.Data {
+		byName[it.Name] = it
+	}
+	cust, ok := byName["Customer"]
+	if !ok {
+		t.Fatalf("missing Customer: %+v", resp.Data)
+	}
+	if cust.App != "acme" || cust.Module != "crm" || !cust.IsSubmittable {
+		t.Fatalf("unexpected Customer: %+v", cust)
+	}
+	ol, ok := byName["Order Line"]
+	if !ok {
+		t.Fatalf("missing Order Line")
+	}
+	if !ol.IsChildTable {
+		t.Fatalf("Order Line not flagged as child table: %+v", ol)
+	}
+}
+
+func TestDevHandler_ListDocTypes_SkipsMalformed(t *testing.T) {
+	dir := t.TempDir()
+
+	// Valid doctype
+	validDir := filepath.Join(dir, "acme", "modules", "crm", "doctypes", "good")
+	if err := os.MkdirAll(validDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(validDir, "good.json"),
+		[]byte(`{"name":"Good","module":"crm"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Malformed doctype (broken JSON)
+	badDir := filepath.Join(dir, "acme", "modules", "crm", "doctypes", "bad")
+	if err := os.MkdirAll(badDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(badDir, "bad.json"),
+		[]byte(`{not valid json`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Doctype with missing name — should also be skipped
+	noNameDir := filepath.Join(dir, "acme", "modules", "crm", "doctypes", "noname")
+	if err := os.MkdirAll(noNameDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(noNameDir, "noname.json"),
+		[]byte(`{"module":"crm"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h := api.NewDevHandler(dir, nil, nil)
+	req := httptest.NewRequest("GET", "/api/v1/dev/doctype", nil)
+	w := httptest.NewRecorder()
+	h.HandleListDocTypes(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Data []api.DocTypeListItem `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Data) != 1 || resp.Data[0].Name != "Good" {
+		t.Fatalf("expected only Good, got %+v", resp.Data)
+	}
+}

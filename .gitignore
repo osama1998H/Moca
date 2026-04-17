@@ -57,3 +57,7 @@ cmd/moca-server/app_imports.go
 
 # Demo project for manual testing
 /demo/
+
+# Git worktrees (isolated workspaces for in-progress feature branches)
+.worktrees/
+.superpowers/
