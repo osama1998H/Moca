@@ -43,7 +43,18 @@ make docs-generate-api  # API reference only
 
 # Release
 make release-local      # Build release archives locally via GoReleaser (snapshot mode)
+
+# Static analysis — Skylos (dead code + SAST + secrets); install once via `pipx install skylos`
+make audit              # Run both audits (Go backend + desk/)
+make audit-go           # Scan Go backend against .skylos/baseline.json
+make audit-desk         # Scan desk/ submodule against desk/.skylos/baseline.json
+make audit-go-baseline  # Re-snapshot the Go baseline after intentional cleanup
+make audit-desk-baseline # Re-snapshot the desk/ baseline
 ```
+
+### Skylos static analysis
+
+Skylos complements the existing golangci-lint `unused` check with cross-language dead-code detection plus SAST (XSS/JWT/secrets/SCA) on the TypeScript side. Baselines live at `.skylos/baseline.json` (Go) and `desk/.skylos/baseline.json` (frontend) and are committed to git so new regressions fail while existing debt is accepted. Only the dead-code category is baselined by Skylos; `-a` security/quality findings surface every run and should be triaged. When intentional cleanup lands, regenerate the corresponding baseline and commit it.
 
 Integration tests use the `integration` build tag and require Docker. `docker-compose.yml` provides:
 - PostgreSQL 16 on port 5433 (user: `moca`, password: `moca_test`, db: `moca_test`)

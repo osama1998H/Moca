@@ -61,3 +61,9 @@ cmd/moca-server/app_imports.go
 # Git worktrees (isolated workspaces for in-progress feature branches)
 .worktrees/
 .superpowers/
+
+# Skylos analysis — keep baseline.json committed, ignore everything else
+.skylos/*
+!.skylos/baseline.json
+skylos-results.json
+skylos-results.sarif.json
