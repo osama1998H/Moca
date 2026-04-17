@@ -208,3 +208,52 @@ func TestIntegration_DevAPI_WithSiteContext_PassesSiteToRegistry(t *testing.T) {
 		t.Errorf("expected Register called with site=acme, got %+v", reg.calls)
 	}
 }
+
+func TestIntegration_DevAPI_ListDocTypes(t *testing.T) {
+	mux, _ := setupDevMux(t)
+
+	// Precondition: create a doctype so the list has something to return.
+	postReq := withAdminCtx(devRequest("POST", "/api/v1/dev/doctype", validDocTypeBody()))
+	postW := httptest.NewRecorder()
+	mux.ServeHTTP(postW, postReq)
+	if postW.Code != http.StatusOK && postW.Code != http.StatusCreated {
+		t.Fatalf("setup POST returned %d: %s", postW.Code, postW.Body.String())
+	}
+
+	// List with admin — should succeed and include the newly-created IntegTest.
+	listReq := withAdminCtx(devRequest("GET", "/api/v1/dev/doctype", nil))
+	listW := httptest.NewRecorder()
+	mux.ServeHTTP(listW, listReq)
+	if listW.Code != http.StatusOK {
+		t.Fatalf("list returned %d: %s", listW.Code, listW.Body.String())
+	}
+
+	var resp struct {
+		Data []api.DocTypeListItem `json:"data"`
+	}
+	if err := json.NewDecoder(listW.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	found := false
+	for _, it := range resp.Data {
+		if it.Name == "IntegTest" {
+			found = true
+			if it.App != "testapp" || it.Module != "core" {
+				t.Fatalf("unexpected IntegTest entry: %+v", it)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected IntegTest in list, got: %+v", resp.Data)
+	}
+
+	// Guest should be rejected by DevAuthMiddleware.
+	guestReq := withGuestCtx(devRequest("GET", "/api/v1/dev/doctype", nil))
+	guestW := httptest.NewRecorder()
+	mux.ServeHTTP(guestW, guestReq)
+	if guestW.Code != http.StatusForbidden {
+		t.Fatalf("expected guest to get 403, got %d", guestW.Code)
+	}
+}
