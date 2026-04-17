@@ -1,0 +1,12 @@
+{
+  "counts": {
+    "unused_functions": 0,
+    "unused_imports": 0,
+    "unused_classes": 0,
+    "unused_variables": 0,
+    "danger": 0,
+    "quality": 0,
+    "secrets": 0
+  },
+  "fingerprints": []
+}

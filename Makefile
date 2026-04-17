@@ -15,6 +15,7 @@ BENCH_PKGS := ./pkg/meta ./pkg/document ./pkg/orm ./pkg/api ./pkg/hooks ./intern
         test test-integration test-api-integration lint clean release-local \
         bench bench-integration bench-compare bench-save-baseline bench-profile \
         docs-generate docs-generate-cli docs-generate-api \
+        audit audit-go audit-desk audit-go-baseline audit-desk-baseline \
         help
 
 ## help: Show available targets
@@ -42,6 +43,12 @@ help:
 	@echo "  docs-generate    Generate CLI + API reference into wiki/"
 	@echo "  docs-generate-cli Generate CLI reference only"
 	@echo "  docs-generate-api Generate API reference only"
+	@echo ""
+	@echo "  audit            Run Skylos audit across Go backend and desk/"
+	@echo "  audit-go         Run Skylos audit on pkg/, cmd/, internal/ against baseline"
+	@echo "  audit-desk       Run Skylos audit on desk/ against baseline"
+	@echo "  audit-go-baseline   Re-snapshot the Go Skylos baseline (accept current debt)"
+	@echo "  audit-desk-baseline Re-snapshot the desk/ Skylos baseline (accept current debt)"
 	@echo ""
 	@echo "Override build vars: make build VERSION=0.1.0"
 
@@ -141,4 +148,49 @@ docs-generate-cli:
 ## docs-generate-api: Generate API reference only
 docs-generate-api:
 	$(GO) run ./cmd/moca docgen api --wiki-dir wiki/
+
+# --- Skylos static analysis -------------------------------------------------
+# Skylos (https://github.com/duriantaco/skylos) scans for dead code, secrets,
+# and risky flows. Install once with: pipx install skylos
+#
+# Skylos writes baselines to <scanned-path>/.skylos/baseline.json. We scan
+# the repo root with exclusions for the Go pass (so one baseline covers
+# pkg/, cmd/, internal/) and `desk/` from inside the submodule (its baseline
+# lives in the submodule repo). Tracking the baseline in git accepts existing
+# debt and gates only new regressions.
+
+SKYLOS ?= skylos
+# Exclusions for the repo-root Go scan: skip the desk/ submodule (scanned
+# separately), the wiki/ submodule, vendored/build output, and node_modules.
+SKYLOS_GO_EXCLUDES := \
+	--exclude-folder desk \
+	--exclude-folder wiki \
+	--exclude-folder apps \
+	--exclude-folder bin \
+	--exclude-folder dist \
+	--exclude-folder node_modules \
+	--exclude-folder .worktrees
+SKYLOS_DESK_EXCLUDES := \
+	--exclude-folder node_modules \
+	--exclude-folder dist \
+	--exclude-folder .vite
+
+## audit: Run Skylos across the Go backend and the desk/ submodule
+audit: audit-go audit-desk
+
+## audit-go: Scan the Go backend against the committed Go baseline
+audit-go:
+	$(SKYLOS) . -a $(SKYLOS_GO_EXCLUDES) --baseline
+
+## audit-desk: Scan the desk/ submodule against its committed baseline
+audit-desk:
+	cd desk && $(SKYLOS) . -a $(SKYLOS_DESK_EXCLUDES) --baseline
+
+## audit-go-baseline: Snapshot current Go findings as the new baseline
+audit-go-baseline:
+	$(SKYLOS) baseline . $(SKYLOS_GO_EXCLUDES)
+
+## audit-desk-baseline: Snapshot current desk/ findings as the new baseline
+audit-desk-baseline:
+	cd desk && $(SKYLOS) baseline . $(SKYLOS_DESK_EXCLUDES)
 
